@@ -385,6 +385,7 @@ class core_calendar_renderer extends plugin_renderer_base {
 
         // Get the day names as the header.
         $header = array();
+	$header[] = "Week";
         for($i = $display->minwday; $i <= $display->maxwday; ++$i) {
             $header[] = $daynames[$i % $numberofdaysinweek]['shortname'];
         }
@@ -396,6 +397,7 @@ class core_calendar_renderer extends plugin_renderer_base {
 
         $row = new html_table_row(array());
 
+	$row->cells[] = "One";
         // Paddding (the first week may have blank days in the beginning)
         for($i = $display->minwday; $i < $startwday; ++$i) {
             $cell = new html_table_cell('&nbsp;');
@@ -416,6 +418,7 @@ class core_calendar_renderer extends plugin_renderer_base {
                 // We need to change week (table row)
                 $table->data[] = $row;
                 $row = new html_table_row(array());
+	$row->cells[] = "Two";
                 $dayweek = $display->minwday;
                 ++$week;
             }
