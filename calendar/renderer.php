@@ -397,7 +397,7 @@ class core_calendar_renderer extends plugin_renderer_base {
 
         $row = new html_table_row(array());
 
-	$row->cells[] = "One";
+	$row->cells[] = $week;
         // Paddding (the first week may have blank days in the beginning)
         for($i = $display->minwday; $i < $startwday; ++$i) {
             $cell = new html_table_cell('&nbsp;');
@@ -418,9 +418,9 @@ class core_calendar_renderer extends plugin_renderer_base {
                 // We need to change week (table row)
                 $table->data[] = $row;
                 $row = new html_table_row(array());
-	$row->cells[] = "Two";
                 $dayweek = $display->minwday;
                 ++$week;
+	$row->cells[] = $week;
             }
 
             // Reset vars
