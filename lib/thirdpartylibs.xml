@@ -85,13 +85,6 @@
     <licenseversion>3.0+</licenseversion>
   </library>
   <library>
-    <location>password_compat</location>
-    <name>Compatible password hashing</name>
-    <license>MIT</license>
-    <version>1.0.4</version>
-    <licenseversion></licenseversion>
-  </library>
-  <library>
     <location>pear/Auth/RADIUS.php</location>
     <name>Pear_Auth_Radius</name>
     <license>BSD</license>
@@ -179,14 +172,7 @@
     <location>jquery</location>
     <name>jQuery</name>
     <license>MIT</license>
-    <version>1.12.1</version>
-    <licenseversion></licenseversion>
-  </library>
-  <library>
-    <location>jquery</location>
-    <name>jQuery Migrate</name>
-    <license>MIT</license>
-    <version>1.4.0</version>
+    <version>3.1.0</version>
     <licenseversion></licenseversion>
   </library>
   <library>
