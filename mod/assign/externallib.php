@@ -473,6 +473,13 @@ class mod_assign_external extends external_api {
                         }
                     }
 
+                    if ($module->requiresubmissionstatement) {
+                        // Submission statement is required, return the submission statement value.
+                        $adminconfig = get_config('assign');
+                        list($assignment['submissionstatement'], $assignment['submissionstatementformat']) = external_format_text(
+                                $adminconfig->submissionstatement, FORMAT_MOODLE, $context->id, 'mod_assign', '', 0);
+                    }
+
                     $assignmentarray[] = $assignment;
                 }
             }
@@ -527,6 +534,8 @@ class mod_assign_external extends external_api {
                 'markingallocation' => new external_value(PARAM_INT, 'enable marking allocation'),
                 'requiresubmissionstatement' => new external_value(PARAM_INT, 'student must accept submission statement'),
                 'preventsubmissionnotingroup' => new external_value(PARAM_INT, 'Prevent submission not in group', VALUE_OPTIONAL),
+                'submissionstatement' => new external_value(PARAM_RAW, 'Submission statement formatted.', VALUE_OPTIONAL),
+                'submissionstatementformat' => new external_format_value('submissionstatement', VALUE_OPTIONAL),
                 'configs' => new external_multiple_structure(self::get_assignments_config_structure(), 'configuration settings'),
                 'intro' => new external_value(PARAM_RAW,
                     'assignment intro, not allways returned because it deppends on the activity configuration', VALUE_OPTIONAL),
@@ -2539,11 +2548,12 @@ class mod_assign_external extends external_api {
      * @param string $filter search string to filter the results.
      * @param int $skip Number of records to skip
      * @param int $limit Maximum number of records to return
+     * @param bool $onlyids Only return user ids.
      * @return array of warnings and status result
      * @since Moodle 3.1
      * @throws moodle_exception
      */
-    public static function list_participants($assignid, $groupid, $filter, $skip, $limit) {
+    public static function list_participants($assignid, $groupid, $filter, $skip, $limit, $onlyids) {
         global $DB, $CFG;
         require_once($CFG->dirroot . "/mod/assign/locallib.php");
         require_once($CFG->dirroot . "/user/lib.php");
@@ -2554,7 +2564,8 @@ class mod_assign_external extends external_api {
                                                 'groupid' => $groupid,
                                                 'filter' => $filter,
                                                 'skip' => $skip,
-                                                'limit' => $limit
+                                                'limit' => $limit,
+                                                'onlyids' => $onlyids
                                             ));
         $warnings = array();
 

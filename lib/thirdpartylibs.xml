@@ -8,13 +8,6 @@
     <licenseversion>2.1+</licenseversion>
   </library>
   <library>
-    <location>alfresco</location>
-    <name>Alfresco</name>
-    <license>GPL</license>
-    <version></version>
-    <licenseversion>2.0+</licenseversion>
-  </library>
-  <library>
     <location>bennu</location>
     <name>Bennu</name>
     <license>LGPL</license>
@@ -260,5 +253,11 @@
     <name>Spout</name>
     <license>GPL</license>
     <version>2.3.0</version>
+  </library>
+  <library>
+    <location>amd/src/chartjs-lazy.js</location>
+    <name>Chart.js</name>
+    <license>MIT</license>
+    <version>2.1.6</version>
   </library>
 </libraries>
