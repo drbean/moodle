@@ -40,20 +40,22 @@ require([
         uniqid = "{{uniqid}}",
         chartArea = $('#chart-area-' + uniqid),
         chartImage = chartArea.find('.chart-image'),
-        chartTable = chartArea.find('.chart-table-data');
-
+        chartTable = chartArea.find('.chart-table-data'),
+        chartLink = chartArea.find('.chart-table-expand a');
     Builder.make(data).then(function(ChartInst) {
         new Output(chartImage, ChartInst);
         new OutputTable(chartTable, ChartInst);
     });
 
-    chartArea.find('.chart-table-expand a').first().click(function(e) {
+    chartLink.on('click', function(e) {
         e.preventDefault();
         if (chartTable.is(':visible')) {
             chartTable.hide();
+            chartLink.text({{#quote}}{{#str}}showchartdata, moodle{{/str}}{{/quote}});
             chartTable.attr('aria-expanded', false);
         } else {
             chartTable.show();
+            chartLink.text({{#quote}}{{#str}}hidechartdata, moodle{{/str}}{{/quote}});
             chartTable.attr('aria-expanded', true);
         }
     });

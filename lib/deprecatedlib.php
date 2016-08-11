@@ -608,11 +608,13 @@ function detect_munged_arguments($string, $allowdots=1) {
  * @param string $zipfile The zip file to unzip
  * @param string $destination The location to unzip to
  * @param bool $showstatus_ignored Unused
+ * @deprecated since 2.0 MDL-15919
  */
 function unzip_file($zipfile, $destination = '', $showstatus_ignored = true) {
-    global $CFG;
+    debugging(__FUNCTION__ . '() is deprecated. '
+            . 'Please use the application/zip file_packer implementation instead.', DEBUG_DEVELOPER);
 
-    //Extract everything from zipfile
+    // Extract everything from zipfile.
     $path_parts = pathinfo(cleardoubleslashes($zipfile));
     $zippath = $path_parts["dirname"];       //The path of the zip file
     $zipfilename = $path_parts["basename"];  //The name of the zip file
@@ -674,11 +676,14 @@ function unzip_file($zipfile, $destination = '', $showstatus_ignored = true) {
  * @param array $originalfiles Files to zip
  * @param string $destination The destination path
  * @return bool Outcome
+ *
+ * @deprecated since 2.0 MDL-15919
  */
-function zip_files ($originalfiles, $destination) {
-    global $CFG;
+function zip_files($originalfiles, $destination) {
+    debugging(__FUNCTION__ . '() is deprecated. '
+            . 'Please use the application/zip file_packer implementation instead.', DEBUG_DEVELOPER);
 
-    //Extract everything from destination
+    // Extract everything from destination.
     $path_parts = pathinfo(cleardoubleslashes($destination));
     $destpath = $path_parts["dirname"];       //The path of the zip file
     $destfilename = $path_parts["basename"];  //The name of the zip file
@@ -1109,7 +1114,7 @@ function print_checkbox($name, $value, $checked = true, $label = '', $alt = '', 
 /**
  * Prints the 'update this xxx' button that appears on module pages.
  *
- * @deprecated since Moodle 2.0
+ * @deprecated since Moodle 3.2
  *
  * @param string $cmid the course_module id.
  * @param string $ignored not used any more. (Used to be courseid.)
@@ -1119,9 +1124,9 @@ function print_checkbox($name, $value, $checked = true, $label = '', $alt = '', 
 function update_module_button($cmid, $ignored, $string) {
     global $CFG, $OUTPUT;
 
-    // debugging('update_module_button() has been deprecated. Please change your code to use $OUTPUT->update_module_button().');
-
-    //NOTE: DO NOT call new output method because it needs the module name we do not have here!
+    debugging('update_module_button() has been deprecated and should not be used anymore. Activity modules should not add the ' .
+        'edit module button, the link is already available in the Administration block. Themes can choose to display the link ' .
+        'in the buttons row consistently for all module types.', DEBUG_DEVELOPER);
 
     if (has_capability('moodle/course:manageactivities', context_module::instance($cmid))) {
         $string = get_string('updatethis', '', $string);

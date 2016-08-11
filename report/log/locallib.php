@@ -566,6 +566,8 @@ function report_log_userall_data($course, $user, $logreader) {
     $timestart = $coursestart = usergetmidnight($course->startdate);
 
     $i = 0;
+    $logs['series'][$i] = 0;
+    $logs['labels'][$i] = 0;
     while ($timestart < $timenow) {
         $timefinish = $timestart + 86400;
         $logs['labels'][$i] = userdate($timestart, "%a %d %b");
@@ -576,7 +578,9 @@ function report_log_userall_data($course, $user, $logreader) {
     $rawlogs = report_log_usercourse($user->id, $courseselect, $coursestart, $logreader);
 
     foreach ($rawlogs as $rawlog) {
-        $logs['series'][$rawlog->day] = $rawlog->num;
+        if (isset($logs['labels'][$rawlog->day])) {
+            $logs['series'][$rawlog->day] = $rawlog->num;
+        }
     }
 
     return $logs;
@@ -616,7 +620,9 @@ function report_log_usertoday_data($course, $user, $date, $logreader) {
     $rawlogs = report_log_userday($user->id, $courseselect, $daystart, $logreader);
 
     foreach ($rawlogs as $rawlog) {
-        $logs['series'][$rawlog->hour] = $rawlog->num;
+        if (isset($logs['labels'][$rawlog->hour])) {
+            $logs['series'][$rawlog->hour] = $rawlog->num;
+        }
     }
 
     return $logs;
