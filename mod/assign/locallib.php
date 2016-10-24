@@ -520,7 +520,8 @@ class assign {
             }
         } else if ($action == 'quickgrade') {
             $message = $this->process_save_quick_grades();
-            $action = 'quickgradingresult';
+                $action = 'redirect';
+                $nextpageparams['action'] = 'grading';
         } else if ($action == 'saveoptions') {
             $this->process_save_grading_options();
             $action = 'redirect';

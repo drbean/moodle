@@ -377,42 +377,42 @@ function grade_regrade_final_grades_if_required($course, callable $callback = nu
         return false;
     }
 
-    if (grade_needs_regrade_progress_bar($course->id)) {
-        $PAGE->set_heading($course->fullname);
-        echo $OUTPUT->header();
-        echo $OUTPUT->heading(get_string('recalculatinggrades', 'grades'));
-        $progress = new \core\progress\display(true);
-        $status = grade_regrade_final_grades($course->id, null, null, $progress);
+    //if (grade_needs_regrade_progress_bar($course->id)) {
+    //    $PAGE->set_heading($course->fullname);
+    //    echo $OUTPUT->header();
+    //    echo $OUTPUT->heading(get_string('recalculatinggrades', 'grades'));
+    //    $progress = new \core\progress\display(true);
+    //    $status = grade_regrade_final_grades($course->id, null, null, $progress);
 
-        // Show regrade errors and set the course to no longer needing regrade (stop endless loop).
-        if (is_array($status)) {
-            foreach ($status as $error) {
-                $errortext = new \core\output\notification($error, \core\output\notification::NOTIFY_ERROR);
-                echo $OUTPUT->render($errortext);
-            }
-            $courseitem = grade_item::fetch_course_item($course->id);
-            $courseitem->regrading_finished();
-        }
+    //    // Show regrade errors and set the course to no longer needing regrade (stop endless loop).
+    //    if (is_array($status)) {
+    //        foreach ($status as $error) {
+    //            $errortext = new \core\output\notification($error, \core\output\notification::NOTIFY_ERROR);
+    //            echo $OUTPUT->render($errortext);
+    //        }
+    //        $courseitem = grade_item::fetch_course_item($course->id);
+    //        $courseitem->regrading_finished();
+    //    }
 
-        if ($callback) {
-            //
-            $url = call_user_func($callback);
-        }
+    //    if ($callback) {
+    //        //
+    //        $url = call_user_func($callback);
+    //    }
 
-        if (empty($url)) {
-            $url = $PAGE->url;
-        }
+    //    if (empty($url)) {
+    //        $url = $PAGE->url;
+    //    }
 
-        echo $OUTPUT->continue_button($url);
-        echo $OUTPUT->footer();
-        die();
-    } else {
+    //    echo $OUTPUT->continue_button($url);
+    //    echo $OUTPUT->footer();
+    //    die();
+    //} else {
         $result = grade_regrade_final_grades($course->id);
         if ($callback) {
             call_user_func($callback);
         }
         return $result;
-    }
+    //}
 }
 
 /**
