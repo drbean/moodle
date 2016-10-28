@@ -216,7 +216,7 @@ class step {
      * @return  $this
      */
     public function set_title($value) {
-        $this->title = clean_param($value, PARAM_TEXT);
+        $this->title = clean_text($value);
         $this->dirty = true;
 
         return $this;
@@ -485,7 +485,18 @@ class step {
             $this->id = $DB->insert_record('tool_usertours_steps', $record);
         }
 
+        $this->get_tour()->reset_step_sortorder();
+
         $this->reload();
+
+        // Notify of a change to the step configuration.
+        // This must be done separately to tour change notifications.
+        cache::notify_step_change($this->get_tourid());
+
+        // Notify the cache that a tour has changed.
+        // Tours are only stored in the cache if there are steps.
+        // If there step count has changed for some reason, this will change the potential cache results.
+        cache::notify_tour_change();
 
         return $this;
     }
@@ -502,6 +513,15 @@ class step {
 
         $DB->delete_records('tool_usertours_steps', array('id' => $this->id));
         $this->get_tour()->reset_step_sortorder();
+
+        // Notify of a change to the step configuration.
+        // This must be done separately to tour change notifications.
+        cache::notify_step_change($this->get_id());
+
+        // Notify the cache that a tour has changed.
+        // Tours are only stored in the cache if there are steps.
+        // If there step count has changed for some reason, this will change the potential cache results.
+        cache::notify_tour_change();
     }
 
     /**
@@ -629,5 +649,28 @@ class step {
         $this->persist();
 
         return $this;
+    }
+
+    /**
+     * Attempt to fetch any matching langstring if the string is in the
+     * format identifier,component.
+     *
+     * @param   string  $string
+     * @return  string
+     */
+    public static function get_string_from_input($string) {
+        $string = trim($string);
+
+        if (preg_match('|^([a-zA-Z][a-zA-Z0-9\.:/_-]*),([a-zA-Z][a-zA-Z0-9\.:/_-]*)$|', $string, $matches)) {
+            if ($matches[2] === 'moodle') {
+                $matches[2] = 'core';
+            }
+
+            if (get_string_manager()->string_exists($matches[1], $matches[2])) {
+                $string = get_string($matches[1], $matches[2]);
+            }
+        }
+
+        return $string;
     }
 }

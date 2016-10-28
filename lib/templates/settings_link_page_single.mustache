@@ -15,9 +15,25 @@
     along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 }}
 {{!
-    Snippet to prevent browsers from autofilling password fields.
+    @template core/settings_link_page_single
+
+    Displays the admin tree as a list of grouped links.
+
+    Example context (json):
+    {
+    }
 }}
-<div class="hide">
-    <input type="text" class="ignoredirty" />
-    <input type="password" class="ignoredirty" />
-</div>
+
+<ul class="nav m-l-2">
+    {{#has_action}}
+    <li class="nav-item"><a class="nav-link" href="{{{action}}}">{{text}}</a></li>
+    {{/has_action}}
+    {{^has_action}}
+    <li class="nav-item">{{text}}</li>
+    {{/has_action}}
+    {{#children.count}}
+        {{#children}}
+            {{> core/settings_link_page_single }}
+        {{/children}}
+    {{/children.count}}
+</ul>

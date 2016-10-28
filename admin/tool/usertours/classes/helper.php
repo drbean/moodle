@@ -355,6 +355,8 @@ class helper {
      * @return  string
      */
     public static function render_stepname_inplace_editable(step $step) {
+        $title = format_text(step::get_string_from_input($step->get_title()), FORMAT_HTML);
+
         return new \core\output\inplace_editable(
                 'tool_usertours',
                 'stepname',
@@ -362,9 +364,9 @@ class helper {
                 true,
                 \html_writer::link(
                     $step->get_edit_link(),
-                    $step->get_title()
+                    $title
                 ),
-                $step->get_title(false)
+                $step->get_title()
             );
     }
 
@@ -432,6 +434,11 @@ class helper {
             }
             $index++;
         }
+
+        // Notify the cache that a tour has changed.
+        // Tours are only stored in the cache if there are steps.
+        // If there step count has changed for some reason, this will change the potential cache results.
+        cache::notify_tour_change();
     }
 
 
@@ -442,11 +449,8 @@ class helper {
      * @return  stdClass[]
      */
     public static function get_steps($tourid) {
-        global $DB;
+        $steps = cache::get_stepdata($tourid);
 
-        $order = 'sortorder ASC';
-
-        $steps = $DB->get_records('tool_usertours_steps', array('tourid' => $tourid), $order);
         $return = [];
         foreach ($steps as $step) {
             $return[$step->id] = step::load_from_record($step);

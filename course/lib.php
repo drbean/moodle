@@ -3469,7 +3469,7 @@ function course_get_tagged_course_modules($tag, $exclusivemode = false, $fromcon
  * This function also handles the frontpage course.
  *
  * @param  stdClass $context context object (it can be a course context or the system context for frontpage settings)
- * @param  stdClass $course  the course where the settings are being rendered (only used when $context is set to frontpage)
+ * @param  stdClass $course  the course where the settings are being rendered
  * @return stdClass          the navigation options in a course and their availability status
  * @since  Moodle 3.2
  */
@@ -3510,6 +3510,30 @@ function course_get_user_navigation_options($context, $course = null) {
         $options->participants = has_capability('moodle/course:viewparticipants', $context);
         $options->badges = !empty($CFG->enablebadges) && !empty($CFG->badges_allowcoursebadges) &&
                             has_capability('moodle/badges:viewbadges', $context);
+        // Add view grade report is permitted.
+        $grades = false;
+
+        if (has_capability('moodle/grade:viewall', $context)) {
+            $grades = true;
+        } else if (!empty($course->showgrades)) {
+            $reports = core_component::get_plugin_list('gradereport');
+            if (is_array($reports) && count($reports) > 0) {  // Get all installed reports.
+                arsort($reports);   // User is last, we want to test it first.
+                foreach ($reports as $plugin => $plugindir) {
+                    if (has_capability('gradereport/'.$plugin.':view', $context)) {
+                        // Stop when the first visible plugin is found.
+                        $grades = true;
+                        break;
+                    }
+                }
+            }
+        }
+        $options->grades = $grades;
+    }
+
+    if (\core_competency\api::is_enabled()) {
+        $capabilities = array('moodle/competency:coursecompetencyview', 'moodle/competency:coursecompetencymanage');
+        $options->competencies = has_any_capability($capabilities, $context);
     }
     return $options;
 }
@@ -3545,25 +3569,6 @@ function course_get_user_administration_options($course, $context) {
         $options->publish = has_capability('moodle/course:publish', $context);
         $options->reset = has_capability('moodle/course:reset', $context);
         $options->roles = has_capability('moodle/role:switchroles', $context);
-
-        // Add view grade report is permitted.
-        $grades = false;
-        if (has_capability('moodle/grade:viewall', $context)) {
-            $grades = true;
-        } else if (!empty($course->showgrades)) {
-            $reports = core_component::get_plugin_list('gradereport');
-            if (is_array($reports) && count($reports) > 0) {  // Get all installed reports.
-                arsort($reports);   // User is last, we want to test it first.
-                foreach ($reports as $plugin => $plugindir) {
-                    if (has_capability('gradereport/'.$plugin.':view', $context)) {
-                        // Stop when the first visible plugin is found.
-                        $grades = true;
-                        break;
-                    }
-                }
-            }
-        }
-        $options->grades = $grades;
     } else {
         // Set default options to false.
         $listofoptions = array('tags', 'gradebook', 'outcomes', 'badges', 'import', 'publish', 'reset', 'roles', 'grades');
@@ -3600,4 +3605,193 @@ function course_validate_dates($coursedata) {
     }
 
     return false;
+}
+
+/**
+ * Check for course updates in the given context level instances (only modules supported right Now)
+ *
+ * @param  stdClass $course  course object
+ * @param  array $tocheck    instances to check for updates
+ * @param  array $filter check only for updates in these areas
+ * @return array list of warnings and instances with updates information
+ * @since  Moodle 3.2
+ */
+function course_check_updates($course, $tocheck, $filter = array()) {
+    global $CFG, $DB;
+
+    $instances = array();
+    $warnings = array();
+    $modulescallbacksupport = array();
+    $modinfo = get_fast_modinfo($course);
+
+    $supportedplugins = get_plugin_list_with_function('mod', 'check_updates_since');
+
+    // Check instances.
+    foreach ($tocheck as $instance) {
+        if ($instance['contextlevel'] == 'module') {
+            // Check module visibility.
+            try {
+                $cm = $modinfo->get_cm($instance['id']);
+            } catch (Exception $e) {
+                $warnings[] = array(
+                    'item' => 'module',
+                    'itemid' => $instance['id'],
+                    'warningcode' => 'cmidnotincourse',
+                    'message' => 'This module id does not belong to this course.'
+                );
+                continue;
+            }
+
+            if (!$cm->uservisible) {
+                $warnings[] = array(
+                    'item' => 'module',
+                    'itemid' => $instance['id'],
+                    'warningcode' => 'nonuservisible',
+                    'message' => 'You don\'t have access to this module.'
+                );
+                continue;
+            }
+            if (empty($supportedplugins['mod_' . $cm->modname])) {
+                $warnings[] = array(
+                    'item' => 'module',
+                    'itemid' => $instance['id'],
+                    'warningcode' => 'missingcallback',
+                    'message' => 'This module does not implement the check_updates_since callback: ' . $instance['contextlevel'],
+                );
+                continue;
+            }
+            // Retrieve the module instance.
+            $instances[] = array(
+                'contextlevel' => $instance['contextlevel'],
+                'id' => $instance['id'],
+                'updates' => call_user_func($cm->modname . '_check_updates_since', $cm, $instance['since'], $filter)
+            );
+
+        } else {
+            $warnings[] = array(
+                'item' => 'contextlevel',
+                'itemid' => $instance['id'],
+                'warningcode' => 'contextlevelnotsupported',
+                'message' => 'Context level not yet supported ' . $instance['contextlevel'],
+            );
+        }
+    }
+    return array($instances, $warnings);
+}
+
+/**
+ * Check module updates since a given time.
+ * This function checks for updates in the module config, file areas, completion, grades, comments and ratings.
+ *
+ * @param  cm_info $cm        course module data
+ * @param  int $from          the time to check
+ * @param  array $fileareas   additional file ares to check
+ * @param  array $filter      if we need to filter and return only selected updates
+ * @return stdClass object with the different updates
+ * @since  Moodle 3.2
+ */
+function course_check_module_updates_since($cm, $from, $fileareas = array(), $filter = array()) {
+    global $DB, $CFG, $USER;
+
+    $context = $cm->context;
+    $mod = $DB->get_record($cm->modname, array('id' => $cm->instance), '*', MUST_EXIST);
+
+    $updates = new stdClass();
+    $course = get_course($cm->course);
+    $component = 'mod_' . $cm->modname;
+
+    // Check changes in the module configuration.
+    if (isset($mod->timemodified) and (empty($filter) or in_array('configuration', $filter))) {
+        $updates->configuration = (object) array('updated' => false);
+        if ($updates->configuration->updated = $mod->timemodified > $from) {
+            $updates->configuration->timeupdated = $mod->timemodified;
+        }
+    }
+
+    // Check for updates in files.
+    if (plugin_supports('mod', $cm->modname, FEATURE_MOD_INTRO)) {
+        $fileareas[] = 'intro';
+    }
+    if (!empty($fileareas) and (empty($filter) or in_array('fileareas', $filter))) {
+        $fs = get_file_storage();
+        $files = $fs->get_area_files($context->id, $component, $fileareas, false, "filearea, timemodified DESC", true, $from);
+        foreach ($fileareas as $filearea) {
+            $updates->{$filearea . 'files'} = (object) array('updated' => false);
+        }
+        foreach ($files as $file) {
+            $updates->{$file->get_filearea() . 'files'}->updated = true;
+            $updates->{$file->get_filearea() . 'files'}->itemids[] = $file->get_id();
+        }
+    }
+
+    // Check completion.
+    $supportcompletion = plugin_supports('mod', $cm->modname, FEATURE_COMPLETION_HAS_RULES);
+    $supportcompletion = $supportcompletion or plugin_supports('mod', $cm->modname, FEATURE_COMPLETION_TRACKS_VIEWS);
+    if ($supportcompletion and (empty($filter) or in_array('completion', $filter))) {
+        $updates->completion = (object) array('updated' => false);
+        $completion = new completion_info($course);
+        // Use wholecourse to cache all the modules the first time.
+        $completiondata = $completion->get_data($cm, true);
+        if ($updates->completion->updated = !empty($completiondata->timemodified) && $completiondata->timemodified > $from) {
+            $updates->completion->timemodified = $completiondata->timemodified;
+        }
+    }
+
+    // Check grades.
+    $supportgrades = plugin_supports('mod', $cm->modname, FEATURE_GRADE_HAS_GRADE);
+    $supportgrades = $supportgrades or plugin_supports('mod', $cm->modname, FEATURE_GRADE_OUTCOMES);
+    if ($supportgrades and (empty($filter) or (in_array('gradeitems', $filter) or in_array('outcomes', $filter)))) {
+        require_once($CFG->libdir . '/gradelib.php');
+        $grades = grade_get_grades($course->id, 'mod', $cm->modname, $mod->id, $USER->id);
+
+        if (empty($filter) or in_array('gradeitems', $filter)) {
+            $updates->gradeitems = (object) array('updated' => false);
+            foreach ($grades->items as $gradeitem) {
+                foreach ($gradeitem->grades as $grade) {
+                    if ($grade->datesubmitted > $from or $grade->dategraded > $from) {
+                        $updates->gradeitems->updated = true;
+                        $updates->gradeitems->itemids[] = $gradeitem->id;
+                    }
+                }
+            }
+        }
+
+        if (empty($filter) or in_array('outcomes', $filter)) {
+            $updates->outcomes = (object) array('updated' => false);
+            foreach ($grades->outcomes as $outcome) {
+                foreach ($outcome->grades as $grade) {
+                    if ($grade->datesubmitted > $from or $grade->dategraded > $from) {
+                        $updates->outcomes->updated = true;
+                        $updates->outcomes->itemids[] = $outcome->id;
+                    }
+                }
+            }
+        }
+    }
+
+    // Check comments.
+    if (plugin_supports('mod', $cm->modname, FEATURE_COMMENT) and (empty($filter) or in_array('comments', $filter))) {
+        $updates->comments = (object) array('updated' => false);
+        require_once($CFG->dirroot . '/comment/locallib.php');
+        $manager = new comment_manager();
+        $comments = $manager->get_component_comments_since($course, $context, $component, $from, $cm);
+        if (!empty($comments)) {
+            $updates->comments->updated = true;
+            $updates->comments->itemids = array_keys($comments);
+        }
+    }
+
+    // Check ratings.
+    if (plugin_supports('mod', $cm->modname, FEATURE_RATE) and (empty($filter) or in_array('ratings', $filter))) {
+        $updates->ratings = (object) array('updated' => false);
+        require_once($CFG->dirroot . '/rating/lib.php');
+        $manager = new rating_manager();
+        $ratings = $manager->get_component_ratings_since($context, $component, $from);
+        if (!empty($ratings)) {
+            $updates->ratings->updated = true;
+            $updates->ratings->itemids = array_keys($ratings);
+        }
+    }
+
+    return $updates;
 }

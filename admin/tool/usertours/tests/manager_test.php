@@ -26,6 +26,7 @@ defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
 require_once($CFG->libdir . '/formslib.php');
+require_once(__DIR__ . '/helper_trait.php');
 
 /**
  * Tests for step.
@@ -34,7 +35,9 @@ require_once($CFG->libdir . '/formslib.php');
  * @copyright  2016 Andrew Nicols <andrew@nicols.co.uk>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class manager_testcase extends advanced_testcase {
+class tool_usertours_manager_testcase extends advanced_testcase {
+    // There are shared helpers for these tests in the helper trait.
+    use tool_usertours_helper_trait;
 
     /**
      * @var moodle_database
@@ -239,55 +242,16 @@ class manager_testcase extends advanced_testcase {
         $this->resetAfterTest();
 
         foreach ($alltours as $tourconfig) {
-            $tourconfig = (object) $tourconfig;
-            $tourconfig->id = null;
-            $tour = \tool_usertours\tour::load_from_record($tourconfig, true);
-            $tour->persist(true);
-
-            $stepconfig = (object) [
-                'id' => null,
-                'tourid' => $tour->get_id(),
-                'title' => '',
-                'content' => '',
-                'targettype' => \tool_usertours\target::TARGET_UNATTACHED,
-                'targetvalue' => '',
-                'sortorder' => 0,
-                'configdata' => '',
-            ];
-            $step = \tool_usertours\step::load_from_record($stepconfig, true);
-            $step->persist(true);
+            $tour = $this->helper_create_tour((object) $tourconfig);
+            $this->helper_create_step((object) ['tourid' => $tour->get_id()]);
         }
 
         $match = \tool_usertours\manager::get_matching_tours(new moodle_url($url));
         if ($expected === null) {
             $this->assertNull($match);
         } else {
+            $this->assertNotNull($match);
             $this->assertEquals($expected, $match->get_name());
         }
     }
-
-    /**
-     * Tests for the get_matching_tours function when requiring an upgrade
-     *
-     * @dataProvider get_matching_tours_provider
-     * @param   array   $alltours   The list of tours to insert
-     * @param   string  $url        The URL to test
-     * @param   string  $expected   The name of the expected matching tour
-     */
-    public function test_get_matching_tours_requires_upgrade($alltours, $url, $expected) {
-        $this->resetAfterTest();
-
-        global $CFG;
-        unset($CFG->version);
-
-        foreach ($alltours as $tourconfig) {
-            $tourconfig = (object) $tourconfig;
-            $tourconfig->id = null;
-            $tour = \tool_usertours\tour::load_from_record($tourconfig, true);
-            $tour->persist(true);
-        }
-
-        $this->assertNull(\tool_usertours\manager::get_matching_tours(new moodle_url($url)));
-    }
-
 }

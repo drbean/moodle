@@ -149,7 +149,7 @@ class theme_config {
     /**
      * @var string Default theme, used when requested theme not found.
      */
-    const DEFAULT_THEME = 'clean';
+    const DEFAULT_THEME = 'boost';
 
     /**
      * @var array You can base your theme on other themes by linking to the other theme as
@@ -344,6 +344,12 @@ class theme_config {
      */
     public $doctype = 'html5';
 
+    /**
+     * @var string undeletableblocktypes If set to a string, will list the block types that cannot be deleted. Defaults to
+     *                                   navigation and settings.
+     */
+    public $undeletableblocktypes = false;
+
     //==Following properties are not configurable from theme config.php==
 
     /**
@@ -524,7 +530,7 @@ class theme_config {
         $configurable = array(
             'parents', 'sheets', 'parents_exclude_sheets', 'plugins_exclude_sheets',
             'javascripts', 'javascripts_footer', 'parents_exclude_javascripts',
-            'layouts', 'enable_dock', 'enablecourseajax',
+            'layouts', 'enable_dock', 'enablecourseajax', 'undeletableblocktypes',
             'rendererfactory', 'csspostprocess', 'editor_sheets', 'rarrow', 'larrow', 'uarrow', 'darrow',
             'hidefromselector', 'doctype', 'yuicssmodules', 'blockrtlmanipulations',
             'lessfile', 'extralesscallback', 'lessvariablescallback', 'blockrendermethod',
