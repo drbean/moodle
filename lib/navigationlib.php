@@ -4129,6 +4129,27 @@ class settings_navigation extends navigation_node {
             $coursenode->add(get_string('coursetags', 'tag'), $url, self::TYPE_SETTING, null, 'coursetags', new pix_icon('i/settings', ''));
         }
 
+        // Questions
+        require_once($CFG->libdir . '/questionlib.php');
+        question_extend_settings_navigation($coursenode, $coursecontext)->trim_if_empty();
+
+        if ($adminoptions->update) {
+            // Repository Instances
+            if (!$this->cache->cached('contexthasrepos'.$coursecontext->id)) {
+                require_once($CFG->dirroot . '/repository/lib.php');
+                $editabletypes = repository::get_editable_types($coursecontext);
+                $haseditabletypes = !empty($editabletypes);
+                unset($editabletypes);
+                $this->cache->set('contexthasrepos'.$coursecontext->id, $haseditabletypes);
+            } else {
+                $haseditabletypes = $this->cache->{'contexthasrepos'.$coursecontext->id};
+            }
+            if ($haseditabletypes) {
+                $url = new moodle_url('/repository/manage_instances.php', array('contextid' => $coursecontext->id));
+                $coursenode->add(get_string('repositories'), $url, self::TYPE_SETTING, null, null, new pix_icon('i/repository', ''));
+            }
+        }
+
         // add enrol nodes
         enrol_add_course_navigation($coursenode, $course);
 
@@ -4207,27 +4228,6 @@ class settings_navigation extends navigation_node {
         if ($adminoptions->reset) {
             $url = new moodle_url('/course/reset.php', array('id'=>$course->id));
             $coursenode->add(get_string('reset'), $url, self::TYPE_SETTING, null, 'reset', new pix_icon('i/return', ''));
-        }
-
-        // Questions
-        require_once($CFG->libdir . '/questionlib.php');
-        question_extend_settings_navigation($coursenode, $coursecontext)->trim_if_empty();
-
-        if ($adminoptions->update) {
-            // Repository Instances
-            if (!$this->cache->cached('contexthasrepos'.$coursecontext->id)) {
-                require_once($CFG->dirroot . '/repository/lib.php');
-                $editabletypes = repository::get_editable_types($coursecontext);
-                $haseditabletypes = !empty($editabletypes);
-                unset($editabletypes);
-                $this->cache->set('contexthasrepos'.$coursecontext->id, $haseditabletypes);
-            } else {
-                $haseditabletypes = $this->cache->{'contexthasrepos'.$coursecontext->id};
-            }
-            if ($haseditabletypes) {
-                $url = new moodle_url('/repository/manage_instances.php', array('contextid' => $coursecontext->id));
-                $coursenode->add(get_string('repositories'), $url, self::TYPE_SETTING, null, null, new pix_icon('i/repository', ''));
-            }
         }
 
         // Manage files
