@@ -217,6 +217,9 @@ class phpunit_util extends testing_util {
         core_filetypes::reset_caches();
         \core_search\manager::clear_static();
         core_user::reset_caches();
+        if (class_exists('core_media_manager', false)) {
+            core_media_manager::reset_caches();
+        }
 
         // Reset static unit test options.
         if (class_exists('\availability_date\condition', false)) {
@@ -817,6 +820,23 @@ class phpunit_util extends testing_util {
             return 'English_Australia.1252';
         } else {
             return 'en_AU.UTF-8';
+        }
+    }
+
+    /**
+     * Executes all adhoc tasks in the queue. Useful for testing asynchronous behaviour.
+     *
+     * @return void
+     */
+    public static function run_all_adhoc_tasks() {
+        $now = time();
+        while (($task = \core\task\manager::get_next_adhoc_task($now)) !== null) {
+            try {
+                $task->execute();
+                \core\task\manager::adhoc_task_complete($task);
+            } catch (Exception $e) {
+                \core\task\manager::adhoc_task_failed($task);
+            }
         }
     }
 }

@@ -834,6 +834,7 @@ function forum_cron() {
                 mtrace('Sending ', '');
 
                 $eventdata = new \core\message\message();
+                $eventdata->courseid            = $course->id;
                 $eventdata->component           = 'mod_forum';
                 $eventdata->name                = 'posts';
                 $eventdata->userfrom            = $userfrom;
@@ -851,11 +852,6 @@ function forum_cron() {
                     $additionalcontent = array('fullmessage' => array('footer' => $textfooter),
                                      'fullmessagehtml' => array('footer' => $htmlfooter));
                     $eventdata->set_additional_content('email', $additionalcontent);
-                }
-
-                // If forum_replytouser is not set then send mail using the noreplyaddress.
-                if (empty($CFG->forum_replytouser)) {
-                    $eventdata->userfrom = core_user::get_noreply_user();
                 }
 
                 $smallmessagestrings = new stdClass();
@@ -1185,6 +1181,7 @@ function forum_cron() {
                 }
 
                 $eventdata = new \core\message\message();
+                $eventdata->courseid            = SITEID;
                 $eventdata->component           = 'mod_forum';
                 $eventdata->name                = 'digests';
                 $eventdata->userfrom            = core_user::get_noreply_user();

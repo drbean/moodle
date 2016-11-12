@@ -1,4 +1,4 @@
-<label class="form-check-inline {{#error}}has-danger{{/error}}">
+<label class="form-check-inline {{#error}}has-danger{{/error}} fitem {{#advanced}}advanced{{/advanced}} {{{element.extraclasses}}}">
 {{^element.hardfrozen}}
     {{^element.frozen}}
         <input type="hidden" name="{{element.name}}" value="{{element.deselectedvalue}}">
@@ -21,8 +21,8 @@
         disabled
     {{/element.frozen}}
     {{{element.attributes}}} >
-    {{{label}}} {{{helpbutton}}}
-</label>
+    {{{label}}}
+</label> {{{helpbutton}}}
 <span class="form-control-feedback" id="id_error_{{element.name}}" {{^error}} style="display: none;"{{/error}}>
     {{{error}}}
 </span>

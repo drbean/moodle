@@ -161,6 +161,7 @@ class cache_factory {
         $factory->reset_cache_instances();
         $factory->configs = array();
         $factory->definitions = array();
+        $factory->definitionstores = array();
         $factory->lockplugins = array(); // MUST be null in order to force its regeneration.
         // Reset the state to uninitialised.
         $factory->state = self::STATE_UNINITIALISED;
@@ -277,6 +278,9 @@ class cache_factory {
         if (!array_key_exists($name, $this->stores)) {
             // Properties: name, plugin, configuration, class.
             $class = $details['class'];
+            if (!$class::are_requirements_met()) {
+                return false;
+            }
             $store = new $class($details['name'], $details['configuration']);
             $this->stores[$name] = $store;
         }

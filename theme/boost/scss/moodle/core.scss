@@ -15,9 +15,14 @@
 }
 
 .context-header-settings-menu .dropdown-toggle > .icon,
-.region-main-settings-menu .dropdown-toggle > .icon {
+#region-main-settings-menu .dropdown-toggle > .icon {
     height: 24px;
     width: auto;
+}
+/** Prevent user notifications overlapping with region main settings menu */
+#user-notifications {
+    display: block;
+    overflow: hidden;
 }
 
 /** Page layout CSS starts **/
@@ -2008,7 +2013,6 @@ dd:after {
 
         input {
             width: 330px;
-            height: 16px;
             vertical-align: text-bottom;
             margin-bottom: 0;
         }
@@ -2173,3 +2177,8 @@ $footer-link-color: $brand-primary !default;
     color: $body-color;
 }
 
+.competency-tree {
+    ul {
+        padding-left: 1.5rem;
+    }
+}

@@ -403,6 +403,8 @@ class mod_assign_external extends external_api {
                     }
 
                     $assign = new assign($context, null, null);
+                    // Update assign with override information.
+                    $assign->update_effective_access($USER->id);
 
                     // Get configurations for only enabled plugins.
                     $plugins = $assign->get_submission_plugins();
@@ -433,12 +435,12 @@ class mod_assign_external extends external_api {
                         'sendnotifications' => $module->sendnotifications,
                         'sendlatenotifications' => $module->sendlatenotifications,
                         'sendstudentnotifications' => $module->sendstudentnotifications,
-                        'duedate' => $module->duedate,
-                        'allowsubmissionsfromdate' => $module->allowsubmissionsfromdate,
+                        'duedate' => $assign->get_instance()->duedate,
+                        'allowsubmissionsfromdate' => $assign->get_instance()->allowsubmissionsfromdate,
                         'grade' => $module->grade,
                         'timemodified' => $module->timemodified,
                         'completionsubmit' => $module->completionsubmit,
-                        'cutoffdate' => $module->cutoffdate,
+                        'cutoffdate' => $assign->get_instance()->cutoffdate,
                         'teamsubmission' => $module->teamsubmission,
                         'requireallteammemberssubmit' => $module->requireallteammemberssubmit,
                         'teamsubmissiongroupingid' => $module->teamsubmissiongroupingid,
@@ -1506,7 +1508,7 @@ class mod_assign_external extends external_api {
      * @param int $userid The id of the user the submission belongs to.
      * @param string $jsonformdata The data from the form, encoded as a json array.
      * @return array of warnings to indicate any errors.
-     * @since Moodle 2.6
+     * @since Moodle 3.1
      */
     public static function submit_grading_form($assignmentid, $userid, $jsonformdata) {
         global $CFG, $USER;
@@ -1536,6 +1538,12 @@ class mod_assign_external extends external_api {
             'rownum' => 0,
             'gradingpanel' => true
         );
+
+        if (WS_SERVER) {
+            // Assume form submission if coming from WS.
+            $USER->ignoresesskey = true;
+            $data['_qf__mod_assign_grade_form_'.$params['userid']] = 1;
+        }
 
         $customdata = (object) $data;
         $formparams = array($assignment, $customdata, $options);
@@ -1790,6 +1798,7 @@ class mod_assign_external extends external_api {
 
         $notices = array();
 
+        $assignment->update_effective_access($USER->id);
         if (!$assignment->submissions_open($USER->id)) {
             $notices[] = get_string('duedatereached', 'assign');
         } else {
@@ -2370,6 +2379,9 @@ class mod_assign_external extends external_api {
                                                                             $lastattempt->submissiongroupmemberswhoneedtosubmit);
             }
 
+            // Can edit its own submission?
+            $lastattempt->caneditowner = $assign->submissions_open($user->id) && $assign->is_any_submission_plugin_enabled();
+
             $result['lastattempt'] = $lastattempt;
         }
 
@@ -2464,6 +2476,7 @@ class mod_assign_external extends external_api {
                         'locked' => new external_value(PARAM_BOOL, 'Whether new submissions are locked.'),
                         'graded' => new external_value(PARAM_BOOL, 'Whether the submission is graded.'),
                         'canedit' => new external_value(PARAM_BOOL, 'Whether the user can edit the current submission.'),
+                        'caneditowner' => new external_value(PARAM_BOOL, 'Whether the owner of the submission can edit it.'),
                         'cansubmit' => new external_value(PARAM_BOOL, 'Whether the user can submit.'),
                         'extensionduedate' => new external_value(PARAM_INT, 'Extension due date.'),
                         'blindmarking' => new external_value(PARAM_BOOL, 'Whether blind marking is enabled.'),
@@ -2722,6 +2735,10 @@ class mod_assign_external extends external_api {
         $assign->require_view_grades();
 
         $participant = $assign->get_participant($params['userid']);
+
+        // Update assign with override information.
+        $assign->update_effective_access($params['userid']);
+
         if (!$participant) {
             // No participant found so we can return early.
             throw new moodle_exception('usernotincourse');
@@ -2733,6 +2750,10 @@ class mod_assign_external extends external_api {
             'submitted' => $participant->submitted,
             'requiregrading' => $participant->requiregrading,
             'blindmarking' => $assign->is_blind_marking(),
+            'allowsubmissionsfromdate' => $assign->get_instance()->allowsubmissionsfromdate,
+            'duedate' => $assign->get_instance()->duedate,
+            'cutoffdate' => $assign->get_instance()->cutoffdate,
+            'duedatestr' => userdate($assign->get_instance()->duedate, get_string('strftimedatetime', 'langconfig')),
         );
 
         if (!empty($participant->groupid)) {
@@ -2768,6 +2789,10 @@ class mod_assign_external extends external_api {
             'submitted' => new external_value(PARAM_BOOL, 'have they submitted their assignment'),
             'requiregrading' => new external_value(PARAM_BOOL, 'is their submission waiting for grading'),
             'blindmarking' => new external_value(PARAM_BOOL, 'is blind marking enabled for this assignment'),
+            'allowsubmissionsfromdate' => new external_value(PARAM_INT, 'allowsubmissionsfromdate for the user'),
+            'duedate' => new external_value(PARAM_INT, 'duedate for the user'),
+            'cutoffdate' => new external_value(PARAM_INT, 'cutoffdate for the user'),
+            'duedatestr' => new external_value(PARAM_TEXT, 'duedate for the user'),
             'groupid' => new external_value(PARAM_INT, 'for group assignments this is the group id', VALUE_OPTIONAL),
             'groupname' => new external_value(PARAM_NOTAGS, 'for group assignments this is the group name', VALUE_OPTIONAL),
             'user' => $userdescription,

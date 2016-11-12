@@ -64,6 +64,13 @@ $capabilities = array(
         'archetypes' => array(
         )
     ),
+    'moodle/site:configview' => array(
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_SYSTEM,
+        'archetypes' => array(
+            'manager' => CAP_ALLOW,
+        )
+    ),
 
     'moodle/site:readallmessages' => array(
 
@@ -74,6 +81,17 @@ $capabilities = array(
         'archetypes' => array(
             'manager' => CAP_ALLOW,
             'editingteacher' => CAP_ALLOW
+        )
+    ),
+
+    'moodle/site:manageallmessaging' => array(
+
+        'riskbitmask' => RISK_PERSONAL,
+
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_SYSTEM,
+        'archetypes' => array(
+            'manager' => CAP_ALLOW
         )
     ),
 
