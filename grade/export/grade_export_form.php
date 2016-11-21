@@ -71,7 +71,7 @@ class grade_export_form extends moodleform {
             }
 
             if ($needs_multiselect) {
-                $this->add_checkbox_controller(1, null, null, 1); // 1st argument is group name, 2nd is link text, 3rd is attributes and 4th is original value
+                $this->add_checkbox_controller(1, null, null, 0); // 1st argument is group name, 2nd is link text, 3rd is attributes and 4th is original value
             }
         }
 
