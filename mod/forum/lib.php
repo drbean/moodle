@@ -834,6 +834,7 @@ function forum_cron() {
                 mtrace('Sending ', '');
 
                 $eventdata = new \core\message\message();
+                $eventdata->courseid            = $course->id;
                 $eventdata->component           = 'mod_forum';
                 $eventdata->name                = 'posts';
                 $eventdata->userfrom            = $userfrom;
@@ -851,11 +852,6 @@ function forum_cron() {
                     $additionalcontent = array('fullmessage' => array('footer' => $textfooter),
                                      'fullmessagehtml' => array('footer' => $htmlfooter));
                     $eventdata->set_additional_content('email', $additionalcontent);
-                }
-
-                // If forum_replytouser is not set then send mail using the noreplyaddress.
-                if (empty($CFG->forum_replytouser)) {
-                    $eventdata->userfrom = core_user::get_noreply_user();
                 }
 
                 $smallmessagestrings = new stdClass();
@@ -888,7 +884,10 @@ function forum_cron() {
             }
 
             // Mark processed posts as read.
-            forum_tp_mark_posts_read($userto, $userto->markposts);
+            if (get_user_preferences('forum_markasreadonnotification', 1, $userto->id) == 1) {
+                forum_tp_mark_posts_read($userto, $userto->markposts);
+            }
+
             unset($userto);
         }
     }
@@ -1182,6 +1181,7 @@ function forum_cron() {
                 }
 
                 $eventdata = new \core\message\message();
+                $eventdata->courseid            = SITEID;
                 $eventdata->component           = 'mod_forum';
                 $eventdata->name                = 'digests';
                 $eventdata->userfrom            = core_user::get_noreply_user();
@@ -1202,7 +1202,9 @@ function forum_cron() {
                     $usermailcount++;
 
                     // Mark post as read if forum_usermarksread is set off
-                    forum_tp_mark_posts_read($userto, $userto->markposts);
+                    if (get_user_preferences('forum_markasreadonnotification', 1, $userto->id) == 1) {
+                        forum_tp_mark_posts_read($userto, $userto->markposts);
+                    }
                 }
             }
         }
@@ -2516,10 +2518,12 @@ function forum_count_discussions($forum, $cm, $course) {
  * @param int $perpage
  * @param int $groupid if groups enabled, get discussions for this group overriding the current group.
  *                     Use FORUM_POSTS_ALL_USER_GROUPS for all the user groups
+ * @param int $updatedsince retrieve only discussions updated since the given time
  * @return array
  */
 function forum_get_discussions($cm, $forumsort="", $fullpost=true, $unused=-1, $limit=-1,
-                                $userlastmodified=false, $page=-1, $perpage=0, $groupid = -1) {
+                                $userlastmodified=false, $page=-1, $perpage=0, $groupid = -1,
+                                $updatedsince = 0) {
     global $CFG, $DB, $USER;
 
     $timelimit = '';
@@ -2630,6 +2634,12 @@ function forum_get_discussions($cm, $forumsort="", $fullpost=true, $unused=-1, $
         $umtable  = " LEFT JOIN {user} um ON (d.usermodified = um.id)";
     }
 
+    $updatedsincesql = '';
+    if (!empty($updatedsince)) {
+        $updatedsincesql = 'AND d.timemodified > ?';
+        $params[] = $updatedsince;
+    }
+
     $allnames = get_all_user_name_fields(true, 'u');
     $sql = "SELECT $postdata, d.name, d.timemodified, d.usermodified, d.groupid, d.timestart, d.timeend, d.pinned, $allnames,
                    u.email, u.picture, u.imagealt $umfields
@@ -2638,8 +2648,9 @@ function forum_get_discussions($cm, $forumsort="", $fullpost=true, $unused=-1, $
                    JOIN {user} u ON p.userid = u.id
                    $umtable
              WHERE d.forum = ? AND p.parent = 0
-                   $timelimit $groupselect
+                   $timelimit $groupselect $updatedsincesql
           ORDER BY $forumsort, d.id DESC";
+
     return $DB->get_records_sql($sql, $params, $limitfrom, $limitnum);
 }
 
@@ -3928,22 +3939,10 @@ function forum_print_mode_form($id, $mode, $forumtype='') {
  * @return string
  */
 function forum_search_form($course, $search='') {
-    global $CFG, $OUTPUT;
-
-    $output  = '<div class="forumsearch">';
-    $output .= '<form action="'.$CFG->wwwroot.'/mod/forum/search.php" style="display:inline">';
-    $output .= '<fieldset class="invisiblefieldset">';
-    $output .= $OUTPUT->help_icon('search');
-    $output .= '<label class="accesshide" for="search" >'.get_string('search', 'forum').'</label>';
-    $output .= '<input id="search" name="search" type="text" size="18" value="'.s($search, true).'" />';
-    $output .= '<label class="accesshide" for="searchforums" >'.get_string('searchforums', 'forum').'</label>';
-    $output .= '<input id="searchforums" value="'.get_string('searchforums', 'forum').'" type="submit" />';
-    $output .= '<input name="id" type="hidden" value="'.$course->id.'" />';
-    $output .= '</fieldset>';
-    $output .= '</form>';
-    $output .= '</div>';
-
-    return $output;
+    global $CFG, $PAGE;
+    $forumsearch = new \mod_forum\output\quick_search_form($course->id, $search);
+    $output = $PAGE->get_renderer('mod_forum');
+    return $output->render($forumsearch);
 }
 
 
@@ -5363,10 +5362,6 @@ function forum_print_latest_discussions($course, $forum, $maxdiscussions = -1, $
     }
 
     if ($canstart) {
-        echo '<div class="singlebutton forumaddnew">';
-        echo "<form id=\"newdiscussionform\" method=\"get\" action=\"$CFG->wwwroot/mod/forum/post.php\">";
-        echo '<div>';
-        echo "<input type=\"hidden\" name=\"forum\" value=\"$forum->id\" />";
         switch ($forum->type) {
             case 'news':
             case 'blog':
@@ -5379,10 +5374,10 @@ function forum_print_latest_discussions($course, $forum, $maxdiscussions = -1, $
                 $buttonadd = get_string('addanewdiscussion', 'forum');
                 break;
         }
-        echo '<input type="submit" value="'.$buttonadd.'" />';
-        echo '</div>';
-        echo '</form>';
-        echo "</div>\n";
+        $button = new single_button(new moodle_url('/mod/forum/post.php', ['forum' => $forum->id]), $buttonadd, 'get');
+        $button->class = 'singlebutton forumaddnew';
+        $button->formid = 'newdiscussionform';
+        echo $OUTPUT->render($button);
 
     } else if (isguestuser() or !isloggedin() or $forum->type == 'news' or
         $forum->type == 'qanda' and !has_capability('mod/forum:addquestion', $context) or
@@ -7151,6 +7146,7 @@ function forum_extend_settings_navigation(settings_navigation $settingsnav, navi
 
     if ($canmanage) {
         $mode = $forumnode->add(get_string('subscriptionmode', 'forum'), null, navigation_node::TYPE_CONTAINER);
+        $mode->add_class('subscriptionmode');
 
         $allowchoice = $mode->add(get_string('subscriptionoptional', 'forum'), new moodle_url('/mod/forum/subscribe.php', array('id'=>$forumobject->id, 'mode'=>FORUM_CHOOSESUBSCRIBE, 'sesskey'=>sesskey())), navigation_node::TYPE_SETTING);
         $forceforever = $mode->add(get_string("subscriptionforced", "forum"), new moodle_url('/mod/forum/subscribe.php', array('id'=>$forumobject->id, 'mode'=>FORUM_FORCESUBSCRIBE, 'sesskey'=>sesskey())), navigation_node::TYPE_SETTING);
@@ -7161,18 +7157,22 @@ function forum_extend_settings_navigation(settings_navigation $settingsnav, navi
             case FORUM_CHOOSESUBSCRIBE : // 0
                 $allowchoice->action = null;
                 $allowchoice->add_class('activesetting');
+                $allowchoice->icon = new pix_icon('t/selected', '', 'mod_forum');
                 break;
             case FORUM_FORCESUBSCRIBE : // 1
                 $forceforever->action = null;
                 $forceforever->add_class('activesetting');
+                $forceforever->icon = new pix_icon('t/selected', '', 'mod_forum');
                 break;
             case FORUM_INITIALSUBSCRIBE : // 2
                 $forceinitially->action = null;
                 $forceinitially->add_class('activesetting');
+                $forceinitially->icon = new pix_icon('t/selected', '', 'mod_forum');
                 break;
             case FORUM_DISALLOWSUBSCRIBE : // 3
                 $disallowchoice->action = null;
                 $disallowchoice->add_class('activesetting');
+                $disallowchoice->icon = new pix_icon('t/selected', '', 'mod_forum');
                 break;
         }
 
@@ -7489,15 +7489,6 @@ function forum_get_posts_by_user($user, array $courses, $musthaveaccess = false,
             if (!can_access_course($course)) {
                 if ($musthaveaccess) {
                     print_error('errorenrolmentrequired', 'forum');
-                }
-                continue;
-            }
-
-            // Check whether the requested user is enrolled or has access to view the course
-            // if they don't we immediately have a problem.
-            if (!can_access_course($course, $user) && !is_enrolled($coursecontext, $user)) {
-                if ($musthaveaccess) {
-                    print_error('notenrolled', 'forum');
                 }
                 continue;
             }
@@ -8048,4 +8039,34 @@ function forum_discussion_is_locked($forum, $discussion) {
     }
 
     return false;
+}
+
+/**
+ * Check if the module has any update that affects the current user since a given time.
+ *
+ * @param  cm_info $cm course module data
+ * @param  int $from the time to check updates from
+ * @param  array $filter  if we need to check only specific updates
+ * @return stdClass an object with the different type of areas indicating if they were updated or not
+ * @since Moodle 3.2
+ */
+function forum_check_updates_since(cm_info $cm, $from, $filter = array()) {
+
+    $context = $cm->context;
+    $updates = new stdClass();
+    if (!has_capability('mod/forum:viewdiscussion', $context)) {
+        return $updates;
+    }
+
+    $updates = course_check_module_updates_since($cm, $from, array(), $filter);
+
+    // Check if there are new discussions in the forum.
+    $updates->discussions = (object) array('updated' => false);
+    $discussions = forum_get_discussions($cm, '', false, -1, -1, true, -1, 0, FORUM_POSTS_ALL_USER_GROUPS, $from);
+    if (!empty($discussions)) {
+        $updates->discussions->updated = true;
+        $updates->discussions->itemids = array_keys($discussions);
+    }
+
+    return $updates;
 }

@@ -583,6 +583,8 @@ function grade_get_grades($courseid, $itemtype, $itemmodule, $iteminstance, $use
                         $grade->feedback       = $grade_grades[$userid]->feedback;
                         $grade->feedbackformat = $grade_grades[$userid]->feedbackformat;
                         $grade->usermodified   = $grade_grades[$userid]->usermodified;
+                        $grade->datesubmitted  = $grade_grades[$userid]->get_datesubmitted();
+                        $grade->dategraded     = $grade_grades[$userid]->get_dategraded();
 
                         // create text representation of grade
                         if (in_array($grade_item->id, $needsupdate)) {
@@ -1115,8 +1117,9 @@ function grade_recover_history_grades($userid, $courseid) {
  * @return bool true if ok, array of errors if problems found. Grade item id => error message
  */
 function grade_regrade_final_grades($courseid, $userid=null, $updated_item=null, $progress=null) {
-    // This may take a very long time.
+    // This may take a very long time and extra memory.
     \core_php_time_limit::raise();
+    raise_memory_limit(MEMORY_EXTRA);
 
     $course_item = grade_item::fetch_course_item($courseid);
 

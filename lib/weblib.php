@@ -1319,7 +1319,9 @@ function format_text($text, $format = FORMAT_MOODLE, $options = null, $courseidd
 
     if ($options['blanktarget']) {
         $domdoc = new DOMDocument();
+        libxml_use_internal_errors(true);
         $domdoc->loadHTML('<?xml version="1.0" encoding="UTF-8" ?>' . $text);
+        libxml_clear_errors();
         foreach ($domdoc->getElementsByTagName('a') as $link) {
             if ($link->hasAttribute('target') && strpos($link->getAttribute('target'), '_blank') === false) {
                 continue;
@@ -1782,7 +1784,7 @@ function purify_html($text, $options = array()) {
         $config = HTMLPurifier_Config::createDefault();
 
         $config->set('HTML.DefinitionID', 'moodlehtml');
-        $config->set('HTML.DefinitionRev', 5);
+        $config->set('HTML.DefinitionRev', 6);
         $config->set('Cache.SerializerPath', $cachedir);
         $config->set('Cache.SerializerPermissions', $CFG->directorypermissions);
         $config->set('Core.NormalizeNewlines', false);
@@ -1863,9 +1865,6 @@ function purify_html($text, $options = array()) {
 
             // Use the built-in Ruby module to add annotation support.
             $def->manager->addModule(new HTMLPurifier_HTMLModule_Ruby());
-
-            // Use the custom Noreferrer module.
-            $def->manager->addModule(new HTMLPurifier_HTMLModule_Noreferrer());
         }
 
         $purifier = new HTMLPurifier($config);
@@ -3169,183 +3168,6 @@ function is_in_popup() {
 }
 
 /**
- * Progress bar class.
- *
- * Manages the display of a progress bar.
- *
- * To use this class.
- * - construct
- * - call create (or use the 3rd param to the constructor)
- * - call update or update_full() or update() repeatedly
- *
- * @copyright 2008 jamiesensei
- * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @package core
- */
-class progress_bar {
-    /** @var string html id */
-    private $html_id;
-    /** @var int total width */
-    private $width;
-    /** @var int last percentage printed */
-    private $percent = 0;
-    /** @var int time when last printed */
-    private $lastupdate = 0;
-    /** @var int when did we start printing this */
-    private $time_start = 0;
-
-    /**
-     * Constructor
-     *
-     * Prints JS code if $autostart true.
-     *
-     * @param string $html_id
-     * @param int $width
-     * @param bool $autostart Default to false
-     */
-    public function __construct($htmlid = '', $width = 500, $autostart = false) {
-        if (!empty($htmlid)) {
-            $this->html_id  = $htmlid;
-        } else {
-            $this->html_id  = 'pbar_'.uniqid();
-        }
-
-        $this->width = $width;
-
-        if ($autostart) {
-            $this->create();
-        }
-    }
-
-    /**
-     * Create a new progress bar, this function will output html.
-     *
-     * @return void Echo's output
-     */
-    public function create() {
-        global $PAGE;
-
-        $this->time_start = microtime(true);
-        if (CLI_SCRIPT) {
-            return; // Temporary solution for cli scripts.
-        }
-
-        $PAGE->requires->string_for_js('secondsleft', 'moodle');
-
-        $htmlcode = <<<EOT
-        <div class="progressbar_container" style="width: {$this->width}px;" id="{$this->html_id}">
-            <h2></h2>
-            <div class="progress progress-striped active">
-                <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">&nbsp;</div>
-            </div>
-            <p></p>
-        </div>
-EOT;
-        flush();
-        echo $htmlcode;
-        flush();
-    }
-
-    /**
-     * Update the progress bar
-     *
-     * @param int $percent from 1-100
-     * @param string $msg
-     * @return void Echo's output
-     * @throws coding_exception
-     */
-    private function _update($percent, $msg) {
-        if (empty($this->time_start)) {
-            throw new coding_exception('You must call create() (or use the $autostart ' .
-                    'argument to the constructor) before you try updating the progress bar.');
-        }
-
-        if (CLI_SCRIPT) {
-            return; // Temporary solution for cli scripts.
-        }
-
-        $estimate = $this->estimate($percent);
-
-        if ($estimate === null) {
-            // Always do the first and last updates.
-        } else if ($estimate == 0) {
-            // Always do the last updates.
-        } else if ($this->lastupdate + 20 < time()) {
-            // We must update otherwise browser would time out.
-        } else if (round($this->percent, 2) === round($percent, 2)) {
-            // No significant change, no need to update anything.
-            return;
-        }
-        if (is_numeric($estimate)) {
-            $estimate = get_string('secondsleft', 'moodle', round($estimate, 2));
-        }
-
-        $this->percent = round($percent, 2);
-        $this->lastupdate = microtime(true);
-
-        echo html_writer::script(js_writer::function_call('updateProgressBar',
-            array($this->html_id, $this->percent, $msg, $estimate)));
-        flush();
-    }
-
-    /**
-     * Estimate how much time it is going to take.
-     *
-     * @param int $pt from 1-100
-     * @return mixed Null (unknown), or int
-     */
-    private function estimate($pt) {
-        if ($this->lastupdate == 0) {
-            return null;
-        }
-        if ($pt < 0.00001) {
-            return null; // We do not know yet how long it will take.
-        }
-        if ($pt > 99.99999) {
-            return 0; // Nearly done, right?
-        }
-        $consumed = microtime(true) - $this->time_start;
-        if ($consumed < 0.001) {
-            return null;
-        }
-
-        return (100 - $pt) * ($consumed / $pt);
-    }
-
-    /**
-     * Update progress bar according percent
-     *
-     * @param int $percent from 1-100
-     * @param string $msg the message needed to be shown
-     */
-    public function update_full($percent, $msg) {
-        $percent = max(min($percent, 100), 0);
-        $this->_update($percent, $msg);
-    }
-
-    /**
-     * Update progress bar according the number of tasks
-     *
-     * @param int $cur current task number
-     * @param int $total total task number
-     * @param string $msg message
-     */
-    public function update($cur, $total, $msg) {
-        $percent = ($cur / $total) * 100;
-        $this->update_full($percent, $msg);
-    }
-
-    /**
-     * Restart the progress bar.
-     */
-    public function restart() {
-        $this->percent    = 0;
-        $this->lastupdate = 0;
-        $this->time_start = 0;
-    }
-}
-
-/**
  * Progress trace class.
  *
  * Use this class from long operations where you want to output occasional information about
@@ -3735,14 +3557,4 @@ function get_formatted_help_string($identifier, $component, $ajax = false, $a = 
             html_writer::tag('strong', 'TODO') . ": missing help string [{$identifier}_help, {$component}]");
     }
     return $data;
-}
-
-/**
- * Renders a hidden password field so that browsers won't incorrectly autofill password fields with the user's password.
- *
- * @since 3.0
- * @return string HTML to prevent password autofill
- */
-function prevent_form_autofill_password() {
-    return '<div class="hide"><input type="text" class="ignoredirty" /><input type="password" class="ignoredirty" /></div>';
 }

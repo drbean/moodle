@@ -69,12 +69,20 @@ class core_component {
     protected static $filestomap = array('lib.php', 'settings.php');
     /** @var array associative array of PSR-0 namespaces and corresponding paths. */
     protected static $psr0namespaces = array(
-        'Horde' => 'lib/horde/framework/Horde'
+        'Horde' => 'lib/horde/framework/Horde',
+        'Mustache' => 'lib/mustache/src/Mustache',
     );
     /** @var array associative array of PRS-4 namespaces and corresponding paths. */
     protected static $psr4namespaces = array(
         'MaxMind' => 'lib/maxmind/MaxMind',
         'GeoIp2' => 'lib/maxmind/GeoIp2',
+        'Sabberworm\\CSS' => 'lib/php-css-parser',
+        'MoodleHQ\\RTLCSS' => 'lib/rtlcss',
+        'Leafo\\ScssPhp' => 'lib/scssphp',
+        'Box\\Spout' => 'lib/spout/src/Spout',
+        'MatthiasMullie\\Minify' => 'lib/minify/matthiasmullie-minify/src/',
+        'MatthiasMullie\\PathConverter' => 'lib/minify/matthiasmullie-pathconverter/src/',
+        'IMSGlobal\LTI' => 'lib/ltiprovider/src',
     );
 
     /**
@@ -446,7 +454,7 @@ $cache = '.var_export($cache, true).';
             'langconfig'  => null,
             'license'     => null,
             'mathslib'    => null,
-            'media'       => null,
+            'media'       => $CFG->dirroot.'/media',
             'message'     => $CFG->dirroot.'/message',
             'mimetypes'   => null,
             'mnet'        => $CFG->dirroot.'/mnet',
@@ -494,6 +502,7 @@ $cache = '.var_export($cache, true).';
             'enrol'         => $CFG->dirroot.'/enrol',
             'message'       => $CFG->dirroot.'/message/output',
             'block'         => $CFG->dirroot.'/blocks',
+            'media'         => $CFG->dirroot.'/media/player',
             'filter'        => $CFG->dirroot.'/filter',
             'editor'        => $CFG->dirroot.'/lib/editor',
             'format'        => $CFG->dirroot.'/course/format',
@@ -1020,7 +1029,7 @@ $cache = '.var_export($cache, true).';
      * Note: this does not verify the validity of plugin or type names.
      *
      * @param string $component
-     * @return array as (string)$type => (string)$plugin
+     * @return array two-items list of [(string)type, (string|null)name]
      */
     public static function normalize_component($component) {
         if ($component === 'moodle' or $component === 'core' or $component === '') {

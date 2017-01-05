@@ -338,15 +338,13 @@ if (file_exists("$CFG->dataroot/climaintenance.html")) {
     }
 }
 
-if (CLI_SCRIPT) {
-    // sometimes people use different PHP binary for web and CLI, make 100% sure they have the supported PHP version
-    if (version_compare(phpversion(), '5.6.5') < 0) {
-        $phpversion = phpversion();
-        // do NOT localise - lang strings would not work here and we CAN NOT move it to later place
-        echo "Moodle 3.2 or later requires at least PHP 5.6.5 (currently using version $phpversion).\n";
-        echo "Some servers may have multiple PHP versions installed, are you using the correct executable?\n";
-        exit(1);
-    }
+// Sometimes people use different PHP binary for web and CLI, make 100% sure they have the supported PHP version.
+if (version_compare(PHP_VERSION, '5.6.5') < 0) {
+    $phpversion = PHP_VERSION;
+    // Do NOT localise - lang strings would not work here and we CAN NOT move it to later place.
+    echo "Moodle 3.2 or later requires at least PHP 5.6.5 (currently using version $phpversion).\n";
+    echo "Some servers may have multiple PHP versions installed, are you using the correct executable?\n";
+    exit(1);
 }
 
 // Detect ajax scripts - they are similar to CLI because we can not redirect, output html, etc.
@@ -555,8 +553,8 @@ if (!PHPUNIT_TEST or PHPUNIT_UTIL) {
 }
 
 // Acceptance tests needs special output to capture the errors,
-// but not necessary for behat CLI command.
-if (defined('BEHAT_SITE_RUNNING') && !defined('BEHAT_TEST')) {
+// but not necessary for behat CLI command and init script.
+if (defined('BEHAT_SITE_RUNNING') && !defined('BEHAT_TEST') && !defined('BEHAT_UTIL')) {
     require_once(__DIR__ . '/behat/lib.php');
     set_error_handler('behat_error_handler', E_ALL | E_STRICT);
 }
@@ -839,7 +837,7 @@ unset($urlthemename);
 
 // Ensure a valid theme is set.
 if (!isset($CFG->theme)) {
-    $CFG->theme = 'clean';
+    $CFG->theme = 'boost';
 }
 
 // Set language/locale of printed times.  If user has chosen a language that

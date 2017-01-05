@@ -536,7 +536,9 @@ function lesson_menu_block_contents($cmid, $lesson) {
         return null;
     }
 
-    $content = '<a href="#maincontent" class="skip">'.get_string('skip', 'lesson')."</a>\n<div class=\"menuwrapper\">\n<ul>\n";
+    $content = '<a href="#maincontent" class="accesshide">' .
+        get_string('skip', 'lesson') .
+        "</a>\n<div class=\"menuwrapper\">\n<ul>\n";
 
     while ($pageid != 0) {
         $page = $pages[$pageid];
@@ -616,19 +618,19 @@ function lesson_get_media_html($lesson, $context) {
 
     $extension = resourcelib_get_extension($url->out(false));
 
-    $mediarenderer = $PAGE->get_renderer('core', 'media');
+    $mediamanager = core_media_manager::instance();
     $embedoptions = array(
-        core_media::OPTION_TRUSTED => true,
-        core_media::OPTION_BLOCK => true
+        core_media_manager::OPTION_TRUSTED => true,
+        core_media_manager::OPTION_BLOCK => true
     );
 
     // find the correct type and print it out
     if (in_array($mimetype, array('image/gif','image/jpeg','image/png'))) {  // It's an image
         $code = resourcelib_embed_image($url, $title);
 
-    } else if ($mediarenderer->can_embed_url($url, $embedoptions)) {
+    } else if ($mediamanager->can_embed_url($url, $embedoptions)) {
         // Media (audio/video) file.
-        $code = $mediarenderer->embed_url($url, $title, 0, 0, $embedoptions);
+        $code = $mediamanager->embed_url($url, $title, 0, 0, $embedoptions);
 
     } else {
         // anything else - just try object tag enlarged as much as possible

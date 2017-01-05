@@ -530,7 +530,7 @@ abstract class backup_controller_dbops extends backup_dbops {
      */
     public static function backup_get_original_course_info($courseid) {
         global $DB;
-        return $DB->get_record('course', array('id' => $courseid), 'fullname, shortname, startdate, format');
+        return $DB->get_record('course', array('id' => $courseid), 'fullname, shortname, startdate, enddate, format');
     }
 
     /**
@@ -628,7 +628,9 @@ abstract class backup_controller_dbops extends backup_dbops {
             $locked = $uselocks && (get_config('backup', $config.'_locked') == true);
             if ($plan->setting_exists($settingname)) {
                 $setting = $plan->get_setting($settingname);
-                if ($setting->get_value() != $value || 1==1) {
+                // We can only update the setting if it isn't already locked by config or permission.
+                if ($setting->get_status() !== base_setting::LOCKED_BY_CONFIG
+                        && $setting->get_status() !== base_setting::LOCKED_BY_PERMISSION) {
                     $setting->set_value($value);
                     if ($locked) {
                         $setting->set_status(base_setting::LOCKED_BY_CONFIG);
