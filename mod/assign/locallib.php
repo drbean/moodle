@@ -2843,6 +2843,9 @@ class assign {
                                                               $this->show_intro(),
                                                               $this->get_course_module()->id,
                                                               $plugin->get_name()));
+
+            $o .= $this->view_return_links();
+
             $o .= $this->get_renderer()->render(new assign_submission_plugin_submission($plugin,
                                                               $item,
                                                               assign_submission_plugin_submission::FULL,
