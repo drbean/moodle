@@ -33,6 +33,8 @@
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+defined('MOODLE_INTERNAL') || die();
+
 require_once($CFG->dirroot . '/mod/wiki/edit_form.php');
 
 /**
@@ -977,14 +979,6 @@ class page_wiki_create extends page_wiki {
 class page_wiki_preview extends page_wiki_edit {
 
     private $newcontent;
-
-    function __construct($wiki, $subwiki, $cm) {
-        global $PAGE, $CFG, $OUTPUT;
-        parent::__construct($wiki, $subwiki, $cm);
-        $buttons = $OUTPUT->update_module_button($cm->id, 'wiki');
-        $PAGE->set_button($buttons);
-
-    }
 
     function print_header() {
         global $PAGE, $CFG;

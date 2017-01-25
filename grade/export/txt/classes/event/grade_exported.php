@@ -15,15 +15,24 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version details.
+ * Grade export event.
  *
- * @package    report_search
- * @copyright  2015 David Monllao {@link http://www.davidmonllao.com}
+ * @package    gradeexport_txt
+ * @copyright  2016 Zane Karl <zkarl@oid.ucla.edu>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+namespace gradeexport_txt\event;
+
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2016052300; // The current plugin version (Date: YYYYMMDDXX).
-$plugin->requires  = 2016051900; // Requires this Moodle version.
-$plugin->component = 'report_search'; // Full name of the plugin (used for diagnostics).
+/**
+ * Grade export event class.
+ *
+ * @package    gradeexport_txt
+ * @since      Moodle 3.2
+ * @copyright  2016 Zane Karl <zkarl@oid.ucla.edu>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class grade_exported extends \core\event\grade_exported {
+}

@@ -32,6 +32,8 @@
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+defined('MOODLE_INTERNAL') || die();
+
 require_once($CFG->dirroot . '/mod/wiki/lib.php');
 require_once($CFG->dirroot . '/mod/wiki/parser/parser.php');
 require_once($CFG->libdir . '/filelib.php');
@@ -1030,7 +1032,8 @@ function wiki_set_lock($pageid, $userid, $section = null, $insert = false) {
     if (!empty($lock)) {
         $DB->update_record('wiki_locks', array('id' => $lock->id, 'lockedat' => time() + LOCK_TIMEOUT));
     } else if ($insert) {
-        $DB->insert_record('wiki_locks', array('pageid' => $pageid, 'sectionname' => $section, 'userid' => $userid, 'lockedat' => time() + 30));
+        $DB->insert_record('wiki_locks',
+            array('pageid' => $pageid, 'sectionname' => $section, 'userid' => $userid, 'lockedat' => time() + LOCK_TIMEOUT));
     }
 
     return true;
