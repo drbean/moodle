@@ -74,6 +74,8 @@ class format_weeks extends format_base {
             // Return the general section.
             return get_string('section0name', 'format_weeks');
         } else {
+            $sectiontitle = get_string('sectionname', "format_weeks");
+            $sectionno = $section->section;
             $dates = $this->get_section_dates($section);
 
             // We subtract 24 hours for display purposes.
@@ -82,7 +84,7 @@ class format_weeks extends format_base {
             $dateformat = get_string('strftimedateshort');
             $weekday = userdate($dates->start, $dateformat);
             $endweekday = userdate($dates->end, $dateformat);
-            return $weekday.' - '.$endweekday;
+            return $sectiontitle.' '.$sectionno.': '.$weekday.' - '.$endweekday;
         }
     }
 
