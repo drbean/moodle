@@ -9,9 +9,11 @@
 .context-header-settings-menu,
 .region-main-settings-menu {
     float: right;
-    width: 4em;
+    width: auto;
+    max-width: 4em;
     height: 2em;
     display: block;
+    margin-top: 4px;
 }
 
 .context-header-settings-menu .dropdown-toggle > .icon,
@@ -73,10 +75,6 @@ a.dimmed_text:visited,
 .dimmed_category,
 .dimmed_category a {
     @extend .text-muted;
-}
-
-.activity.label .dimmed_text {
-    opacity: 0.5;
 }
 
 .unlist,
@@ -1782,12 +1780,12 @@ header {
 
     .page-header-image,
     .page-header-headings {
+        float: left;
         display: block;
         position: relative;
     }
 
     .page-header-image {
-        float: left;
         margin-right: 1em;
         margin-bottom: 1em;
     }
