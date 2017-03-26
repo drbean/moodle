@@ -515,7 +515,7 @@ class assign {
                 $action = 'grade';
                 if ($this->process_save_grade($mform)) {
                     $action = 'redirect';
-                    $nextpageparams['action'] = 'grading';
+                    $nextpageparams['action'] = 'savegradingresult';
                 }
             } else {
                 // Cancel button.
