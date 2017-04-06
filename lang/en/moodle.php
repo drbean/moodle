@@ -381,6 +381,8 @@ $string['coursesummary'] = 'Course summary';
 $string['coursesummary_help'] = 'The course summary is displayed in the list of courses. A course search searches course summary text in addition to course names.';
 $string['coursetitle'] = 'Course: {$a->course}';
 $string['courseupdates'] = 'Course updates';
+$string['coursevisibility'] = 'Course visibility';
+$string['coursevisibility_help'] = 'This setting determines whether the course appears in the list of courses and whether students can access it. If set to Hide, then access is restricted to users with the capability to view hidden courses (such as teachers).';
 $string['create'] = 'Create';
 $string['createaccount'] = 'Create my new account';
 $string['createcategory'] = 'Create category';
@@ -1649,7 +1651,6 @@ $string['section'] = 'Section';
 $string['sectionactionnotsupported'] = 'Section action "{$a}" is not supported here';
 $string['sectionname'] = 'Section name';
 $string['sections'] = 'Sections';
-$string['sectionusedefaultname'] = 'Use default section name';
 $string['seealsostats'] = 'See also: stats';
 $string['select'] = 'Select';
 $string['selectacategory'] = 'Please select a category';
@@ -2064,3 +2065,4 @@ $string['modchooserdisable'] = 'Activity chooser off';
 
 // Deprecated since Moodle 3.3.
 $string['deletecomment'] = 'Delete this comment';
+$string['sectionusedefaultname'] = 'Use default section name';
