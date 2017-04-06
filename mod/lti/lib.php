@@ -102,6 +102,9 @@ function lti_add_instance($lti, $mform) {
     $lti->timecreated = time();
     $lti->timemodified = $lti->timecreated;
     $lti->servicesalt = uniqid('', true);
+    if (!isset($lti->typeid)) {
+        $lti->typeid = null;
+    }
 
     lti_force_type_config_settings($lti, lti_get_type_config_by_instance($lti));
 
@@ -502,6 +505,22 @@ function lti_grade_item_update($basiclti, $grades = null) {
 }
 
 /**
+ * Update activity grades
+ *
+ * @param stdClass $basiclti The LTI instance
+ * @param int      $userid Specific user only, 0 means all.
+ * @param bool     $nullifnone Not used
+ */
+function lti_update_grades($basiclti, $userid=0, $nullifnone=true) {
+    global $CFG;
+    require_once($CFG->dirroot.'/mod/lti/servicelib.php');
+    // LTI doesn't have its own grade table so the only thing to do is update the grade item.
+    if (lti_accepts_grades($basiclti)) {
+        lti_grade_item_update($basiclti);
+    }
+}
+
+/**
  * Delete grade item for given basiclti
  *
  * @category grade
@@ -586,4 +605,13 @@ function lti_check_updates_since(cm_info $cm, $from, $filter = array()) {
     }
 
     return $updates;
+}
+
+/**
+ * Get icon mapping for font-awesome.
+ */
+function mod_lti_get_fontawesome_icon_map() {
+    return [
+        'mod_lti:warning' => 'fa-exclamation text-warning',
+    ];
 }

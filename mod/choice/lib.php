@@ -1027,6 +1027,12 @@ function choice_can_view_results($choice, $current = null, $choiceopen = null) {
 
     if (is_null($choiceopen)) {
         $timenow = time();
+
+        if ($choice->timeopen != 0 && $timenow < $choice->timeopen) {
+            // If the choice is not available, we can't see the results.
+            return false;
+        }
+
         if ($choice->timeclose != 0 && $timenow > $choice->timeclose) {
             $choiceopen = false;
         } else {
@@ -1166,4 +1172,14 @@ function choice_check_updates_since(cm_info $cm, $from, $filter = array()) {
     }
 
     return $updates;
+}
+
+/**
+ * Get icon mapping for font-awesome.
+ */
+function mod_choice_get_fontawesome_icon_map() {
+    return [
+        'mod_choice:row' => 'fa-info',
+        'mod_choice:column' => 'fa-columns',
+    ];
 }

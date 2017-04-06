@@ -492,8 +492,7 @@ function feedback_print_recent_mod_activity($activity, $courseid, $detail, $modn
     if ($detail) {
         $modname = $modnames[$activity->type];
         echo '<div class="title">';
-        echo "<img src=\"" . $OUTPUT->pix_url('icon', $activity->type) . "\" ".
-             "class=\"icon\" alt=\"$modname\" />";
+        echo $OUTPUT->image_icon('icon', $modname, $activity->type);
         echo "<a href=\"$CFG->wwwroot/mod/feedback/view.php?id={$activity->cmid}\">{$activity->name}</a>";
         echo '</div>';
     }
@@ -3315,4 +3314,48 @@ function feedback_can_view_analysis($feedback, $context, $courseid = false) {
     }
 
     return feedback_is_already_submitted($feedback->id, $courseid);
+}
+
+/**
+ * Get icon mapping for font-awesome.
+ */
+function mod_feedback_get_fontawesome_icon_map() {
+    return [
+        'mod_feedback:required' => 'fa-exclamation-circle',
+        'mod_feedback:notrequired' => 'fa-question-circle-o',
+    ];
+}
+
+/**
+ * Check if the module has any update that affects the current user since a given time.
+ *
+ * @param  cm_info $cm course module data
+ * @param  int $from the time to check updates from
+ * @param  array $filter if we need to check only specific updates
+ * @return stdClass an object with the different type of areas indicating if they were updated or not
+ * @since Moodle 3.3
+ */
+function feedback_check_updates_since(cm_info $cm, $from, $filter = array()) {
+    global $DB, $USER, $CFG;
+
+    $updates = course_check_module_updates_since($cm, $from, array(), $filter);
+
+    // Check for new attempts.
+    $updates->attemptsfinished = (object) array('updated' => false);
+    $updates->attemptsunfinished = (object) array('updated' => false);
+    $select = 'feedback = ? AND userid = ? AND timemodified > ?';
+    $params = array($cm->instance, $USER->id, $from);
+
+    $attemptsfinished = $DB->get_records_select('feedback_completed', $select, $params, '', 'id');
+    if (!empty($attemptsfinished)) {
+        $updates->attemptsfinished->updated = true;
+        $updates->attemptsfinished->itemids = array_keys($attemptsfinished);
+    }
+    $attemptsunfinished = $DB->get_records_select('feedback_completedtmp', $select, $params, '', 'id');
+    if (!empty($attemptsunfinished)) {
+        $updates->attemptsunfinished->updated = true;
+        $updates->attemptsunfinished->itemids = array_keys($attemptsunfinished);
+    }
+
+    return $updates;
 }
