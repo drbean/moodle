@@ -160,7 +160,7 @@ class core_course_external extends external_api {
             //retrieve sections
             $modinfo = get_fast_modinfo($course);
             $sections = $modinfo->get_section_info_all();
-            $coursenumsections = course_get_format($course)->get_course()->numsections;
+            $coursenumsections = course_get_format($course)->get_last_section_number();
 
             //for each sections (first displayed to last displayed)
             $modinfosections = $modinfo->get_sections();
@@ -363,6 +363,11 @@ class core_course_external extends external_api {
                                                   'timecreated' => new external_value(PARAM_INT, 'Time created'),
                                                   'timemodified' => new external_value(PARAM_INT, 'Time modified'),
                                                   'sortorder' => new external_value(PARAM_INT, 'Content sort order'),
+                                                  'mimetype' => new external_value(PARAM_RAW, 'File mime type.', VALUE_OPTIONAL),
+                                                  'isexternalfile' => new external_value(PARAM_BOOL, 'Whether is an external file.',
+                                                    VALUE_OPTIONAL),
+                                                  'repositorytype' => new external_value(PARAM_PLUGIN, 'The repository type for external files.',
+                                                    VALUE_OPTIONAL),
 
                                                   // copyright related info
                                                   'userid' => new external_value(PARAM_INT, 'User who added this content to moodle'),
@@ -468,6 +473,8 @@ class core_course_external extends external_api {
                     // For backward-compartibility
                     $courseinfo['hiddensections'] = $courseformatoptions['hiddensections'];
                 }
+                // Return numsections for backward-compatibility with clients who expect it.
+                $courseinfo['numsections'] = course_get_format($course)->get_last_section_number();
                 $courseinfo['groupmode'] = $course->groupmode;
                 $courseinfo['groupmodeforce'] = $course->groupmodeforce;
                 $courseinfo['defaultgroupingid'] = $course->defaultgroupingid;
@@ -2654,6 +2661,8 @@ class core_course_external extends external_api {
     /**
      * Returns description of method parameters
      *
+     * @deprecated since 3.3
+     *
      * @return external_function_parameters
      * @since Moodle 3.2
      */
@@ -2667,6 +2676,8 @@ class core_course_external extends external_api {
 
     /**
      * Return activities overview for the given courses.
+     *
+     * @deprecated since 3.3
      *
      * @param array $courseids a list of course ids
      * @return array of warnings and the activities overview
@@ -2725,6 +2736,8 @@ class core_course_external extends external_api {
     /**
      * Returns description of method result value
      *
+     * @deprecated since 3.3
+     *
      * @return external_description
      * @since Moodle 3.2
      */
@@ -2749,6 +2762,15 @@ class core_course_external extends external_api {
                 'warnings' => new external_warnings()
             )
         );
+    }
+
+    /**
+     * Marking the method as deprecated.
+     *
+     * @return bool
+     */
+    public static function get_activities_overview_is_deprecated() {
+        return true;
     }
 
     /**

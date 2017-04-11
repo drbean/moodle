@@ -68,6 +68,12 @@ define("ASSIGN_MAX_EVENT_LENGTH", "432000");
 // Name of file area for intro attachments.
 define('ASSIGN_INTROATTACHMENT_FILEAREA', 'introattachment');
 
+// Event types.
+define('ASSIGN_EVENT_TYPE_DUE', 'due');
+define('ASSIGN_EVENT_TYPE_GRADINGDUE', 'gradingdue');
+define('ASSIGN_EVENT_TYPE_OPEN', 'open');
+define('ASSIGN_EVENT_TYPE_CLOSE', 'close');
+
 require_once($CFG->libdir . '/accesslib.php');
 require_once($CFG->libdir . '/formslib.php');
 require_once($CFG->dirroot . '/repository/lib.php');
@@ -636,6 +642,7 @@ class assign {
         }
         $update->duedate = $formdata->duedate;
         $update->cutoffdate = $formdata->cutoffdate;
+        $update->gradingduedate = $formdata->gradingduedate;
         $update->allowsubmissionsfromdate = $formdata->allowsubmissionsfromdate;
         $update->grade = $formdata->grade;
         $update->completionsubmit = !empty($formdata->completionsubmit);
@@ -1159,12 +1166,43 @@ class assign {
         // Special case for add_instance as the coursemodule has not been set yet.
         $instance = $this->get_instance();
 
-        $eventtype = 'due';
+        // Start with creating the event.
+        $event = new stdClass();
+        $event->modulename  = 'assign';
+        $event->courseid = $instance->course;
+        $event->groupid = 0;
+        $event->userid  = 0;
+        $event->instance  = $instance->id;
+        $event->name = $instance->name;
+        $event->type = CALENDAR_EVENT_TYPE_ACTION;
 
+        // Convert the links to pluginfile. It is a bit hacky but at this stage the files
+        // might not have been saved in the module area yet.
+        $intro = $instance->intro;
+        if ($draftid = file_get_submitted_draft_itemid('introeditor')) {
+            $intro = file_rewrite_urls_to_pluginfile($intro, $draftid);
+        }
+
+        // We need to remove the links to files as the calendar is not ready
+        // to support module events with file areas.
+        $intro = strip_pluginfile_content($intro);
+        if ($this->show_intro()) {
+            $event->description = array(
+                'text' => $intro,
+                'format' => $instance->introformat
+            );
+        } else {
+            $event->description = array(
+                'text' => '',
+                'format' => $instance->introformat
+            );
+        }
+
+        $eventtype = ASSIGN_EVENT_TYPE_DUE;
         if ($instance->duedate) {
-            $event = new stdClass();
-
-            // Fetch the original due date event. It will have a non-zero course ID and a zero group ID.
+            $event->eventtype = $eventtype;
+            $event->timestart = $instance->duedate;
+            $event->timesort = $instance->duedate;
             $select = "modulename = :modulename
                        AND instance = :instance
                        AND eventtype = :eventtype
@@ -1172,50 +1210,41 @@ class assign {
                        AND courseid <> 0";
             $params = array('modulename' => 'assign', 'instance' => $instance->id, 'eventtype' => $eventtype);
             $event->id = $DB->get_field_select('event', 'id', $select, $params);
-            $event->name = $instance->name;
-            $event->timestart = $instance->duedate;
 
-            // Convert the links to pluginfile. It is a bit hacky but at this stage the files
-            // might not have been saved in the module area yet.
-            $intro = $instance->intro;
-            if ($draftid = file_get_submitted_draft_itemid('introeditor')) {
-                $intro = file_rewrite_urls_to_pluginfile($intro, $draftid);
-            }
-
-            // We need to remove the links to files as the calendar is not ready
-            // to support module events with file areas.
-            $intro = strip_pluginfile_content($intro);
-            if ($this->show_intro()) {
-                $event->description = array(
-                    'text' => $intro,
-                    'format' => $instance->introformat
-                );
-            } else {
-                $event->description = array(
-                    'text' => '',
-                    'format' => $instance->introformat
-                );
-            }
-
+            // Now process the event.
             if ($event->id) {
                 $calendarevent = calendar_event::load($event->id);
                 $calendarevent->update($event);
             } else {
-                unset($event->id);
-                $event->courseid    = $instance->course;
-                $event->groupid     = 0;
-                $event->userid      = 0;
-                $event->modulename  = 'assign';
-                $event->instance    = $instance->id;
-                $event->eventtype   = $eventtype;
-                $event->timeduration = 0;
                 calendar_event::create($event);
             }
         } else {
-            $DB->delete_records('event', array('modulename' => 'assign', 'instance' => $instance->id, 'eventtype' => $eventtype));
+            $DB->delete_records('event', array('modulename' => 'assign', 'instance' => $instance->id,
+                'eventtype' => $eventtype));
         }
-    }
 
+        $eventtype = ASSIGN_EVENT_TYPE_GRADINGDUE;
+        if ($instance->gradingduedate) {
+            $event->eventtype = $eventtype;
+            $event->timestart = $instance->gradingduedate;
+            $event->timesort = $instance->gradingduedate;
+            $event->id = $DB->get_field('event', 'id', array('modulename' => 'assign',
+                'instance' => $instance->id, 'eventtype' => $event->eventtype));
+
+            // Now process the event.
+            if ($event->id) {
+                $calendarevent = calendar_event::load($event->id);
+                $calendarevent->update($event);
+            } else {
+                calendar_event::create($event);
+            }
+        } else {
+            $DB->delete_records('event', array('modulename' => 'assign', 'instance' => $instance->id,
+                'eventtype' => $eventtype));
+        }
+
+        return true;
+    }
 
     /**
      * Update this instance in the database.
@@ -1245,6 +1274,7 @@ class assign {
         }
         $update->duedate = $formdata->duedate;
         $update->cutoffdate = $formdata->cutoffdate;
+        $update->gradingduedate = $formdata->gradingduedate;
         $update->allowsubmissionsfromdate = $formdata->allowsubmissionsfromdate;
         $update->grade = $formdata->grade;
         if (!empty($formdata->completionunlocked)) {
@@ -3078,7 +3108,7 @@ class assign {
      * Throw an error if the permissions to view this users submission are missing.
      *
      * @throws required_capability_exception
-     * @return void
+     * @return none
      */
     public function require_view_submission($userid) {
         if (!$this->can_view_submission($userid)) {
@@ -3090,7 +3120,7 @@ class assign {
      * Throw an error if the permissions to view grades in this assignment are missing.
      *
      * @throws required_capability_exception
-     * @return void
+     * @return none
      */
     public function require_view_grades() {
         if (!$this->can_view_grades()) {
@@ -4365,6 +4395,25 @@ class assign {
     }
 
     /**
+     * Perform an access check to see if the current $USER can edit this group submission.
+     *
+     * @param int $groupid
+     * @return bool
+     */
+    public function can_edit_group_submission($groupid) {
+        global $USER;
+
+        $members = $this->get_submission_group_members($groupid, true);
+        foreach ($members as $member) {
+            // If we can edit any members submission, we can edit the submission for the group.
+            if ($this->can_edit_submission($member->id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Perform an access check to see if the current $USER can view this group submission.
      *
      * @param int $groupid
@@ -5547,10 +5596,8 @@ class assign {
     public function get_shared_group_members($cm, $userid) {
         if (!isset($this->sharedgroupmembers[$userid])) {
             $this->sharedgroupmembers[$userid] = array();
-            $groupsids = array_keys(groups_get_activity_allowed_groups($cm, $userid));
-            foreach ($groupsids as $groupid) {
-                $members = array_keys(groups_get_members($groupid, 'u.id'));
-                $this->sharedgroupmembers[$userid] = array_merge($this->sharedgroupmembers[$userid], $members);
+            if ($members = groups_get_activity_shared_group_members($cm, $userid)) {
+                $this->sharedgroupmembers[$userid] = array_keys($members);
             }
         }
 

@@ -185,7 +185,7 @@ class api {
             $settings->frontpageloggedin = $CFG->frontpageloggedin;
             $settings->maxcategorydepth = $CFG->maxcategorydepth;
             $settings->frontpagecourselimit = $CFG->frontpagecourselimit;
-            $settings->numsections = course_get_format($SITE)->get_course()->numsections;
+            $settings->numsections = course_get_format($SITE)->get_last_section_number();
             $settings->newsitems = $SITE->newsitems;
             $settings->commentsperpage = $CFG->commentsperpage;
 
@@ -273,8 +273,8 @@ class api {
 
         $availablemods = core_plugin_manager::instance()->get_plugins_of_type('mod');
         $coursemodules = array();
-        $appsupportedmodules = array('assign', 'book', 'chat', 'choice', 'folder', 'forum', 'glossary', 'imscp', 'label',
-                                        'lti', 'page', 'quiz', 'resource', 'scorm', 'survey', 'url', 'wiki');
+        $appsupportedmodules = array('assign', 'book', 'chat', 'choice', 'data', 'feedback', 'folder', 'forum', 'glossary', 'imscp',
+                                        'label', 'lesson', 'lti', 'page', 'quiz', 'resource', 'scorm', 'survey', 'url', 'wiki');
         foreach ($availablemods as $mod) {
             if (in_array($mod->name, $appsupportedmodules)) {
                 $coursemodules['$mmCourseDelegate_mmaMod' . ucfirst($mod->name)] = $mod->displayname;
