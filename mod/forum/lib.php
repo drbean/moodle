@@ -130,6 +130,9 @@ function forum_add_instance($forum, $mform = null) {
 
     forum_grade_item_update($forum);
 
+    $completiontimeexpected = !empty($forum->completionexpected) ? $forum->completionexpected : null;
+    \core_completion\api::update_completion_date_event($forum->coursemodule, 'forum', $forum->id, $completiontimeexpected);
+
     return $forum->id;
 }
 
@@ -249,6 +252,9 @@ function forum_update_instance($forum, $mform) {
 
     forum_grade_item_update($forum);
 
+    $completiontimeexpected = !empty($forum->completionexpected) ? $forum->completionexpected : null;
+    \core_completion\api::update_completion_date_event($forum->coursemodule, 'forum', $forum->id, $completiontimeexpected);
+
     return true;
 }
 
@@ -282,6 +288,8 @@ function forum_delete_instance($id) {
     $fs->delete_area_files($context->id);
 
     $result = true;
+
+    \core_completion\api::update_completion_date_event($cm->id, 'forum', $forum->id, null);
 
     // Delete digest and subscription preferences.
     $DB->delete_records('forum_digests', array('forum' => $forum->id));
@@ -559,13 +567,14 @@ function forum_cron() {
                 }
             }
 
+            $modcontext = context_module::instance($coursemodules[$forumid]->id);
+
             // Save the Inbound Message datakey here to reduce DB queries later.
             $messageinboundgenerator->set_data($pid);
             $messageinboundhandlers[$pid] = $messageinboundgenerator->fetch_data_key();
 
             // Caching subscribed users of each forum.
             if (!isset($subscribedusers[$forumid])) {
-                $modcontext = context_module::instance($coursemodules[$forumid]->id);
                 if ($subusers = \mod_forum\subscriptions::fetch_subscribed_users($forums[$forumid], 0, $modcontext, 'u.*', true)) {
 
                     foreach ($subusers as $postuser) {
@@ -1323,11 +1332,15 @@ function forum_user_complete($course, $user, $mod, $forum) {
 /**
  * Filters the forum discussions according to groups membership and config.
  *
+ * @deprecated since 3.3
+ *
  * @since  Moodle 2.8, 2.7.1, 2.6.4
  * @param  array $discussions Discussions with new posts array
  * @return array Forums with the number of new posts
  */
 function forum_filter_user_groups_discussions($discussions) {
+
+    debugging('The function forum_filter_user_groups_discussions() is now deprecated.', DEBUG_DEVELOPER);
 
     // Group the remaining discussions posts by their forumid.
     $filteredforums = array();
@@ -1384,6 +1397,8 @@ function forum_is_user_group_discussion(cm_info $cm, $discussiongroupid) {
 }
 
 /**
+ * @deprecated since 3.3
+ *
  * @global object
  * @global object
  * @global object
@@ -1392,6 +1407,8 @@ function forum_is_user_group_discussion(cm_info $cm, $discussiongroupid) {
  */
 function forum_print_overview($courses,&$htmlarray) {
     global $USER, $CFG, $DB, $SESSION;
+
+    debugging('The function forum_print_overview() is now deprecated.', DEBUG_DEVELOPER);
 
     if (empty($courses) || !is_array($courses) || count($courses) == 0) {
         return array();
@@ -6057,17 +6074,22 @@ function forum_update_subscriptions_button($courseid, $forumid) {
     global $CFG, $USER;
 
     if (!empty($USER->subscriptionsediting)) {
-        $string = get_string('turneditingoff');
+        $string = get_string('managesubscriptionsoff', 'forum');
         $edit = "off";
     } else {
-        $string = get_string('turneditingon');
+        $string = get_string('managesubscriptionson', 'forum');
         $edit = "on";
     }
 
-    return "<form method=\"get\" action=\"$CFG->wwwroot/mod/forum/subscribers.php\">".
-           "<input type=\"hidden\" name=\"id\" value=\"$forumid\" />".
-           "<input type=\"hidden\" name=\"edit\" value=\"$edit\" />".
-           "<input type=\"submit\" value=\"$string\" /></form>";
+    $subscribers = html_writer::start_tag('form', array('action' => $CFG->wwwroot . '/mod/forum/subscribers.php',
+        'method' => 'get', 'class' => 'form-inline'));
+    $subscribers .= html_writer::empty_tag('input', array('type' => 'submit', 'value' => $string,
+        'class' => 'btn btn-secondary'));
+    $subscribers .= html_writer::empty_tag('input', array('type' => 'hidden', 'name' => 'id', 'value' => $forumid));
+    $subscribers .= html_writer::empty_tag('input', array('type' => 'hidden', 'name' => 'edit', 'value' => $edit));
+    $subscribers .= html_writer::end_tag('form');
+
+    return $subscribers;
 }
 
 // Functions to do with read tracking.
@@ -6360,12 +6382,17 @@ function forum_tp_get_course_unread_posts($userid, $courseid) {
  * @global object
  * @param object $cm
  * @param object $course
+ * @param bool   $resetreadcache optional, true to reset the function static $readcache var
  * @return int
  */
-function forum_tp_count_forum_unread_posts($cm, $course) {
+function forum_tp_count_forum_unread_posts($cm, $course, $resetreadcache = false) {
     global $CFG, $USER, $DB;
 
     static $readcache = array();
+
+    if ($resetreadcache) {
+        $readcache = array();
+    }
 
     $forumid = $cm->instance;
 
@@ -8107,4 +8134,51 @@ function mod_forum_get_fontawesome_icon_map() {
         'mod_forum:t/subscribed' => 'fa-envelope-o',
         'mod_forum:t/unsubscribed' => 'fa-envelope-open-o',
     ];
+}
+
+/**
+ * Callback function that determines whether an action event should be showing its item count
+ * based on the event type and the item count.
+ *
+ * @param calendar_event $event The calendar event.
+ * @param int $itemcount The item count associated with the action event.
+ * @return bool
+ */
+function mod_forum_core_calendar_event_action_shows_item_count(calendar_event $event, $itemcount = 0) {
+    // Always show item count for forums if item count is greater than 0.
+    return $itemcount > 0;
+}
+
+/**
+ * Handles creating actions for events.
+ *
+ * @param calendar_event $event
+ * @param \core_calendar\action_factory $factory
+ * @return \core_calendar\local\event\value_objects\action|\core_calendar\local\interfaces\action_interface|null
+ */
+function mod_forum_core_calendar_provide_event_action(calendar_event $event,
+                                                       \core_calendar\action_factory $factory) {
+    $cm = get_fast_modinfo($event->courseid)->instances['forum'][$event->instance];
+    $context = context_module::instance($cm->id);
+
+    if (!has_capability('mod/forum:viewdiscussion', $context)) {
+        return null;
+    }
+
+    $course = new stdClass();
+    $course->id = $event->courseid;
+    $completion = new \completion_info($course);
+
+    $completiondata = $completion->get_data($cm, false);
+
+    if ($completiondata->completionstate != COMPLETION_INCOMPLETE) {
+        return null;
+    }
+
+    return $factory->create_instance(
+        get_string('view'),
+        new \moodle_url('/mod/forum/view.php', ['id' => $cm->id]),
+        1,
+        true
+    );
 }

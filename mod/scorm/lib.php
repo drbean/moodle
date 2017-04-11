@@ -165,6 +165,7 @@ function scorm_add_instance($scorm, $mform=null) {
     scorm_parse($record, true);
 
     scorm_grade_item_update($record);
+    scorm_update_calendar($record, $cmid);
 
     return $record->id;
 }
@@ -255,6 +256,7 @@ function scorm_update_instance($scorm, $mform=null) {
 
     scorm_grade_item_update($scorm);
     scorm_update_grades($scorm);
+    scorm_update_calendar($scorm, $cmid);
 
     return true;
 }
@@ -518,7 +520,7 @@ function scorm_user_complete($course, $user, $mod, $scorm) {
 }
 
 /**
- * Function to be run periodically according to the moodle cron
+ * Function to be run periodically according to the moodle Tasks API
  * This function searches for things that need to be done, such
  * as sending out mail, toggling flags etc ...
  *
@@ -526,7 +528,7 @@ function scorm_user_complete($course, $user, $mod, $scorm) {
  * @global object
  * @return boolean
  */
-function scorm_cron () {
+function scorm_cron_scheduled_task () {
     global $CFG, $DB;
 
     require_once($CFG->dirroot.'/mod/scorm/locallib.php');
@@ -1088,12 +1090,16 @@ function scorm_debug_log_remove($type, $scoid) {
 /**
  * writes overview info for course_overview block - displays upcoming scorm objects that have a due date
  *
+ * @deprecated since 3.3
+ *
  * @param object $type - type of log(aicc,scorm12,scorm13) used as prefix for filename
  * @param array $htmlarray
  * @return mixed
  */
 function scorm_print_overview($courses, &$htmlarray) {
     global $USER, $CFG;
+
+    debugging('The function scorm_print_overview() is now deprecated.', DEBUG_DEVELOPER);
 
     if (empty($courses) || !is_array($courses) || count($courses) == 0) {
         return array();
@@ -1525,6 +1531,29 @@ function scorm_check_updates_since(cm_info $cm, $from, $filter = array()) {
         $updates->tracks->updated = true;
         $updates->tracks->itemids = array_keys($tracks);
     }
+
+    // Now, teachers should see other students updates.
+    if (has_capability('mod/scorm:viewreport', $cm->context)) {
+        $select = 'scormid = ? AND timemodified > ?';
+        $params = array($scorm->id, $from);
+
+        if (groups_get_activity_groupmode($cm) == SEPARATEGROUPS) {
+            $groupusers = array_keys(groups_get_activity_shared_group_members($cm));
+            if (empty($groupusers)) {
+                return $updates;
+            }
+            list($insql, $inparams) = $DB->get_in_or_equal($groupusers);
+            $select .= ' AND userid ' . $insql;
+            $params = array_merge($params, $inparams);
+        }
+
+        $updates->usertracks = (object) array('updated' => false);
+        $tracks = $DB->get_records_select('scorm_scoes_track', $select, $params, '', 'id');
+        if (!empty($tracks)) {
+            $updates->usertracks->updated = true;
+            $updates->usertracks->itemids = array_keys($tracks);
+        }
+    }
     return $updates;
 }
 
@@ -1533,8 +1562,8 @@ function scorm_check_updates_since(cm_info $cm, $from, $filter = array()) {
  */
 function mod_scorm_get_fontawesome_icon_map() {
     return [
-        'mod_scorm:assetc' => 'fa-archive-o',
-        'mod_scorm:asset' => 'fa-archive-o',
+        'mod_scorm:assetc' => 'fa-file-archive-o',
+        'mod_scorm:asset' => 'fa-file-archive-o',
         'mod_scorm:browsed' => 'fa-book',
         'mod_scorm:completed' => 'fa-check-square-o',
         'mod_scorm:failed' => 'fa-times',
@@ -1548,4 +1577,67 @@ function mod_scorm_get_fontawesome_icon_map() {
         'mod_scorm:suspend' => 'fa-pause',
         'mod_scorm:wait' => 'fa-clock-o',
     ];
+}
+
+/**
+ * This standard function will check all instances of this module
+ * and make sure there are up-to-date events created for each of them.
+ * If courseid = 0, then every scorm event in the site is checked, else
+ * only scorm events belonging to the course specified are checked.
+ *
+ * @param int $courseid
+ * @return bool
+ */
+function scorm_refresh_events($courseid = 0) {
+    global $CFG, $DB;
+
+    require_once($CFG->dirroot . '/mod/scorm/locallib.php');
+
+    if ($courseid) {
+        // Make sure that the course id is numeric.
+        if (!is_numeric($courseid)) {
+            return false;
+        }
+        if (!$scorms = $DB->get_records('scorm', array('course' => $courseid))) {
+            return false;
+        }
+    } else {
+        if (!$scorms = $DB->get_records('scorm')) {
+            return false;
+        }
+    }
+
+    foreach ($scorms as $scorm) {
+        $cm = get_coursemodule_from_instance('scorm', $scorm->id);
+        scorm_update_calendar($scorm, $cm->id);
+    }
+
+    return true;
+}
+
+/**
+ * Handles creating actions for events.
+ *
+ * @param calendar_event $event
+ * @param \core_calendar\action_factory $factory
+ * @return \core_calendar\local\event\value_objects\action|\core_calendar\local\interfaces\action_interface|null
+ */
+function mod_scorm_core_calendar_provide_event_action(calendar_event $event,
+                                                      \core_calendar\action_factory $factory) {
+    global $CFG, $DB;
+
+    require_once($CFG->dirroot . '/mod/scorm/locallib.php');
+
+    $cm = get_fast_modinfo($event->courseid)->instances['scorm'][$event->instance];
+    $scorm = $DB->get_record('scorm', array('id' => $event->instance));
+
+    // Check that the SCORM activity is open.
+    list($actionable, $warnings) = scorm_get_availability_status($scorm);
+
+    return $factory->create_instance(
+        get_string('enter', 'scorm'),
+        new \moodle_url('/mod/scorm/view.php', array('id' => $cm->id)),
+        1,
+        $actionable
+    );
 }

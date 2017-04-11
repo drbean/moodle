@@ -78,7 +78,12 @@ function survey_add_instance($survey) {
     $survey->timecreated  = time();
     $survey->timemodified = $survey->timecreated;
 
-    return $DB->insert_record("survey", $survey);
+    $id = $DB->insert_record("survey", $survey);
+
+    $completiontimeexpected = !empty($survey->completionexpected) ? $survey->completionexpected : null;
+    \core_completion\api::update_completion_date_event($survey->coursemodule, 'survey', $id, $completiontimeexpected);
+
+    return $id;
 
 }
 
@@ -102,6 +107,9 @@ function survey_update_instance($survey) {
     $survey->questions    = $template->questions;
     $survey->timemodified = time();
 
+    $completiontimeexpected = !empty($survey->completionexpected) ? $survey->completionexpected : null;
+    \core_completion\api::update_completion_date_event($survey->coursemodule, 'survey', $survey->id, $completiontimeexpected);
+
     return $DB->update_record("survey", $survey);
 }
 
@@ -120,6 +128,9 @@ function survey_delete_instance($id) {
     if (! $survey = $DB->get_record("survey", array("id"=>$id))) {
         return false;
     }
+
+    $cm = get_coursemodule_from_instance('survey', $id);
+    \core_completion\api::update_completion_date_event($cm->id, 'survey', $id, null);
 
     $result = true;
 
@@ -1072,5 +1083,62 @@ function survey_check_updates_since(cm_info $cm, $from, $filter = array()) {
         $updates->answers->updated = true;
         $updates->answers->itemids = array_keys($answers);
     }
+
+    // Now, teachers should see other students updates.
+    if (has_capability('mod/survey:readresponses', $cm->context)) {
+        $select = 'survey = ? AND time > ?';
+        $params = array($cm->instance, $from);
+
+        if (groups_get_activity_groupmode($cm) == SEPARATEGROUPS) {
+            $groupusers = array_keys(groups_get_activity_shared_group_members($cm));
+            if (empty($groupusers)) {
+                return $updates;
+            }
+            list($insql, $inparams) = $DB->get_in_or_equal($groupusers);
+            $select .= ' AND userid ' . $insql;
+            $params = array_merge($params, $inparams);
+        }
+
+        $updates->useranswers = (object) array('updated' => false);
+        $answers = $DB->get_records_select('survey_answers', $select, $params, '', 'id');
+        if (!empty($answers)) {
+            $updates->useranswers->updated = true;
+            $updates->useranswers->itemids = array_keys($answers);
+        }
+    }
     return $updates;
+}
+
+/**
+ * Handles creating actions for events.
+ *
+ * @param calendar_event $event
+ * @param \core_calendar\action_factory $factory
+ * @return \core_calendar\local\event\value_objects\action|\core_calendar\local\interfaces\action_interface|null
+ */
+function mod_survey_core_calendar_provide_event_action(calendar_event $event,
+                                                      \core_calendar\action_factory $factory) {
+    $cm = get_fast_modinfo($event->courseid)->instances['survey'][$event->instance];
+    $context = context_module::instance($cm->id);
+
+    if (!has_capability('mod/survey:participate', $context)) {
+        return null;
+    }
+
+    $course = new stdClass();
+    $course->id = $event->courseid;
+    $completion = new \completion_info($course);
+
+    $completiondata = $completion->get_data($cm, false);
+
+    if ($completiondata->completionstate != COMPLETION_INCOMPLETE) {
+        return null;
+    }
+
+    return $factory->create_instance(
+        get_string('view'),
+        new \moodle_url('/mod/survey/view.php', ['id' => $cm->id]),
+        1,
+        true
+    );
 }

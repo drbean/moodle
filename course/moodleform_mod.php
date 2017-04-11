@@ -557,8 +557,16 @@ abstract class moodleform_mod extends moodleform {
 
         $section = get_fast_modinfo($COURSE)->get_section_info($this->_section);
         $allowstealth = !empty($CFG->allowstealth) && $this->courseformat->allow_stealth_module_visibility($this->_cm, $section);
-        $mform->addElement('modvisible', 'visible', get_string('visible'), null,
+        if ($allowstealth && $section->visible) {
+            $modvisiblelabel = 'modvisiblewithstealth';
+        } else if ($section->visible) {
+            $modvisiblelabel = 'modvisible';
+        } else {
+            $modvisiblelabel = 'modvisiblehiddensection';
+        }
+        $mform->addElement('modvisible', 'visible', get_string($modvisiblelabel), null,
                 array('allowstealth' => $allowstealth, 'sectionvisible' => $section->visible, 'cm' => $this->_cm));
+        $mform->addHelpButton('visible', $modvisiblelabel);
         if (!empty($this->_cm)) {
             $context = context_module::instance($this->_cm->id);
             if (!has_capability('moodle/course:activityvisibility', $context)) {
@@ -628,7 +636,6 @@ abstract class moodleform_mod extends moodleform {
         }
         if ($completion->is_enabled()) {
             $mform->addElement('header', 'activitycompletionheader', get_string('activitycompletion', 'completion'));
-
             // Unlock button for if people have completed it (will
             // be removed in definition_after_data if they haven't)
             $mform->addElement('submit', 'unlockcompletion', get_string('unlockcompletion', 'completion'));
@@ -639,7 +646,13 @@ abstract class moodleform_mod extends moodleform {
             $trackingdefault = COMPLETION_TRACKING_NONE;
             // If system and activity default is on, set it.
             if ($CFG->completiondefault && $this->_features->defaultcompletion) {
-                $trackingdefault = COMPLETION_TRACKING_MANUAL;
+                $hasrules = plugin_supports('mod', $this->_modname, FEATURE_COMPLETION_HAS_RULES, true);
+                $tracksviews = plugin_supports('mod', $this->_modname, FEATURE_COMPLETION_TRACKS_VIEWS, true);
+                if ($hasrules || $tracksviews) {
+                    $trackingdefault = COMPLETION_TRACKING_AUTOMATIC;
+                } else {
+                    $trackingdefault = COMPLETION_TRACKING_MANUAL;
+                }
             }
 
             $mform->addElement('select', 'completion', get_string('completion', 'completion'),
@@ -654,6 +667,10 @@ abstract class moodleform_mod extends moodleform {
                 $mform->addElement('checkbox', 'completionview', get_string('completionview', 'completion'),
                     get_string('completionview_desc', 'completion'));
                 $mform->disabledIf('completionview', 'completion', 'ne', COMPLETION_TRACKING_AUTOMATIC);
+                // Check by default if automatic completion tracking is set.
+                if ($trackingdefault == COMPLETION_TRACKING_AUTOMATIC) {
+                    $mform->setDefault('completionview', 1);
+                }
                 $gotcompletionoptions = true;
             }
 
