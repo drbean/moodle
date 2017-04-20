@@ -491,7 +491,7 @@ function assign_page_type_list($pagetype, $parentcontext, $currentcontext) {
  * for the courses.
  *
  * @deprecated since 3.3
- *
+ * @todo The final deprecation of this function will take place in Moodle 3.7 - see MDL-57487.
  * @param mixed $courses The list of courses to print the overview for
  * @param array $htmlarray The array of html to return
  * @return true
@@ -634,7 +634,7 @@ function assign_print_overview($courses, &$htmlarray) {
  * assignment.
  *
  * @deprecated since 3.3
- *
+ * @todo The final deprecation of this function will take place in Moodle 3.7 - see MDL-57487.
  * @param array $mysubmissions list of submissions of current user indexed by assignment id.
  * @param string $sqlassignmentids sql clause used to filter open assignments.
  * @param array $assignmentidparams sql params used to filter open assignments.
@@ -724,7 +724,7 @@ function assign_get_mysubmission_details_for_print_overview(&$mysubmissions, $sq
  * assignment's submissions.
  *
  * @deprecated since 3.3
- *
+ * @todo The final deprecation of this function will take place in Moodle 3.7 - see MDL-57487.
  * @param array $unmarkedsubmissions list of submissions of that are currently unmarked indexed by assignment id.
  * @param string $sqlassignmentids sql clause used to filter open assignments.
  * @param array $assignmentidparams sql params used to filter open assignments.
@@ -754,10 +754,14 @@ function assign_get_grade_details_for_print_overview(&$unmarkedsubmissions, $sql
                                              s.userid = g.userid AND
                                              s.assignment = g.assignment AND
                                              g.attemptnumber = s.attemptnumber
+                                   LEFT JOIN {assign} a ON
+                                             a.id = s.assignment
                                        WHERE
                                              ( g.timemodified is NULL OR
                                              s.timemodified >= g.timemodified OR
-                                             g.grade IS NULL ) AND
+                                             g.grade IS NULL OR
+                                             (g.grade = -1 AND
+                                             a.grade < 0)) AND
                                              s.timemodified IS NOT NULL AND
                                              s.status = ? AND
                                              s.latest = 1 AND
@@ -1771,11 +1775,14 @@ function mod_assign_core_calendar_is_event_visible(calendar_event $event) {
 }
 
 /**
- * Handles creating actions for events.
+ * This function receives a calendar event and returns the action associated with it, or null if there is none.
+ *
+ * This is used by block_myoverview in order to display the event appropriately. If null is returned then the event
+ * is not displayed on the block.
  *
  * @param calendar_event $event
  * @param \core_calendar\action_factory $factory
- * @return \core_calendar\local\event\value_objects\action|\core_calendar\local\interfaces\action_interface|null
+ * @return \core_calendar\local\event\entities\action_interface|null
  */
 function mod_assign_core_calendar_provide_event_action(calendar_event $event,
                                                        \core_calendar\action_factory $factory) {

@@ -971,13 +971,15 @@ function feedback_check_is_switchrole() {
  * @param string $sort
  * @param int $startpage
  * @param int $pagecount
- * @return object the userrecords
+ * @param bool $includestatus to return if the user started or not the feedback among the complete user record
+ * @return array array of user ids or user objects when $includestatus set to true
  */
 function feedback_get_incomplete_users(cm_info $cm,
                                        $group = false,
                                        $sort = '',
                                        $startpage = false,
-                                       $pagecount = false) {
+                                       $pagecount = false,
+                                       $includestatus = false) {
 
     global $DB;
 
@@ -985,7 +987,8 @@ function feedback_get_incomplete_users(cm_info $cm,
 
     //first get all user who can complete this feedback
     $cap = 'mod/feedback:complete';
-    $fields = 'u.id, u.username';
+    $allnames = get_all_user_name_fields(true, 'u');
+    $fields = 'u.id, ' . $allnames . ', u.picture, u.email, u.imagealt';
     if (!$allusers = get_users_by_capability($context,
                                             $cap,
                                             $fields,
@@ -999,25 +1002,35 @@ function feedback_get_incomplete_users(cm_info $cm,
     }
     // Filter users that are not in the correct group/grouping.
     $info = new \core_availability\info_module($cm);
-    $allusers = $info->filter_user_list($allusers);
+    $allusersrecords = $info->filter_user_list($allusers);
 
-    $allusers = array_keys($allusers);
+    $allusers = array_keys($allusersrecords);
 
     //now get all completeds
     $params = array('feedback'=>$cm->instance);
-    if (!$completedusers = $DB->get_records_menu('feedback_completed', $params, '', 'id, userid')) {
-        return $allusers;
+    if ($completedusers = $DB->get_records_menu('feedback_completed', $params, '', 'id, userid')) {
+        // Now strike all completedusers from allusers.
+        $allusers = array_diff($allusers, $completedusers);
     }
-
-    //now strike all completedusers from allusers
-    $allusers = array_diff($allusers, $completedusers);
 
     //for paging I use array_slice()
     if ($startpage !== false AND $pagecount !== false) {
         $allusers = array_slice($allusers, $startpage, $pagecount);
     }
 
-    return $allusers;
+    // Check if we should return the full users objects.
+    if ($includestatus) {
+        $userrecords = [];
+        $startedusers = $DB->get_records_menu('feedback_completedtmp', ['feedback' => $cm->instance], '', 'id, userid');
+        $startedusers = array_flip($startedusers);
+        foreach ($allusers as $userid) {
+            $allusersrecords[$userid]->feedbackstarted = isset($startedusers[$userid]);
+            $userrecords[] = $allusersrecords[$userid];
+        }
+        return $userrecords;
+    } else {    // Return just user ids.
+        return $allusers;
+    }
 }
 
 /**
@@ -1924,8 +1937,6 @@ function feedback_print_item_show_value($item, $value = false) {
  */
 function feedback_set_tmp_values($feedbackcompleted) {
     global $DB;
-    debugging('Function feedback_set_tmp_values() is deprecated and since it is '
-            . 'no longer used in mod_feedback', DEBUG_DEVELOPER);
 
     //first we create a completedtmp
     $tmpcpl = new stdClass();
@@ -2970,9 +2981,10 @@ function feedback_print_numeric_option_list($startval, $endval, $selectval = '',
  * @param object $feedback
  * @param object $course
  * @param stdClass|int $user
+ * @param stdClass $completed record from feedback_completed if known
  * @return void
  */
-function feedback_send_email($cm, $feedback, $course, $user) {
+function feedback_send_email($cm, $feedback, $course, $user, $completed = null) {
     global $CFG, $DB;
 
     if ($feedback->email_notification == 0) {  // No need to do anything
@@ -3021,6 +3033,13 @@ function feedback_send_email($cm, $feedback, $course, $user) {
             $info->url = $CFG->wwwroot.'/mod/feedback/show_entries.php?'.
                             'id='.$cm->id.'&'.
                             'userid=' . $user->id;
+            if ($completed) {
+                $info->url .= '&showcompleted=' . $completed->id;
+                if ($feedback->course == SITEID) {
+                    // Course where feedback was completed (for site feedbacks only).
+                    $info->url .= '&courseid=' . $completed->courseid;
+                }
+            }
 
             $a = array('username' => $info->username, 'feedbackname' => $feedback->name);
 
@@ -3400,11 +3419,14 @@ function feedback_check_updates_since(cm_info $cm, $from, $filter = array()) {
 }
 
 /**
- * Handles creating actions for events.
+ * This function receives a calendar event and returns the action associated with it, or null if there is none.
+ *
+ * This is used by block_myoverview in order to display the event appropriately. If null is returned then the event
+ * is not displayed on the block.
  *
  * @param calendar_event $event
  * @param \core_calendar\action_factory $factory
- * @return \core_calendar\local\event\value_objects\action|\core_calendar\local\interfaces\action_interface|null
+ * @return \core_calendar\local\event\entities\action_interface|null
  */
 function mod_feedback_core_calendar_provide_event_action(calendar_event $event,
                                                          \core_calendar\action_factory $factory) {
