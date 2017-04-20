@@ -304,15 +304,10 @@ function book_supports($feature) {
 function book_extend_settings_navigation(settings_navigation $settingsnav, navigation_node $booknode) {
     global $USER, $PAGE, $OUTPUT;
 
-    $plugins = core_component::get_plugin_list('booktool');
-    foreach ($plugins as $plugin => $dir) {
-        if (file_exists("$dir/lib.php")) {
-            require_once("$dir/lib.php");
-        }
-        $function = 'booktool_'.$plugin.'_extend_settings_navigation';
-        if (function_exists($function)) {
-            $function($settingsnav, $booknode);
-        }
+    if ($booknode->children->count() > 0) {
+        $firstkey = $booknode->children->get_key_list()[0];
+    } else {
+        $firstkey = null;
     }
 
     $params = $PAGE->url->params();
@@ -327,8 +322,20 @@ function book_extend_settings_navigation(settings_navigation $settingsnav, navig
             $edit = '1';
         }
         $url = new moodle_url('/mod/book/view.php', array('id'=>$params['id'], 'chapterid'=>$params['chapterid'], 'edit'=>$edit, 'sesskey'=>sesskey()));
-        $booknode->add($string, $url, navigation_node::TYPE_SETTING);
+        $editnode = navigation_node::create($string, $url, navigation_node::TYPE_SETTING);
+        $booknode->add_node($editnode, $firstkey);
         $PAGE->set_button($OUTPUT->single_button($url, $string));
+    }
+
+    $plugins = core_component::get_plugin_list('booktool');
+    foreach ($plugins as $plugin => $dir) {
+        if (file_exists("$dir/lib.php")) {
+            require_once("$dir/lib.php");
+        }
+        $function = 'booktool_'.$plugin.'_extend_settings_navigation';
+        if (function_exists($function)) {
+            $function($settingsnav, $booknode);
+        }
     }
 }
 
@@ -704,11 +711,14 @@ function mod_book_get_fontawesome_icon_map() {
 }
 
 /**
- * Handles creating actions for events.
+ * This function receives a calendar event and returns the action associated with it, or null if there is none.
+ *
+ * This is used by block_myoverview in order to display the event appropriately. If null is returned then the event
+ * is not displayed on the block.
  *
  * @param calendar_event $event
  * @param \core_calendar\action_factory $factory
- * @return \core_calendar\local\event\value_objects\action|\core_calendar\local\interfaces\action_interface|null
+ * @return \core_calendar\local\event\entities\action_interface|null
  */
 function mod_book_core_calendar_provide_event_action(calendar_event $event,
                                                      \core_calendar\action_factory $factory) {

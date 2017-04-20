@@ -802,11 +802,14 @@ function mod_wiki_get_fontawesome_icon_map() {
 }
 
 /**
- * Handles creating actions for events.
+ * This function receives a calendar event and returns the action associated with it, or null if there is none.
+ *
+ * This is used by block_myoverview in order to display the event appropriately. If null is returned then the event
+ * is not displayed on the block.
  *
  * @param calendar_event $event
  * @param \core_calendar\action_factory $factory
- * @return \core_calendar\local\event\value_objects\action|\core_calendar\local\interfaces\action_interface|null
+ * @return \core_calendar\local\event\entities\action_interface|null
  */
 function mod_wiki_core_calendar_provide_event_action(calendar_event $event,
                                                     \core_calendar\action_factory $factory) {
