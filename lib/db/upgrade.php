@@ -2862,5 +2862,30 @@ function xmldb_main_upgrade($oldversion) {
         upgrade_main_savepoint(true, 2017050900.01);
     }
 
+    // Automatically generated Moodle v3.3.0 release upgrade line.
+    // Put any upgrade step following this.
+
+    if ($oldversion < 2017061201.00) {
+        $table = new xmldb_table('course_sections');
+        $field = new xmldb_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'availability');
+
+        // Define a field 'timemodified' in the 'course_sections' table.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_main_savepoint(true, 2017061201.00);
+    }
+
+    if ($oldversion < 2017061301.00) {
+        // Check if the value of 'navcourselimit' is set to the old default value, if so, change it to the new default.
+        if ($CFG->navcourselimit == 20) {
+            set_config('navcourselimit', 10);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2017061301.00);
+    }
+
     return true;
 }
