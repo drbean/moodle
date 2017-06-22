@@ -244,7 +244,7 @@ $functions = array(
         'classname' => 'core_course_external',
         'methodname' => 'duplicate_course',
         'classpath' => 'course/externallib.php',
-        'description' => 'Duplicate an existing course (creating a new one), without user data',
+        'description' => 'Duplicate an existing course (creating a new one).',
         'type' => 'write',
         'capabilities' => 'moodle/backup:backupcourse, moodle/restore:restorecourse, moodle/course:create'
     ),
@@ -468,6 +468,15 @@ $functions = array(
         'description' => 'upload a file to moodle',
         'type'        => 'write',
         'classpath'   => 'files/externallib.php',
+    ),
+    'core_form_get_filetypes_browser_data' => array(
+        'classname' => 'core_form\external',
+        'methodname' => 'get_filetypes_browser_data',
+        'classpath' => '',
+        'description' => 'Provides data for the filetypes element browser.',
+        'type' => 'read',
+        'loginrequired' => false,
+        'ajax' => true,
     ),
     'core_get_component_strings' => array(
         'classname' => 'core_external',
