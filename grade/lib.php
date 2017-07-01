@@ -3175,6 +3175,7 @@ abstract class grade_helper {
         }
         if (count($exportplugins) > 0) {
             asort($exportplugins);
+	    $exportplugins = array( 'txt' => $exportplugins['txt'] ) + $exportplugins;
             self::$exportplugins = $exportplugins;
         } else {
             self::$exportplugins = false;
