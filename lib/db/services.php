@@ -74,6 +74,7 @@ $functions = array(
         'classpath' => 'calendar/externallib.php',
         'type' => 'write',
         'capabilities' => 'moodle/calendar:manageentries, moodle/calendar:manageownentries, moodle/calendar:managegroupentries',
+        'ajax' => true,
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
     ),
     'core_calendar_get_calendar_events' => array(
@@ -109,6 +110,16 @@ $functions = array(
         'classname' => 'core_calendar_external',
         'methodname' => 'get_calendar_action_events_by_courses',
         'description' => 'Get calendar action events by courses',
+        'classpath' => 'calendar/externallib.php',
+        'type' => 'read',
+        'capabilities' => 'moodle/calendar:manageentries, moodle/calendar:manageownentries, moodle/calendar:managegroupentries',
+        'ajax' => true,
+        'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+    ),
+    'core_calendar_get_calendar_event_by_id' => array(
+        'classname' => 'core_calendar_external',
+        'methodname' => 'get_calendar_event_by_id',
+        'description' => 'Get calendar event by id',
         'classpath' => 'calendar/externallib.php',
         'type' => 'read',
         'capabilities' => 'moodle/calendar:manageentries, moodle/calendar:manageownentries, moodle/calendar:managegroupentries',
@@ -153,6 +164,15 @@ $functions = array(
         'classpath' => 'cohort/externallib.php',
         'description' => 'Returns cohort members.',
         'type' => 'read',
+        'capabilities' => 'moodle/cohort:view'
+    ),
+    'core_cohort_search_cohorts' => array(
+        'classname' => 'core_cohort_external',
+        'methodname' => 'search_cohorts',
+        'classpath' => 'cohort/externallib.php',
+        'description' => 'Search for cohorts.',
+        'type' => 'read',
+        'ajax' => true,
         'capabilities' => 'moodle/cohort:view'
     ),
     'core_cohort_get_cohorts' => array(
@@ -443,6 +463,15 @@ $functions = array(
         'description' => 'For each course and capability specified, return a list of the users that are enrolled in the course
                                   and have that capability',
         'type' => 'read',
+    ),
+    'core_enrol_get_potential_users' => array(
+        'classname' => 'core_enrol_external',
+        'methodname' => 'get_potential_users',
+        'classpath' => 'enrol/externallib.php',
+        'description' => 'Get the list of potential users to enrol',
+        'ajax' => true,
+        'type' => 'read',
+        'capabilities' => 'moodle/course:enrolreview'
     ),
     'core_enrol_get_users_courses' => array(
         'classname' => 'core_enrol_external',
