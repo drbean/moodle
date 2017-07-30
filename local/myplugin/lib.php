@@ -15,7 +15,7 @@ function local_myplugin_extend_settings_navigation($settingsnav, $context) {
 
     if ($settingnode = $settingsnav->find('courseadmin', navigation_node::TYPE_COURSE)) {
         $strfoo = get_string('foo', 'local_myplugin');
-        $url = new moodle_url('/local/myplugin/foo.php', array('id' => $PAGE->course->id));
+        $url = new moodle_url('/local/myplugin/settings.php', array('id' => $PAGE->course->id));
         $foonode = navigation_node::create(
             $strfoo,
             $url,
