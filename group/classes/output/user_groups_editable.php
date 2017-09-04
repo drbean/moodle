@@ -54,11 +54,11 @@ class user_groups_editable extends \core\output\inplace_editable {
      * @param \context $context The course context
      * @param \stdClass $user The current user
      * @param \stdClass[] $coursegroups The list of course groups from groups_get_all_groups with membership.
-     * @param string $value JSON Encoded list of group ids.
+     * @param array $value Array of groupids.
      */
     public function __construct($course, $context, $user, $coursegroups, $value) {
         // Check capabilities to get editable value.
-        $editable = has_capability('moodle/course:managegroups', $context);
+        $editable = has_capability('moodle/course:managegroups', $context) && !empty($coursegroups);
 
         // Invent an itemid.
         $itemid = $course->id . ':' . $user->id;
@@ -75,7 +75,7 @@ class user_groups_editable extends \core\output\inplace_editable {
         $options = [];
 
         foreach ($coursegroups as $group) {
-            $options[$group->id] = $group->name;
+            $options[$group->id] = format_string($group->name, true, ['context' => $this->context]);
         }
         $this->edithint = get_string('editusersgroupsa', 'group', fullname($user));
         $this->editlabel = get_string('editusersgroupsa', 'group', fullname($user));

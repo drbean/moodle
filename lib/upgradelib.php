@@ -1665,6 +1665,31 @@ function upgrade_language_pack($lang = null) {
 }
 
 /**
+ * Build the current theme so that the user doesn't have to wait for it
+ * to build on the first page load after the install / upgrade.
+ */
+function upgrade_themes() {
+    global $CFG;
+
+    require_once("{$CFG->libdir}/outputlib.php");
+
+    // Build the current theme so that the user can immediately
+    // browse the site without having to wait for the theme to build.
+    $themeconfig = theme_config::load($CFG->theme);
+    $direction = right_to_left() ? 'rtl' : 'ltr';
+    theme_build_css_for_themes([$themeconfig], [$direction]);
+
+    // Only queue the task if there isn't already one queued.
+    if (empty(\core\task\manager::get_adhoc_tasks('\\core\\task\\build_installed_themes_task'))) {
+        // Queue a task to build all of the site themes at some point
+        // later. These can happen offline because it doesn't block the
+        // user unless they quickly change theme.
+        $adhoctask = new \core\task\build_installed_themes_task();
+        \core\task\manager::queue_adhoc_task($adhoctask);
+    }
+}
+
+/**
  * Install core moodle tables and initialize
  * @param float $version target version
  * @param bool $verbose
@@ -2600,4 +2625,67 @@ function upgrade_fix_config_auth_plugin_defaults($plugin) {
             admin_apply_default_settings($settings, false);
         }
     }
+}
+
+/**
+ * Search for a given theme in any of the parent themes of a given theme.
+ *
+ * @param string $needle The name of the theme you want to search for
+ * @param string $themename The name of the theme you want to search for
+ * @param string $checkedthemeforparents The name of all the themes already checked
+ * @return bool True if found, false if not.
+ */
+function upgrade_theme_is_from_family($needle, $themename, $checkedthemeforparents = []) {
+    global $CFG;
+
+    // Once we've started checking a theme, don't start checking it again. Prevent recursion.
+    if (!empty($checkedthemeforparents[$themename])) {
+        return false;
+    }
+    $checkedthemeforparents[$themename] = true;
+
+    if ($themename == $needle) {
+        return true;
+    }
+
+    if ($themedir = upgrade_find_theme_location($themename)) {
+        $THEME = new stdClass();
+        require($themedir . '/config.php');
+        $theme = $THEME;
+    } else {
+        return false;
+    }
+
+    if (empty($theme->parents)) {
+        return false;
+    }
+
+    // Recursively search through each parent theme.
+    foreach ($theme->parents as $parent) {
+        if (upgrade_theme_is_from_family($needle, $parent, $checkedthemeforparents)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Finds the theme location and verifies the theme has all needed files.
+ *
+ * @param string $themename The name of the theme you want to search for
+ * @return string full dir path or null if not found
+ * @see \theme_config::find_theme_location()
+ */
+function upgrade_find_theme_location($themename) {
+    global $CFG;
+
+    if (file_exists("$CFG->dirroot/theme/$themename/config.php")) {
+        $dir = "$CFG->dirroot/theme/$themename";
+    } else if (!empty($CFG->themedir) and file_exists("$CFG->themedir/$themename/config.php")) {
+        $dir = "$CFG->themedir/$themename";
+    } else {
+        return null;
+    }
+
+    return $dir;
 }

@@ -128,7 +128,7 @@ class core_calendar_renderer extends plugin_renderer_base {
      *     $month and $year are kept for backwards compatibility.
      * @return string
      */
-    protected function add_event_button($courseid, $day = null, $month = null, $year = null, $time = null) {
+    public function add_event_button($courseid, $day = null, $month = null, $year = null, $time = null) {
         // If a day, month and year were passed then convert it to a timestamp. If these were passed
         // then we can assume the day, month and year are passed as Gregorian, as no where in core
         // should we be passing these values rather than the time. This is done for BC.
@@ -142,18 +142,13 @@ class core_calendar_renderer extends plugin_renderer_base {
             $time = time();
         }
 
-        $output = html_writer::start_tag('div', array('class'=>'buttons'));
-        $output .= html_writer::start_tag('form', array('action' => CALENDAR_URL . 'event.php', 'method' => 'get'));
-        $output .= html_writer::start_tag('div');
-        $output .= html_writer::empty_tag('input', array('type'=>'hidden', 'name' => 'action', 'value' => 'new'));
-        $output .= html_writer::empty_tag('input', array('type'=>'hidden', 'name' => 'course', 'value' => $courseid));
-        $output .= html_writer::empty_tag('input', array('type'=>'hidden', 'name' => 'time', 'value' => $time));
-        $attributes = array('type' => 'submit', 'value' => get_string('newevent', 'calendar'), 'class' => 'btn btn-secondary');
-        $output .= html_writer::empty_tag('input', $attributes);
-        $output .= html_writer::end_tag('div');
-        $output .= html_writer::end_tag('form');
-        $output .= html_writer::end_tag('div');
-        return $output;
+        $coursecontext = \context_course::instance($courseid);
+        $attributes = [
+            'class' => 'btn btn-secondary pull-xs-right pull-right',
+            'data-context-id' => $coursecontext->id,
+            'data-action' => 'new-event-button'
+        ];
+        return html_writer::tag('button', get_string('newevent', 'calendar'), $attributes);
     }
 
     /**
@@ -233,7 +228,7 @@ class core_calendar_renderer extends plugin_renderer_base {
 
         $output .= $this->output->box_start('card-header clearfix');
         if (calendar_edit_event_allowed($event) && $showactions) {
-            if (empty($event->cmid)) {
+            if (calendar_delete_event_allowed($event)) {
                 $editlink = new moodle_url(CALENDAR_URL.'event.php', array('action' => 'edit', 'id' => $event->id));
                 $deletelink = new moodle_url(CALENDAR_URL.'delete.php', array('id' => $event->id));
                 if (!empty($event->calendarcourseid)) {
@@ -410,7 +405,6 @@ class core_calendar_renderer extends plugin_renderer_base {
 
         // Get the day names as the header.
         $header = array();
-	$header[] = "Week";
         for($i = $display->minwday; $i <= $display->maxwday; ++$i) {
             $header[] = $daynames[$i % $numberofdaysinweek]['shortname'];
         }
@@ -422,7 +416,6 @@ class core_calendar_renderer extends plugin_renderer_base {
 
         $row = new html_table_row(array());
 
-	$row->cells[] = $week;
         // Paddding (the first week may have blank days in the beginning)
         for($i = $display->minwday; $i < $startwday; ++$i) {
             $cell = new html_table_cell('&nbsp;');
@@ -445,7 +438,6 @@ class core_calendar_renderer extends plugin_renderer_base {
                 $row = new html_table_row(array());
                 $dayweek = $display->minwday;
                 ++$week;
-	$row->cells[] = $week;
             }
 
             // Reset vars
@@ -595,7 +587,7 @@ class core_calendar_renderer extends plugin_renderer_base {
      * @param string $label The label to use for the course select.
      * @return string
      */
-    protected function course_filter_selector(moodle_url $returnurl, $label=null) {
+    public function course_filter_selector(moodle_url $returnurl, $label=null) {
         global $USER, $SESSION, $CFG;
 
         if (!isloggedin() or isguestuser()) {
@@ -625,7 +617,7 @@ class core_calendar_renderer extends plugin_renderer_base {
         $courseurl = new moodle_url($returnurl);
         $courseurl->remove_params('course');
         $select = new single_select($courseurl, 'course', $courseoptions, $selected, null);
-        $select->class = 'cal_courses_flt m-r-1';
+        $select->class = 'm-r-1';
         if ($label !== null) {
             $select->set_label($label);
         } else {
