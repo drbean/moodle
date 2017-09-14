@@ -64,7 +64,9 @@ define([
         NEW_EVENT_BUTTON: "[data-action='new-event-button']",
         DAY_CONTENT: "[data-region='day-content']",
         LOADING_ICON: '.loading-icon',
-        VIEW_DAY_LINK: "[data-action='view-day-link']"
+        VIEW_DAY_LINK: "[data-action='view-day-link']",
+        CALENDAR_MONTH_WRAPPER: ".calendarwrapper",
+        COURSE_SELECTOR: 'select[name="course"]'
     };
 
     /**
@@ -140,7 +142,9 @@ define([
                 body: Templates.render('core_calendar/event_summary_body', eventData),
                 templateContext: {
                     canedit: eventData.canedit,
-                    candelete: eventData.candelete
+                    candelete: eventData.candelete,
+                    isactionevent: eventData.isactionevent,
+                    url: eventData.url
                 }
             };
 
@@ -254,7 +258,8 @@ define([
      * @param {object} eventFormModalPromise A promise reolved with the event form modal
      */
     var registerCalendarEventListeners = function(root, eventFormModalPromise) {
-        var body = $('body');
+        var body = $('body'),
+            courseId = $(root).find(SELECTORS.CALENDAR_MONTH_WRAPPER).data('courseid');
 
         body.on(CalendarEvents.created, function() {
             CalendarViewManager.reloadCurrentMonth(root);
@@ -283,7 +288,7 @@ define([
                 modal.setEventId(eventId);
                 modal.show();
             });
-
+            modal.setCourseId(courseId);
             return;
         });
     };
@@ -311,6 +316,17 @@ define([
             }
 
             renderEventSummaryModal(eventId);
+        });
+
+        root.on('change', SELECTORS.COURSE_SELECTOR, function() {
+            var selectElement = $(this);
+            var courseId = selectElement.val();
+            CalendarViewManager.reloadCurrentMonth(root, courseId)
+                .then(function() {
+                    // We need to get the selector again because the content has changed.
+                    return root.find(SELECTORS.COURSE_SELECTOR).val(courseId);
+                })
+                .fail(Notification.exception);
         });
 
         var eventFormPromise = registerEventFormModal(root);

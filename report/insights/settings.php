@@ -15,22 +15,20 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Strings
+ * Links and settings
  *
- * @package    report
- * @subpackage outline
- * @copyright  1999 onwards Martin Dougiamas  {@link http://moodle.com}
+ * Contains settings used by insights report.
+ *
+ * @package    report_insights
+ * @copyright  2017 David Monllao {@link http://www.davidmonllao.com}
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-$string['eventactivityreportviewed'] = 'Activity report viewed';
-$string['eventoutlinereportviewed'] = 'Outline report viewed';
-$string['neverseen'] = 'Never seen';
-$string['nocapability'] = 'Can not access user outline report';
-$string['nologreaderenabled'] = 'No log reader enabled';
-$string['numviews'] = '{$a->numviews} by {$a->distinctusers} users';
-$string['outline:view'] = 'View activity report';
-$string['page-report-outline-x'] = 'Any outline report';
-$string['page-report-outline-index'] = 'Course outline report';
-$string['page-report-outline-user'] = 'User course outline report';
-$string['pluginname'] = 'Activity report';
+defined('MOODLE_INTERNAL') || die;
+
+// Just a link to course report.
+$ADMIN->add('reports', new admin_externalpage('reportinsights', get_string('insights', 'report_insights'),
+        $CFG->wwwroot . "/report/insights/insights.php?contextid=" . SYSCONTEXTID, 'moodle/analytics:listinsights'));
+
+// No report settings.
+$settings = null;
