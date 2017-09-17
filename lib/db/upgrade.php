@@ -2436,5 +2436,63 @@ function xmldb_main_upgrade($oldversion) {
         upgrade_main_savepoint(true, 2017082800.00);
     }
 
+    if ($oldversion < 2017090700.01) {
+
+        // Define table analytics_prediction_actions to be created.
+        $table = new xmldb_table('analytics_prediction_actions');
+
+        // Adding fields to table analytics_prediction_actions.
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('predictionid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('actionname', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+
+        // Adding keys to table analytics_prediction_actions.
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, array('id'));
+        $table->add_key('predictionid', XMLDB_KEY_FOREIGN, array('predictionid'), 'analytics_predictions', array('id'));
+        $table->add_key('userid', XMLDB_KEY_FOREIGN, array('userid'), 'user', array('id'));
+
+        // Adding indexes to table analytics_prediction_actions.
+        $table->add_index('predictionidanduseridandactionname', XMLDB_INDEX_NOTUNIQUE,
+            array('predictionid', 'userid', 'actionname'));
+
+        // Conditionally launch create table for analytics_prediction_actions.
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2017090700.01);
+    }
+
+    if ($oldversion < 2017091200.00) {
+        // Force all messages to be reindexed.
+        set_config('core_message_message_sent_lastindexrun', '0', 'core_search');
+        set_config('core_message_message_received_lastindexrun', '0', 'core_search');
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2017091200.00);
+    }
+
+    if ($oldversion < 2017091201.00) {
+        // Define field userid to be added to task_adhoc.
+        $table = new xmldb_table('task_adhoc');
+        $field = new xmldb_field('userid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'customdata');
+
+        // Conditionally launch add field userid.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $key = new xmldb_key('useriduser', XMLDB_KEY_FOREIGN, array('userid'), 'user', array('id'));
+
+        // Launch add key userid_user.
+        $dbman->add_key($table, $key);
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2017091201.00);
+    }
+
     return true;
 }
