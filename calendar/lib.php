@@ -1049,7 +1049,7 @@ class calendar_information {
     public function add_sidecalendar_blocks(core_calendar_renderer $renderer, $showfilters=false, $view=null) {
         if ($showfilters) {
             $filters = new block_contents();
-            $filters->content = $renderer->fake_block_filters($this->courseid, 0, 0, 0, $view, $this->courses);
+            $filters->content = $renderer->event_filter();
             $filters->footer = '';
             $filters->title = get_string('eventskey', 'calendar');
             $renderer->add_pretend_calendar_block($filters, BLOCK_POS_RIGHT);
@@ -1478,7 +1478,7 @@ function calendar_get_mini($courses, $groups, $users, $calmonth = false, $calyea
 
             // Class and cell content.
             if (isset($typesbyday[$day]['startglobal'])) {
-                $class .= ' calendar_event_global';
+                $class .= ' calendar_event_site';
             } else if (isset($typesbyday[$day]['startcourse'])) {
                 $class .= ' calendar_event_course';
             } else if (isset($typesbyday[$day]['startgroup'])) {
@@ -1977,88 +1977,6 @@ function calendar_top_controls($type, $data) {
 
             break;
     }
-
-    return $content;
-}
-
-/**
- * Formats a filter control element.
- *
- * @param moodle_url $url of the filter
- * @param int $type constant defining the type filter
- * @return string html content of the element
- */
-function calendar_filter_controls_element(moodle_url $url, $type) {
-    global $OUTPUT;
-
-    switch ($type) {
-        case CALENDAR_EVENT_GLOBAL:
-            $typeforhumans = 'global';
-            $class = 'calendar_event_global';
-            break;
-        case CALENDAR_EVENT_COURSE:
-            $typeforhumans = 'course';
-            $class = 'calendar_event_course';
-            break;
-        case CALENDAR_EVENT_GROUP:
-            $typeforhumans = 'groups';
-            $class = 'calendar_event_group';
-            break;
-        case CALENDAR_EVENT_USER:
-            $typeforhumans = 'user';
-            $class = 'calendar_event_user';
-            break;
-    }
-
-    if (calendar_show_event_type($type)) {
-        $icon = $OUTPUT->pix_icon('t/hide', get_string('hide'));
-        $str = get_string('hide' . $typeforhumans . 'events', 'calendar');
-    } else {
-        $icon = $OUTPUT->pix_icon('t/show', get_string('show'));
-        $str = get_string('show' . $typeforhumans . 'events', 'calendar');
-    }
-    $content = \html_writer::start_tag('li', array('class' => 'calendar_event'));
-    $content .= \html_writer::start_tag('a', array('href' => $url, 'rel' => 'nofollow'));
-    $content .= \html_writer::tag('span', $icon, array('class' => $class));
-    $content .= \html_writer::tag('span', $str, array('class' => 'eventname'));
-    $content .= \html_writer::end_tag('a');
-    $content .= \html_writer::end_tag('li');
-
-    return $content;
-}
-
-/**
- * Get the controls filter for calendar.
- *
- * Filter is used to hide calendar info from the display page.
- *
-
- * @param moodle_url $returnurl return-url for filter controls
- * @return string $content return filter controls in html
- */
-function calendar_filter_controls(moodle_url $returnurl) {
-    $groupevents = true;
-
-    $seturl = new \moodle_url('/calendar/set.php', array('return' => base64_encode($returnurl->out_as_local_url(false)),
-        'sesskey' => sesskey()));
-    $content = \html_writer::start_tag('ul');
-
-    $seturl->param('var', 'showglobal');
-    $content .= calendar_filter_controls_element($seturl, CALENDAR_EVENT_GLOBAL);
-
-    $seturl->param('var', 'showcourses');
-    $content .= calendar_filter_controls_element($seturl, CALENDAR_EVENT_COURSE);
-
-    if (isloggedin() && !isguestuser()) {
-        if ($groupevents) {
-            // This course MIGHT have group events defined, so show the filter.
-            $seturl->param('var', 'showgroups');
-            $content .= calendar_filter_controls_element($seturl, CALENDAR_EVENT_GROUP);
-        }
-        $seturl->param('var', 'showuser');
-        $content .= calendar_filter_controls_element($seturl, CALENDAR_EVENT_USER);
-    }
-    $content .= \html_writer::end_tag('ul');
 
     return $content;
 }
@@ -3464,6 +3382,11 @@ function calendar_get_view(\calendar_information $calendar, $view) {
         $monthdays = $type->get_num_days_in_month($date['year'], $date['mon']);
         $tend = $tstart + ($monthdays * DAYSECS) - 1;
         $selectortitle = get_string('detailedmonthviewfor', 'calendar');
+        if ($view === 'mini') {
+            $template = 'core_calendar/calendar_mini';
+        } else {
+            $template = 'core_calendar/calendar_month';
+        }
     }
 
     list($userparam, $groupparam, $courseparam) = array_map(function($param) {
@@ -3518,7 +3441,6 @@ function calendar_get_view(\calendar_information $calendar, $view) {
 
     $month = new \core_calendar\external\month_exporter($calendar, $type, $related);
     $data = $month->export($renderer);
-    $template = 'core_calendar/month_detailed';
 
     return [$data, $template];
 }
@@ -3530,24 +3452,25 @@ function calendar_get_view(\calendar_information $calendar, $view) {
  * @return string The rendered mform fragment.
  */
 function calendar_output_fragment_event_form($args) {
-    global $CFG, $OUTPUT;
-    require_once($CFG->dirroot.'/calendar/event_form.php');
+    global $CFG, $OUTPUT, $USER;
 
     $html = '';
-    $data = null;
+    $data = [];
     $eventid = isset($args['eventid']) ? clean_param($args['eventid'], PARAM_INT) : null;
     $starttime = isset($args['starttime']) ? clean_param($args['starttime'], PARAM_INT) : null;
     $courseid = isset($args['courseid']) ? clean_param($args['courseid'], PARAM_INT) : null;
     $event = null;
     $hasformdata = isset($args['formdata']) && !empty($args['formdata']);
-    $formoptions = [];
+    $context = \context_user::instance($USER->id);
+    $editoroptions = \core_calendar\local\event\forms\create::build_editor_options($context);
+    $formoptions = ['editoroptions' => $editoroptions];
+    $draftitemid = 0;
 
     if ($hasformdata) {
         parse_str(clean_param($args['formdata'], PARAM_TEXT), $data);
-    }
-
-    if (isset($args['haserror'])) {
-        $formoptions['haserror'] = clean_param($args['haserror'], PARAM_BOOL);
+        if (isset($data['description']['itemid'])) {
+            $draftitemid = $data['description']['itemid'];
+        }
     }
 
     if ($starttime) {
@@ -3572,8 +3495,22 @@ function calendar_output_fragment_event_form($args) {
         $mform->set_data($data);
     } else {
         $event = calendar_event::load($eventid);
+        $mapper = new \core_calendar\local\event\mappers\create_update_form_mapper();
+        $eventdata = $mapper->from_legacy_event_to_data($event);
+        $data = array_merge((array) $eventdata, $data);
         $event->count_repeats();
         $formoptions['event'] = $event;
+        $data['description']['text'] = file_prepare_draft_area(
+            $draftitemid,
+            $event->context->id,
+            'calendar',
+            'event_description',
+            $event->id,
+            null,
+            $data['description']['text']
+        );
+        $data['description']['itemid'] = $draftitemid;
+
         $mform = new \core_calendar\local\event\forms\update(
             null,
             $formoptions,
@@ -3583,13 +3520,6 @@ function calendar_output_fragment_event_form($args) {
             true,
             $data
         );
-    }
-
-    if ($hasformdata) {
-        $mform->is_validated();
-    } else if (!is_null($event)) {
-        $mapper = new \core_calendar\local\event\mappers\create_update_form_mapper();
-        $data = $mapper->from_legacy_event_to_data($event);
         $mform->set_data($data);
 
         // Check to see if this event is part of a subscription or import.
@@ -3602,6 +3532,10 @@ function calendar_output_fragment_event_form($args) {
 
             $html .= $OUTPUT->render($renderable);
         }
+    }
+
+    if ($hasformdata) {
+        $mform->is_validated();
     }
 
     $html .= $mform->render();
@@ -3653,4 +3587,26 @@ function calendar_get_footer_options($calendar) {
     $template = 'core_calendar/footer_options';
 
     return [$data, $template];
+}
+
+/**
+ * Get the list of potential calendar filter types as a type => name
+ * combination.
+ *
+ * @return array
+ */
+function calendar_get_filter_types() {
+    $types = [
+        'site',
+        'course',
+        'group',
+        'user',
+    ];
+
+    return array_map(function($type) {
+        return [
+            'type' => $type,
+            'name' => get_string("eventtype{$type}", "calendar"),
+        ];
+    }, $types);
 }

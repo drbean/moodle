@@ -31,6 +31,8 @@ define([], function() {
         editActionEvent: 'calendar-events:edit_action_event',
         eventMoved: 'calendar-events:event_moved',
         monthChanged: 'calendar-events:month_changed',
-        moveEvent: 'calendar-events:move_event'
+        moveEvent: 'calendar-events:move_event',
+        filterChanged: 'calendar-events:filter_changed',
+        viewUpdated: 'calendar-events:view_updated',
     };
 });
