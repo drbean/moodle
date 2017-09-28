@@ -29,16 +29,19 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
      *
      * @method deleteEvent
      * @param {int} eventId The event id.
+     * @arapm {bool} deleteSeries Whether to delete all events in the series
      * @return {promise} Resolved with requested calendar event
      */
-    var deleteEvent = function(eventId) {
-
+    var deleteEvent = function(eventId, deleteSeries) {
+        if (typeof deleteSeries === 'undefined') {
+            deleteSeries = false;
+        }
         var request = {
             methodname: 'core_calendar_delete_calendar_events',
             args: {
                 events: [{
                     eventid: eventId,
-                    repeat: 1
+                    repeat: deleteSeries,
                 }]
             }
         };
@@ -87,16 +90,20 @@ define(['jquery', 'core/ajax'], function($, Ajax) {
      * Get calendar data for the month view.
      *
      * @method getCalendarMonthData
-     * @param {Number} time Timestamp.
+     * @param {Number} year Year
+     * @param {Number} month Month
      * @param {Number} courseid The course id.
+     * @param {Bool} includenavigation Whether to include navigation.
      * @return {promise} Resolved with the month view data.
      */
-    var getCalendarMonthData = function(time, courseid) {
+    var getCalendarMonthData = function(year, month, courseid, includenavigation) {
         var request = {
             methodname: 'core_calendar_get_calendar_monthly_view',
             args: {
-                time: time,
-                courseid: courseid
+                year: year,
+                month: month,
+                courseid: courseid,
+                includenavigation: includenavigation,
             }
         };
 
