@@ -168,8 +168,9 @@ class assign_grading_table extends table_sql implements renderable {
                                   LEFT JOIN (groups_members) gm
                                          ON mxg.userid = gm.userid
                                   LEFT JOIN (groupings_groups) gg
-                                         ON gm.groupid = 
+                                         ON gm.groupid = gg.groupid
                                  WHERE mxg.assignment = :assignmentid4
+                                         AND gg.groupingid = 24
                               GROUP BY mxg.userid';
             $from .= 'LEFT JOIN (' . $grademaxattempt . ') gmx
                              ON u.id = gmx.userid
