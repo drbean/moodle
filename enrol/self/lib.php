@@ -173,7 +173,7 @@ class enrol_self_plugin extends enrol_plugin {
             }
         }
         // Send welcome message.
-        if ($instance->customint4 !== ENROL_DO_NOT_SEND_EMAIL) {
+        if ($instance->customint4 != ENROL_DO_NOT_SEND_EMAIL) {
             $this->email_welcome_message($instance, $USER);
         }
     }
@@ -534,13 +534,17 @@ class enrol_self_plugin extends enrol_plugin {
         $instance = $ue->enrolmentinstance;
         $params = $manager->get_moodlepage()->url->params();
         $params['ue'] = $ue->id;
-        if ($this->allow_unenrol($instance) && has_capability("enrol/self:unenrol", $context)) {
-            $url = new moodle_url('/enrol/unenroluser.php', $params);
-            $actions[] = new user_enrolment_action(new pix_icon('t/delete', ''), get_string('unenrol', 'enrol'), $url, array('class'=>'unenrollink', 'rel'=>$ue->id));
-        }
         if ($this->allow_manage($instance) && has_capability("enrol/self:manage", $context)) {
             $url = new moodle_url('/enrol/editenrolment.php', $params);
-            $actions[] = new user_enrolment_action(new pix_icon('t/edit', ''), get_string('edit'), $url, array('class'=>'editenrollink', 'rel'=>$ue->id));
+            $actionparams = array('class' => 'editenrollink', 'rel' => $ue->id, 'data-action' => ENROL_ACTION_EDIT);
+            $actions[] = new user_enrolment_action(new pix_icon('t/edit', get_string('editenrolment', 'enrol')),
+                get_string('editenrolment', 'enrol'), $url, $actionparams);
+        }
+        if ($this->allow_unenrol($instance) && has_capability("enrol/self:unenrol", $context)) {
+            $url = new moodle_url('/enrol/unenroluser.php', $params);
+            $actionparams = array('class' => 'unenrollink', 'rel' => $ue->id, 'data-action' => ENROL_ACTION_UNENROL);
+            $actions[] = new user_enrolment_action(new pix_icon('t/delete', get_string('unenrol', 'enrol')),
+                get_string('unenrol', 'enrol'), $url, $actionparams);
         }
         return $actions;
     }
@@ -561,6 +565,7 @@ class enrol_self_plugin extends enrol_plugin {
             $merge = array(
                 'courseid'   => $data->courseid,
                 'enrol'      => $this->get_name(),
+                'status'     => $data->status,
                 'roleid'     => $data->roleid,
             );
         }
@@ -1051,4 +1056,14 @@ class enrol_self_plugin extends enrol_plugin {
 
         return $contact;
     }
+}
+
+/**
+ * Get icon mapping for font-awesome.
+ */
+function enrol_self_get_fontawesome_icon_map() {
+    return [
+        'enrol_self:withkey' => 'fa-key',
+        'enrol_self:withoutkey' => 'fa-sign-in',
+    ];
 }

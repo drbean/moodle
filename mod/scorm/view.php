@@ -70,13 +70,20 @@ if (!empty($scorm->popup)) {
 
     $scoid = 0;
     $orgidentifier = '';
-    if ($sco = scorm_get_sco($scorm->launch, SCO_ONLY)) {
-        if (($sco->organization == '') && ($sco->launch == '')) {
-            $orgidentifier = $sco->identifier;
-        } else {
-            $orgidentifier = $sco->organization;
+
+    $result = scorm_get_toc($USER, $scorm, $cm->id, TOCFULLURL);
+    // Set last incomplete sco to launch first.
+    if (!empty($result->sco->id)) {
+        $scoid = $result->sco->id;
+    } else {
+        if ($sco = scorm_get_sco($scorm->launch, SCO_ONLY)) {
+            if (($sco->organization == '') && ($sco->launch == '')) {
+                $orgidentifier = $sco->identifier;
+            } else {
+                $orgidentifier = $sco->organization;
+            }
+            $scoid = $sco->id;
         }
-        $scoid = $sco->id;
     }
 
     if (empty($preventskip) && $scorm->skipview >= SCORM_SKIPVIEW_FIRST &&
@@ -169,7 +176,8 @@ if ($available && empty($launch)) {
     scorm_print_launch($USER, $scorm, 'view.php?id='.$cm->id, $cm);
 }
 if (!empty($forcejs)) {
-    echo $OUTPUT->box(get_string("forcejavascriptmessage", "scorm"), "container forcejavascriptmessage");
+    $message = $OUTPUT->box(get_string("forcejavascriptmessage", "scorm"), "container forcejavascriptmessage");
+    echo html_writer::tag('noscript', $message);
 }
 
 if (!empty($scorm->popup)) {

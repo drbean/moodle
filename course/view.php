@@ -217,8 +217,6 @@
 
     $completion = new completion_info($course);
     if ($completion->is_enabled()) {
-        $PAGE->requires->string_for_js('completion-title-manual-y', 'completion');
-        $PAGE->requires->string_for_js('completion-title-manual-n', 'completion');
         $PAGE->requires->string_for_js('completion-alt-manual-y', 'completion');
         $PAGE->requires->string_for_js('completion-alt-manual-n', 'completion');
 
@@ -237,7 +235,7 @@
     if ($section and $section > 0 and course_format_uses_sections($course->format)) {
         $sectionname = get_string('sectionname', "format_$course->format");
         $sectiontitle = get_section_name($course, $section);
-        $PAGE->set_title(get_string('coursesectiontitle', 'moodle', array('course' => $course->fullname, 'sectiontitle' => $sectiontitle, 'sectionname' => $sectionname)));
+        $PAGE->set_title(get_string('coursesectiontitle', 'moodle', array('course' => $course->fullname, 'sectiontitle' => $sectiontitle, 'section' => $section, 'sectionname' => $sectionname)));
     } else {
         $PAGE->set_title(get_string('coursetitle', 'moodle', array('course' => $course->fullname)));
     }

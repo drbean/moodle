@@ -175,7 +175,8 @@ abstract class base {
         list($componentname, $varname) = $this->get_config_var_name();
 
         $config = [];
-        $settingnames = array('_enabled', '_indexingstart', '_indexingend', '_lastindexrun', '_docsignored', '_docsprocessed', '_recordsprocessed');
+        $settingnames = array('_enabled', '_indexingstart', '_indexingend', '_lastindexrun',
+                '_docsignored', '_docsprocessed', '_recordsprocessed', '_partial');
         foreach ($settingnames as $name) {
             $config[$varname . $name] = get_config($componentname, $varname . $name);
         }
@@ -207,6 +208,22 @@ abstract class base {
     public function set_enabled($isenabled) {
         list($componentname, $varname) = $this->get_config_var_name();
         return set_config($varname . '_enabled', $isenabled, $componentname);
+    }
+
+    /**
+     * Gets the length of time spent indexing this area (the last time it was indexed).
+     *
+     * @return int|bool Time in seconds spent indexing this area last time, false if never indexed
+     */
+    public function get_last_indexing_duration() {
+        list($componentname, $varname) = $this->get_config_var_name();
+        $start = get_config($componentname, $varname . '_indexingstart');
+        $end = get_config($componentname, $varname . '_indexingend');
+        if ($start && $end) {
+            return $end - $start;
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -257,20 +274,55 @@ abstract class base {
     abstract public function get_document($record, $options = array());
 
     /**
-     * Add any files to the document that should be indexed.
+     * Return the context info required to index files for
+     * this search area.
+     *
+     * Should be onerridden by each search area.
+     *
+     * @return array
+     */
+    public function get_search_fileareas() {
+        $fileareas = array();
+
+        return $fileareas;
+    }
+
+    /**
+     * Files related to the current document are attached,
+     * to the document object ready for indexing by
+     * Global Search.
+     *
+     * The default implementation retrieves all files for
+     * the file areas returned by get_search_fileareas().
+     * If you need to filter files to specific items per
+     * file area, you will need to override this method
+     * and explicitly provide the items.
      *
      * @param document $document The current document
      * @return void
      */
     public function attach_files($document) {
-        return;
+        $fileareas = $this->get_search_fileareas();
+        $contextid = $document->get('contextid');
+        $component = $this->get_component_name();
+        $itemid = $document->get('itemid');
+
+        foreach ($fileareas as $filearea) {
+            $fs = get_file_storage();
+            $files = $fs->get_area_files($contextid, $component, $filearea, $itemid, '', false);
+
+            foreach ($files as $file) {
+                $document->add_stored_file($file);
+            }
+        }
+
     }
 
     /**
      * Can the current user see the document.
      *
      * @param int $id The internal search area entity id.
-     * @return bool True if the user can see it, false otherwise
+     * @return int manager:ACCESS_xx constant
      */
     abstract public function check_access($id);
 

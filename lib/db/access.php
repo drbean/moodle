@@ -69,6 +69,7 @@ $capabilities = array(
         'contextlevel' => CONTEXT_SYSTEM,
         'archetypes' => array(
             'manager' => CAP_ALLOW,
+            'coursecreator' => CAP_ALLOW,
         )
     ),
 
@@ -499,7 +500,7 @@ $capabilities = array(
 
     'moodle/user:delete' => array(
 
-        'riskbitmask' => RISK_PERSONAL, RISK_DATALOSS,
+        'riskbitmask' => RISK_PERSONAL | RISK_DATALOSS,
 
         'captype' => 'write',
         'contextlevel' => CONTEXT_SYSTEM,
@@ -918,6 +919,18 @@ $capabilities = array(
             'editingteacher' => CAP_ALLOW,
             'manager' => CAP_ALLOW
         )
+    ),
+
+    'moodle/course:ignoreavailabilityrestrictions' => array(
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => array(
+            'manager' => CAP_ALLOW,
+            'coursecreator' => CAP_ALLOW,
+            'editingteacher' => CAP_ALLOW,
+            'teacher' => CAP_ALLOW,
+        ),
+        'clonepermissionsfrom' => 'moodle/course:viewhiddenactivities'
     ),
 
     'moodle/course:ignorefilesizelimits' => array(
@@ -1832,6 +1845,13 @@ $capabilities = array(
             'manager' => CAP_ALLOW
         )
     ),
+    'moodle/webservice:managealltokens' => array(
+
+        'riskbitmask' => RISK_CONFIG | RISK_DATALOSS | RISK_PERSONAL,
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_SYSTEM,
+        'archetypes' => array()
+    ),
     'moodle/webservice:createmobiletoken' => array(
 
         'riskbitmask' => RISK_SPAM | RISK_PERSONAL,
@@ -2288,6 +2308,24 @@ $capabilities = array(
     'moodle/competency:templatemanage' => array(
         'captype' => 'write',
         'contextlevel' => CONTEXT_COURSECAT,
+        'archetypes' => array(
+            'manager' => CAP_ALLOW
+        ),
+    ),
+    'moodle/analytics:listinsights' => array(
+        'riskbitmask' => RISK_PERSONAL,
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes' => array(
+            'teacher' => CAP_ALLOW,
+            'editingteacher' => CAP_ALLOW,
+            'manager' => CAP_ALLOW
+        )
+    ),
+    'moodle/analytics:managemodels' => array(
+        'riskbitmask' => RISK_CONFIG,
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_SYSTEM,
         'archetypes' => array(
             'manager' => CAP_ALLOW
         ),

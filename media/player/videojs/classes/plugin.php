@@ -129,8 +129,13 @@ class media_videojs_plugin extends core_media_player_native {
         }
 
         // Attributes for the video/audio tag.
+        // We use data-setup-lazy as the attribute name for the config instead of
+        // data-setup because data-setup will cause video.js to load the player as soon as the library is loaded,
+        // which is BEFORE we have a chance to load any additional libraries (youtube).
+        // The data-setup-lazy is just a tag name that video.js does not recognise so we can manually initialise
+        // it when we are sure the dependencies are loaded.
         $attributes = [
-            'data-setup' => '{' . join(', ', $datasetup) . '}',
+            'data-setup-lazy' => '{' . join(', ', $datasetup) . '}',
             'id' => 'id_videojs_' . uniqid(),
             'class' => get_config('media_videojs', $isaudio ? 'audiocssclass' : 'videocssclass')
         ];
@@ -334,21 +339,19 @@ class media_videojs_plugin extends core_media_player_native {
      */
     public function setup($page) {
 
-        // Load core video JS.
+        // Load dynamic loader. It will scan page for videojs media and load necessary modules.
+        // Loader will be loaded on absolutely every page, however the videojs will only be loaded
+        // when video is present on the page or added later to it in AJAX.
         $path = new moodle_url('/media/player/videojs/videojs/video-js.swf');
         $contents = 'videojs.options.flash.swf = "' . $path . '";' . "\n";
         $contents .= $this->find_language(current_language());
         $page->requires->js_amd_inline(<<<EOT
-require(["media_videojs/video"], function(videojs) {
-$contents
+require(["media_videojs/loader"], function(loader) {
+    loader.setUp(function(videojs) {
+        $contents
+    });
 });
 EOT
         );
-
-        // Load Youtube JS.
-        $page->requires->js_amd_inline('require(["media_videojs/Youtube"])');
-
-        // Load dynamic loader.
-        $page->requires->js_call_amd('media_videojs/loader', 'setUp');
     }
 }

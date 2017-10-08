@@ -57,6 +57,9 @@ class workshop {
     const EXAMPLES_BEFORE_SUBMISSION    = 1;
     const EXAMPLES_BEFORE_ASSESSMENT    = 2;
 
+    /** @var stdclass workshop record from database */
+    public $dbrecord;
+
     /** @var cm_info course module record */
     public $cm;
 
@@ -195,7 +198,8 @@ class workshop {
      * @param stdClass $context The context of the workshop instance
      */
     public function __construct(stdclass $dbrecord, $cm, $course, stdclass $context=null) {
-        foreach ($dbrecord as $field => $value) {
+        $this->dbrecord = $dbrecord;
+        foreach ($this->dbrecord as $field => $value) {
             if (property_exists('workshop', $field)) {
                 $this->{$field} = $value;
             }
@@ -424,10 +428,14 @@ class workshop {
      * Empty values are not returned. Values are converted to lowercase.
      * Duplicates are removed. Glob evaluation is not supported.
      *
+     * @deprecated since Moodle 3.4 MDL-56486 - please use the {@link core_form\filetypes_util}
      * @param string|array $extensions list of file extensions
      * @return array of strings
      */
     public static function normalize_file_extensions($extensions) {
+
+        debugging('The method workshop::normalize_file_extensions() is deprecated.
+            Please use the methods provided by the \core_form\filetypes_util class.', DEBUG_DEVELOPER);
 
         if ($extensions === '') {
             return array();
@@ -464,10 +472,14 @@ class workshop {
     /**
      * Cleans the user provided list of file extensions.
      *
+     * @deprecated since Moodle 3.4 MDL-56486 - please use the {@link core_form\filetypes_util}
      * @param string $extensions
      * @return string
      */
     public static function clean_file_extensions($extensions) {
+
+        debugging('The method workshop::clean_file_extensions() is deprecated.
+            Please use the methods provided by the \core_form\filetypes_util class.', DEBUG_DEVELOPER);
 
         $extensions = self::normalize_file_extensions($extensions);
 
@@ -483,11 +495,15 @@ class workshop {
      *
      * Empty whitelist is interpretted as "any extension is valid".
      *
+     * @deprecated since Moodle 3.4 MDL-56486 - please use the {@link core_form\filetypes_util}
      * @param string|array $extensions list of file extensions
      * @param string|array $whitelist list of valid extensions
      * @return array list of invalid extensions not found in the whitelist
      */
     public static function invalid_file_extensions($extensions, $whitelist) {
+
+        debugging('The method workshop::invalid_file_extensions() is deprecated.
+            Please use the methods provided by the \core_form\filetypes_util class.', DEBUG_DEVELOPER);
 
         $extensions = self::normalize_file_extensions($extensions);
         $whitelist = self::normalize_file_extensions($whitelist);
@@ -506,11 +522,15 @@ class workshop {
      * Empty whitelist is interpretted as "any file type is allowed" rather
      * than "no file can be uploaded".
      *
+     * @deprecated since Moodle 3.4 MDL-56486 - please use the {@link core_form\filetypes_util}
      * @param string $filename the file name
      * @param string|array $whitelist list of allowed file extensions
      * @return false
      */
     public static function is_allowed_file_type($filename, $whitelist) {
+
+        debugging('The method workshop::is_allowed_file_type() is deprecated.
+            Please use the methods provided by the \core_form\filetypes_util class.', DEBUG_DEVELOPER);
 
         $whitelist = self::normalize_file_extensions($whitelist);
 
@@ -1184,6 +1204,20 @@ class workshop {
         $fs->delete_area_files($this->context->id, 'mod_workshop', 'submission_attachment', $submission->id);
 
         $DB->delete_records('workshop_submissions', array('id' => $submission->id));
+
+        // Event information.
+        $params = array(
+            'context' => $this->context,
+            'courseid' => $this->course->id,
+            'relateduserid' => $submission->authorid,
+            'other' => array(
+                'submissiontitle' => $submission->title
+            )
+        );
+        $params['objectid'] = $submission->id;
+        $event = \mod_workshop\event\submission_deleted::create($params);
+        $event->add_record_snapshot('workshop', $this->dbrecord);
+        $event->trigger();
     }
 
     /**
@@ -2512,12 +2546,11 @@ class workshop {
             'subdirs' => true,
             'maxfiles' => $this->nattachments,
             'maxbytes' => $this->maxbytes,
-            'return_types' => FILE_INTERNAL,
+            'return_types' => FILE_INTERNAL | FILE_CONTROLLED_LINK,
         );
 
-        if ($acceptedtypes = self::normalize_file_extensions($this->submissionfiletypes)) {
-            $options['accepted_types'] = $acceptedtypes;
-        }
+        $filetypesutil = new \core_form\filetypes_util();
+        $options['accepted_types'] = $filetypesutil->normalize_file_types($this->submissionfiletypes);
 
         return $options;
     }
@@ -2554,12 +2587,11 @@ class workshop {
             'subdirs' => 1,
             'maxbytes' => $this->overallfeedbackmaxbytes,
             'maxfiles' => $this->overallfeedbackfiles,
-            'return_types' => FILE_INTERNAL,
+            'return_types' => FILE_INTERNAL | FILE_CONTROLLED_LINK,
         );
 
-        if ($acceptedtypes = self::normalize_file_extensions($this->overallfeedbackfiletypes)) {
-            $options['accepted_types'] = $acceptedtypes;
-        }
+        $filetypesutil = new \core_form\filetypes_util();
+        $options['accepted_types'] = $filetypesutil->normalize_file_types($this->overallfeedbackfiletypes);
 
         return $options;
     }
@@ -2669,6 +2701,180 @@ class workshop {
                 return true;
             }
         }
+    }
+
+    /**
+     * Check whether the given user has assessed all his required examples.
+     *
+     * @param  int $userid the user to check
+     * @return bool        false if there are examples missing assessment, true otherwise.
+     * @since  Moodle 3.4
+     */
+    public function check_examples_assessed($userid) {
+
+        if ($this->useexamples and $this->examplesmode == self::EXAMPLES_BEFORE_SUBMISSION
+            and !has_capability('mod/workshop:manageexamples', $this->context)) {
+
+            // Check that all required examples have been assessed by the user.
+            $examples = $this->get_examples_for_reviewer($userid);
+            foreach ($examples as $exampleid => $example) {
+                if (is_null($example->assessmentid)) {
+                    $examples[$exampleid]->assessmentid = $this->add_allocation($example, $userid, 0);
+                }
+                if (is_null($example->grade)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Trigger module viewed event and set the module viewed for completion.
+     *
+     * @since  Moodle 3.4
+     */
+    public function set_module_viewed() {
+        global $CFG;
+        require_once($CFG->libdir . '/completionlib.php');
+
+        // Mark viewed.
+        $completion = new completion_info($this->course);
+        $completion->set_module_viewed($this->cm);
+
+        $eventdata = array();
+        $eventdata['objectid'] = $this->id;
+        $eventdata['context'] = $this->context;
+
+        // Trigger module viewed event.
+        $event = \mod_workshop\event\course_module_viewed::create($eventdata);
+        $event->add_record_snapshot('course', $this->course);
+        $event->add_record_snapshot('workshop', $this->dbrecord);
+        $event->add_record_snapshot('course_modules', $this->cm);
+        $event->trigger();
+    }
+
+    /**
+     * Validates the submission form or WS data.
+     *
+     * @param  array $data the data to be validated
+     * @return array       the validation errors (if any)
+     * @since  Moodle 3.4
+     */
+    public function validate_submission_data($data) {
+        global $DB, $USER;
+
+        $errors = array();
+        if (empty($data['id']) and empty($data['example'])) {
+            // Make sure there is no submission saved meanwhile from another browser window.
+            $sql = "SELECT COUNT(s.id)
+                      FROM {workshop_submissions} s
+                      JOIN {workshop} w ON (s.workshopid = w.id)
+                      JOIN {course_modules} cm ON (w.id = cm.instance)
+                      JOIN {modules} m ON (m.name = 'workshop' AND m.id = cm.module)
+                     WHERE cm.id = ? AND s.authorid = ? AND s.example = 0";
+
+            if ($DB->count_records_sql($sql, array($data['cmid'], $USER->id))) {
+                $errors['title'] = get_string('err_multiplesubmissions', 'mod_workshop');
+            }
+        }
+
+        $getfiles = file_get_drafarea_files($data['attachment_filemanager']);
+        if (empty($getfiles->list) and html_is_blank($data['content_editor']['text'])) {
+            $errors['content_editor'] = get_string('submissionrequiredcontent', 'mod_workshop');
+            $errors['attachment_filemanager'] = get_string('submissionrequiredfile', 'mod_workshop');
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Adds or updates a submission.
+     *
+     * @param stdClass $submission The submissin data (via form or via WS).
+     * @return the new or updated submission id.
+     * @since  Moodle 3.4
+     */
+    public function edit_submission($submission) {
+        global $USER, $DB;
+
+        if ($submission->example == 0) {
+            // This was used just for validation, it must be set to zero when dealing with normal submissions.
+            unset($submission->example);
+        } else {
+            throw new coding_exception('Invalid submission form data value: example');
+        }
+        $timenow = time();
+        if (is_null($submission->id)) {
+            $submission->workshopid     = $this->id;
+            $submission->example        = 0;
+            $submission->authorid       = $USER->id;
+            $submission->timecreated    = $timenow;
+            $submission->feedbackauthorformat = editors_get_preferred_format();
+        }
+        $submission->timemodified       = $timenow;
+        $submission->title              = trim($submission->title);
+        $submission->content            = '';          // Updated later.
+        $submission->contentformat      = FORMAT_HTML; // Updated later.
+        $submission->contenttrust       = 0;           // Updated later.
+        $submission->late               = 0x0;         // Bit mask.
+        if (!empty($this->submissionend) and ($this->submissionend < time())) {
+            $submission->late = $submission->late | 0x1;
+        }
+        if ($this->phase == self::PHASE_ASSESSMENT) {
+            $submission->late = $submission->late | 0x2;
+        }
+
+        // Event information.
+        $params = array(
+            'context' => $this->context,
+            'courseid' => $this->course->id,
+            'other' => array(
+                'submissiontitle' => $submission->title
+            )
+        );
+        $logdata = null;
+        if (is_null($submission->id)) {
+            $submission->id = $DB->insert_record('workshop_submissions', $submission);
+            $params['objectid'] = $submission->id;
+            $event = \mod_workshop\event\submission_created::create($params);
+            $event->trigger();
+        } else {
+            if (empty($submission->id) or empty($submission->id) or ($submission->id != $submission->id)) {
+                throw new moodle_exception('err_submissionid', 'workshop');
+            }
+        }
+        $params['objectid'] = $submission->id;
+
+        // Save and relink embedded images and save attachments.
+        $submission = file_postupdate_standard_editor($submission, 'content', $this->submission_content_options(),
+            $this->context, 'mod_workshop', 'submission_content', $submission->id);
+
+        $submission = file_postupdate_standard_filemanager($submission, 'attachment', $this->submission_attachment_options(),
+            $this->context, 'mod_workshop', 'submission_attachment', $submission->id);
+
+        if (empty($submission->attachment)) {
+            // Explicit cast to zero integer.
+            $submission->attachment = 0;
+        }
+        // Store the updated values or re-save the new submission (re-saving needed because URLs are now rewritten).
+        $DB->update_record('workshop_submissions', $submission);
+        $event = \mod_workshop\event\submission_updated::create($params);
+        $event->add_record_snapshot('workshop', $this->dbrecord);
+        $event->trigger();
+
+        // Send submitted content for plagiarism detection.
+        $fs = get_file_storage();
+        $files = $fs->get_area_files($this->context->id, 'mod_workshop', 'submission_attachment', $submission->id);
+
+        $params['other']['content'] = $submission->content;
+        $params['other']['pathnamehashes'] = array_keys($files);
+
+        $event = \mod_workshop\event\assessable_uploaded::create($params);
+        $event->set_legacy_logdata($logdata);
+        $event->trigger();
+
+        return $submission->id;
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -3702,7 +3908,7 @@ abstract class workshop_assessment_base {
     protected $fields = array();
 
     /** @var workshop */
-    protected $workshop;
+    public $workshop;
 
     /**
      * Copies the properties of the given database record into properties of $this instance

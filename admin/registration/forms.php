@@ -128,7 +128,7 @@ class hub_selector_form extends moodleform {
 
         //remove moodle.org from the hub list
         foreach ($hubs as $key => $hub) {
-            if ($hub['url'] == HUB_MOODLEORGHUBURL) {
+            if ($hub['url'] == HUB_MOODLEORGHUBURL || $hub['url'] == HUB_OLDMOODLEORGHUBURL) {
                 unset($hubs[$key]);
             }
         }
@@ -225,19 +225,25 @@ class site_registration_form extends moodleform {
         $imageurl = get_config('hub', 'site_imageurl_' . $cleanhuburl);
         $privacy = get_config('hub', 'site_privacy_' . $cleanhuburl);
         $address = get_config('hub', 'site_address_' . $cleanhuburl);
+        if ($address === false) {
+            $address = '';
+        }
         $region = get_config('hub', 'site_region_' . $cleanhuburl);
         $country = get_config('hub', 'site_country_' . $cleanhuburl);
-        if ($country === false) {
-            $country = $admin->country;
+        if (empty($country)) {
+            $country = $admin->country ?: $CFG->country;
         }
         $language = get_config('hub', 'site_language_' . $cleanhuburl);
         if ($language === false) {
-            $language = current_language();
+            $language = explode('_', current_language())[0];
         }
         $geolocation = get_config('hub', 'site_geolocation_' . $cleanhuburl);
+        if ($geolocation === false) {
+            $geolocation = '';
+        }
         $contactable = get_config('hub', 'site_contactable_' . $cleanhuburl);
         $emailalert = get_config('hub', 'site_emailalert_' . $cleanhuburl);
-        $emailalert = ($emailalert === 0) ? 0 : 1;
+        $emailalert = ($emailalert === false || $emailalert) ? 1 : 0;
         $coursesnumber = get_config('hub', 'site_coursesnumber_' . $cleanhuburl);
         $usersnumber = get_config('hub', 'site_usersnumber_' . $cleanhuburl);
         $roleassignmentsnumber = get_config('hub', 'site_roleassignmentsnumber_' . $cleanhuburl);
@@ -249,6 +255,11 @@ class site_registration_form extends moodleform {
         $mediancoursesize = get_config('hub', 'site_mediancoursesize_' . $cleanhuburl);
         $participantnumberaveragecfg = get_config('hub', 'site_participantnumberaverage_' . $cleanhuburl);
         $modulenumberaveragecfg = get_config('hub', 'site_modulenumberaverage_' . $cleanhuburl);
+        // Mobile related information.
+        $mobileservicesenabled = get_config('hub', 'site_mobileservicesenabled_' . $cleanhuburl);
+        $mobilenotificationsenabled = get_config('hub', 'site_mobilenotificationsenabled_' . $cleanhuburl);
+        $registereduserdevices = get_config('hub', 'site_registereduserdevices_' . $cleanhuburl);
+        $registeredactiveuserdevices = get_config('hub', 'site_registeredactiveuserdevices_' . $cleanhuburl);
 
         //hidden parameters
         $mform->addElement('hidden', 'huburl', $huburl);
@@ -306,11 +317,12 @@ class site_registration_form extends moodleform {
         $mform->addElement('hidden', 'regioncode', '-');
         $mform->setType('regioncode', PARAM_ALPHANUMEXT);
 
-        $countries = get_string_manager()->get_list_of_countries();
+        $countries = ['' => ''] + get_string_manager()->get_list_of_countries();
         $mform->addElement('select', 'countrycode', get_string('sitecountry', 'hub'), $countries);
         $mform->setDefault('countrycode', $country);
         $mform->setType('countrycode', PARAM_ALPHANUMEXT);
         $mform->addHelpButton('countrycode', 'sitecountry', 'hub');
+        $mform->addRule('countrycode', $strrequired, 'required', null, 'client');
 
         $mform->addElement('text', 'geolocation', get_string('sitegeolocation', 'hub'),
                 array('class' => 'registration_textfield'));
@@ -328,6 +340,7 @@ class site_registration_form extends moodleform {
         $mform->addElement('text', 'contactphone', get_string('sitephone', 'hub'),
                 array('class' => 'registration_textfield'));
         $mform->setType('contactphone', PARAM_TEXT);
+        $mform->setDefault('contactphone', $contactphone);
         $mform->addHelpButton('contactphone', 'sitephone', 'hub');
         $mform->setForceLtr('contactphone');
 
@@ -386,6 +399,21 @@ class site_registration_form extends moodleform {
         require_once($CFG->libdir . '/badgeslib.php');
         $badges = $DB->count_records_select('badge', 'status <> ' . BADGE_STATUS_ARCHIVED);
         $issuedbadges = $DB->count_records('badge_issued');
+        // Mobile related information.
+        $ismobileenabled = false;
+        $aremobilenotificationsenabled = false;
+        $registereduserdevicescount = 0;
+        $registeredactiveuserdevicescount = 0;
+        if (!empty($CFG->enablewebservices) && !empty($CFG->enablemobilewebservice)) {
+            $ismobileenabled = true;
+            $registereduserdevicescount = $DB->count_records('user_devices');
+            $airnotifierextpath = $CFG->dirroot . '/message/output/airnotifier/externallib.php';
+            if (file_exists($airnotifierextpath)) { // Maybe some one uninstalled the plugin.
+                require_once($airnotifierextpath);
+                $aremobilenotificationsenabled = (bool) message_airnotifier_external::is_system_configured();
+                $registeredactiveuserdevicescount = $DB->count_records('message_airnotifier_devices', array('enable' => 1));
+            }
+        }
 
         if (HUB_MOODLEORGHUBURL != $huburl) {
             $mform->addElement('checkbox', 'courses', get_string('sendfollowinginfo', 'hub'),
@@ -422,12 +450,12 @@ class site_registration_form extends moodleform {
             $mform->addElement('checkbox', 'badges', '',
                     " " . get_string('badgesnumber', 'hub', $badges));
             $mform->setDefault('badges', $badgesnumber != -1);
-            $mform->setType('resources', PARAM_INT);
+            $mform->setType('badges', PARAM_INT);
 
             $mform->addElement('checkbox', 'issuedbadges', '',
                     " " . get_string('issuedbadgesnumber', 'hub', $issuedbadges));
             $mform->setDefault('issuedbadges', $issuedbadgesnumber != -1);
-            $mform->setType('resources', PARAM_INT);
+            $mform->setType('issuedbadges', PARAM_INT);
 
             $mform->addElement('checkbox', 'participantnumberaverage', '',
                     " " . get_string('participantnumberaverage', 'hub', $participantnumberaverage));
@@ -438,6 +466,28 @@ class site_registration_form extends moodleform {
                     " " . get_string('modulenumberaverage', 'hub', $modulenumberaverage));
             $mform->setDefault('modulenumberaverage', $modulenumberaveragecfg != -1);
             $mform->setType('modulenumberaverage', PARAM_FLOAT);
+
+            $mobileservicestatus = $ismobileenabled ? 'yes' : 'no';
+            $mform->addElement('checkbox', 'mobileservicesenabled', '',
+                    " " . get_string('mobileservicesenabled', 'hub', $mobileservicestatus));
+            $mform->setDefault('mobileservicesenabled', $mobileservicesenabled != -1);
+            $mform->setType('mobileservicesenabled', PARAM_INT);
+
+            $mobilenotificationsstatus = $aremobilenotificationsenabled ? 'yes' : 'no';
+            $mform->addElement('checkbox', 'mobilenotificationsenabled', '',
+                    " " . get_string('mobilenotificationsenabled', 'hub', $mobilenotificationsstatus));
+            $mform->setDefault('mobilenotificationsenabled', $mobilenotificationsenabled != -1);
+            $mform->setType('mobilenotificationsenabled', PARAM_INT);
+
+            $mform->addElement('checkbox', 'registereduserdevices', '',
+                    " " . get_string('registereduserdevices', 'hub', $registereduserdevicescount));
+            $mform->setDefault('registereduserdevices', $registereduserdevices != -1);
+            $mform->setType('registereduserdevices', PARAM_INT);
+
+            $mform->addElement('checkbox', 'registeredactiveuserdevices', '',
+                    " " . get_string('registeredactiveuserdevices', 'hub', $registeredactiveuserdevicescount));
+            $mform->setDefault('registeredactiveuserdevices', $registeredactiveuserdevices != -1);
+            $mform->setType('registeredactiveuserdevices', PARAM_INT);
         } else {
             $mform->addElement('static', 'courseslabel', get_string('sendfollowinginfo', 'hub'),
                     " " . get_string('coursesnumber', 'hub', $coursecount));
@@ -489,6 +539,28 @@ class site_registration_form extends moodleform {
                     " " . get_string('modulenumberaverage', 'hub', $modulenumberaverage));
             $mform->addElement('hidden', 'modulenumberaverage', 1);
             $mform->setType('modulenumberaverage', PARAM_FLOAT);
+
+            $mobileservicestatus = $ismobileenabled ? 'yes' : 'no';
+            $mform->addElement('static', 'mobileservicesenabledlabel', '',
+                    " " . get_string('mobileservicesenabled', 'hub', $mobileservicestatus));
+            $mform->addElement('hidden', 'mobileservicesenabled', 1);
+            $mform->setType('mobileservicesenabled', PARAM_INT);
+
+            $mobilenotificationsstatus = $aremobilenotificationsenabled ? 'yes' : 'no';
+            $mform->addElement('static', 'mobilenotificationsenabledlabel', '',
+                    " " . get_string('mobilenotificationsenabled', 'hub', $mobilenotificationsstatus));
+            $mform->addElement('hidden', 'mobilenotificationsenabled', 1);
+            $mform->setType('mobilenotificationsenabled', PARAM_INT);
+
+            $mform->addElement('static', 'registereduserdeviceslabel', '',
+                    " " . get_string('registereduserdevices', 'hub', $registereduserdevicescount));
+            $mform->addElement('hidden', 'registereduserdevices', 1);
+            $mform->setType('registereduserdevices', PARAM_INT);
+
+            $mform->addElement('static', 'registeredactiveuserdeviceslabel', '',
+                    " " . get_string('registeredactiveuserdevices', 'hub', $registeredactiveuserdevicescount));
+            $mform->addElement('hidden', 'registeredactiveuserdevices', 1);
+            $mform->setType('registeredactiveuserdevices', PARAM_INT);
         }
 
         //check if it's a first registration or update

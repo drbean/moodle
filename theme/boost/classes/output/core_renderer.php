@@ -78,15 +78,17 @@ class core_renderer extends \core_renderer {
         $html .= html_writer::start_div('card');
         $html .= html_writer::start_div('card-block');
         $html .= html_writer::div($this->context_header_settings_menu(), 'pull-xs-right context-header-settings-menu');
+        $html .= html_writer::start_div('pull-xs-left');
         $html .= $this->context_header();
+        $html .= html_writer::end_div();
         $pageheadingbutton = $this->page_heading_button();
         if (empty($PAGE->layout_options['nonavbar'])) {
-            $html .= html_writer::start_div('clearfix', array('id' => 'page-navbar'));
+            $html .= html_writer::start_div('clearfix w-100 pull-xs-left', array('id' => 'page-navbar'));
             $html .= html_writer::tag('div', $this->navbar(), array('class' => 'breadcrumb-nav'));
-            $html .= html_writer::div($pageheadingbutton, 'breadcrumb-button');
+            $html .= html_writer::div($pageheadingbutton, 'breadcrumb-button pull-xs-right');
             $html .= html_writer::end_div();
         } else if ($pageheadingbutton) {
-            $html .= html_writer::div($pageheadingbutton, 'breadcrumb-button nonavbar');
+            $html .= html_writer::div($pageheadingbutton, 'breadcrumb-button nonavbar pull-xs-right');
         }
         $html .= html_writer::tag('div', $this->course_header(), array('id' => 'course-header'));
         $html .= html_writer::end_div();
@@ -404,20 +406,6 @@ class core_renderer extends \core_renderer {
         }
         $context = $menu->export_for_template($this);
 
-        // We do not want the icon with the caret, the caret is added by Bootstrap.
-        if (empty($context->primary->menutrigger)) {
-            $newurl = $this->pix_url('t/edit', 'moodle');
-            $context->primary->icon['attributes'] = array_reduce($context->primary->icon['attributes'],
-                function($carry, $item) use ($newurl) {
-                    if ($item['name'] === 'src') {
-                        $item['value'] = $newurl->out(false);
-                    }
-                    $carry[] = $item;
-                    return $carry;
-                }, []
-            );
-        }
-
         return $this->render_from_template('core/action_menu', $context);
     }
 
@@ -457,27 +445,6 @@ class core_renderer extends \core_renderer {
     }
 
     /**
-     * Renders a pix_icon widget and returns the HTML to display it.
-     *
-     * @param pix_icon $icon
-     * @return string HTML fragment
-     */
-    protected function render_pix_icon(pix_icon $icon) {
-        $data = $icon->export_for_template($this);
-        foreach ($data['attributes'] as $key => $item) {
-            $name = $item['name'];
-            $value = $item['value'];
-            if ($name == 'class') {
-                $data['extraclasses'] = $value;
-                unset($data['attributes'][$key]);
-                $data['attributes'] = array_values($data['attributes']);
-                break;
-            }
-        }
-        return $this->render_from_template('core/pix_icon', $data);
-    }
-
-    /**
      * Renders the login form.
      *
      * @param \core_auth\output\login $form The renderable.
@@ -498,7 +465,7 @@ class core_renderer extends \core_renderer {
         $context->logourl = $url;
         $context->sitename = format_string($SITE->fullname, true, ['context' => context_course::instance(SITEID), "escape" => false]);
 
-        return $this->render_from_template('core/login', $context);
+        return $this->render_from_template('core/loginform', $context);
     }
 
     /**
@@ -695,7 +662,7 @@ class core_renderer extends \core_renderer {
      * @param boolean $onlytopleafnodes
      * @return boolean nodesskipped - True if nodes were skipped in building the menu
      */
-    private function build_action_menu_from_navigation(action_menu $menu,
+    protected function build_action_menu_from_navigation(action_menu $menu,
                                                        navigation_node $node,
                                                        $indent = false,
                                                        $onlytopleafnodes = false) {

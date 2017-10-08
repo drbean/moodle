@@ -220,6 +220,7 @@ class phpunit_util extends testing_util {
         if (class_exists('core_media_manager', false)) {
             core_media_manager::reset_caches();
         }
+        \core_analytics\course::reset_caches();
 
         // Reset static unit test options.
         if (class_exists('\availability_date\condition', false)) {
@@ -228,6 +229,11 @@ class phpunit_util extends testing_util {
 
         // Reset internal users.
         core_user::reset_internal_users();
+
+        // Clear static caches in calendar container.
+        if (class_exists('\core_calendar\local\event\container', false)) {
+            core_calendar\local\event\container::reset_caches();
+        }
 
         //TODO MDL-25290: add more resets here and probably refactor them to new core function
 
@@ -412,10 +418,12 @@ class phpunit_util extends testing_util {
 
         self::reset_dataroot();
         testing_initdataroot($CFG->dataroot, 'phpunit');
-        self::drop_dataroot();
 
-        // drop all tables
+        // Drop all tables.
         self::drop_database($displayprogress);
+
+        // Drop dataroot.
+        self::drop_dataroot();
     }
 
     /**
@@ -544,7 +552,15 @@ class phpunit_util extends testing_util {
             <testsuite name="@component@_testsuite">
                 <directory suffix="_test.php">.</directory>
             </testsuite>
-        </testsuites>';
+        </testsuites>
+        <filter>
+            <whitelist processUncoveredFilesFromWhitelist="false">
+                <directory suffix=".php">.</directory>
+                <exclude>
+                    <directory suffix="_test.php">.</directory>
+                </exclude>
+            </whitelist>
+        </filter>';
 
         // Start a sequence between 100000 and 199000 to ensure each call to init produces
         // different ids in the database.  This reduces the risk that hard coded values will

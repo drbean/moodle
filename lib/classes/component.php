@@ -83,6 +83,7 @@ class core_component {
         'MatthiasMullie\\Minify' => 'lib/minify/matthiasmullie-minify/src/',
         'MatthiasMullie\\PathConverter' => 'lib/minify/matthiasmullie-pathconverter/src/',
         'IMSGlobal\LTI' => 'lib/ltiprovider/src',
+        'Phpml' => 'lib/mlbackend/php/phpml/src/Phpml',
     );
 
     /**
@@ -415,6 +416,7 @@ $cache = '.var_export($cache, true).';
         $info = array(
             'access'      => null,
             'admin'       => $CFG->dirroot.'/'.$CFG->admin,
+            'analytics'   => $CFG->dirroot . '/analytics',
             'antivirus'   => $CFG->dirroot . '/lib/antivirus',
             'auth'        => $CFG->dirroot.'/auth',
             'availability' => $CFG->dirroot . '/availability',
@@ -439,6 +441,7 @@ $cache = '.var_export($cache, true).';
             'enrol'       => $CFG->dirroot.'/enrol',
             'error'       => null,
             'filepicker'  => null,
+            'fileconverter' => $CFG->dirroot.'/files/converter',
             'files'       => $CFG->dirroot.'/files',
             'filters'     => null,
             //'fonts'       => null, // Bogus.
@@ -514,6 +517,7 @@ $cache = '.var_export($cache, true).';
             'gradeimport'   => $CFG->dirroot.'/grade/import',
             'gradereport'   => $CFG->dirroot.'/grade/report',
             'gradingform'   => $CFG->dirroot.'/grade/grading/form',
+            'mlbackend'     => $CFG->dirroot.'/lib/mlbackend',
             'mnetservice'   => $CFG->dirroot.'/mnet/service',
             'webservice'    => $CFG->dirroot.'/webservice',
             'repository'    => $CFG->dirroot.'/repository',
@@ -525,6 +529,7 @@ $cache = '.var_export($cache, true).';
             'tool'          => $CFG->dirroot.'/'.$CFG->admin.'/tool',
             'cachestore'    => $CFG->dirroot.'/cache/stores',
             'cachelock'     => $CFG->dirroot.'/cache/locks',
+            'fileconverter' => $CFG->dirroot.'/files/converter',
         );
         $parents = array();
         $subplugins = array();

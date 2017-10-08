@@ -57,12 +57,8 @@ class core_accesslib_testcase extends advanced_testcase {
         $this->setAdminUser();
         load_all_capabilities();
 
-        $this->assertNotEmpty($ACCESSLIB_PRIVATE->rolepermissions);
-        $this->assertNotEmpty($ACCESSLIB_PRIVATE->rolepermissions);
         $this->assertNotEmpty($ACCESSLIB_PRIVATE->accessdatabyuser);
         accesslib_clear_all_caches_for_unit_testing();
-        $this->assertEmpty($ACCESSLIB_PRIVATE->rolepermissions);
-        $this->assertEmpty($ACCESSLIB_PRIVATE->rolepermissions);
         $this->assertEmpty($ACCESSLIB_PRIVATE->dirtycontexts);
         $this->assertEmpty($ACCESSLIB_PRIVATE->accessdatabyuser);
     }
@@ -93,9 +89,9 @@ class core_accesslib_testcase extends advanced_testcase {
 
             $this->assertTrue(is_array($access));
             $this->assertTrue(is_array($access['ra']));
-            $this->assertTrue(is_array($access['rdef']));
-            $this->assertTrue(isset($access['rdef_count']));
-            $this->assertTrue(is_array($access['loaded']));
+            $this->assertFalse(isset($access['rdef']));
+            $this->assertFalse(isset($access['rdef_count']));
+            $this->assertFalse(isset($access['loaded']));
             $this->assertTrue(isset($access['time']));
             $this->assertTrue(is_array($access['rsw']));
         }
@@ -1537,6 +1533,7 @@ class core_accesslib_testcase extends advanced_testcase {
 
         $teacherrole = $DB->get_record('role', array('shortname'=>'editingteacher'), '*', MUST_EXIST);
         $studentrole = $DB->get_record('role', array('shortname'=>'student'), '*', MUST_EXIST);
+        $managerrole = $DB->get_record('role', array('shortname' => 'manager'), '*', MUST_EXIST);
         $course = $this->getDataGenerator()->create_course();
         $coursecontext = context_course::instance($course->id);
         $teacherrename = (object)array('roleid'=>$teacherrole->id, 'name'=>'Učitel', 'contextid'=>$coursecontext->id);
@@ -1545,6 +1542,7 @@ class core_accesslib_testcase extends advanced_testcase {
         $roleids = explode(',', $CFG->profileroles); // Should include teacher and student in new installs.
         $this->assertTrue(in_array($teacherrole->id, $roleids));
         $this->assertTrue(in_array($studentrole->id, $roleids));
+        $this->assertFalse(in_array($managerrole->id, $roleids));
 
         $user1 = $this->getDataGenerator()->create_user();
         role_assign($teacherrole->id, $user1->id, $coursecontext->id);
@@ -1552,6 +1550,8 @@ class core_accesslib_testcase extends advanced_testcase {
         $user2 = $this->getDataGenerator()->create_user();
         role_assign($studentrole->id, $user2->id, $coursecontext->id);
         $user3 = $this->getDataGenerator()->create_user();
+        $user4 = $this->getDataGenerator()->create_user();
+        role_assign($managerrole->id, $user4->id, $coursecontext->id);
 
         $roles = get_user_roles_in_course($user1->id, $course->id);
         $this->assertEquals(1, preg_match_all('/,/', $roles, $matches));
@@ -1563,6 +1563,61 @@ class core_accesslib_testcase extends advanced_testcase {
 
         $roles = get_user_roles_in_course($user3->id, $course->id);
         $this->assertSame('', $roles);
+
+        // Managers should be able to see a link to their own role type, given they can assign it in the context.
+        $this->setUser($user4);
+        $roles = get_user_roles_in_course($user4->id, $course->id);
+        $this->assertNotEmpty($roles);
+        $this->assertEquals(1, count(explode(',', $roles)));
+        $this->assertTrue(strpos($roles, role_get_name($managerrole, $coursecontext)) !== false);
+
+        // Managers should see 2 roles if viewing a user who has been enrolled as a student and a teacher in the course.
+        $roles = get_user_roles_in_course($user1->id, $course->id);
+        $this->assertEquals(2, count(explode(',', $roles)));
+        $this->assertTrue(strpos($roles, role_get_name($studentrole, $coursecontext)) !== false);
+        $this->assertTrue(strpos($roles, role_get_name($teacherrole, $coursecontext)) !== false);
+
+        // Students should not see the manager role if viewing a manager's profile.
+        $this->setUser($user2);
+        $roles = get_user_roles_in_course($user4->id, $course->id);
+        $this->assertEmpty($roles); // Should see 0 roles on the manager's profile.
+        $this->assertFalse(strpos($roles, role_get_name($managerrole, $coursecontext)) !== false);
+    }
+
+    /**
+     * Test get_user_roles and get_users_roles
+     */
+    public function test_get_user_roles() {
+        global $DB, $CFG;
+
+        $this->resetAfterTest();
+
+        $teacherrole = $DB->get_record('role', array('shortname'=>'editingteacher'), '*', MUST_EXIST);
+        $studentrole = $DB->get_record('role', array('shortname'=>'student'), '*', MUST_EXIST);
+        $course = $this->getDataGenerator()->create_course();
+        $coursecontext = context_course::instance($course->id);
+        $teacherrename = (object)array('roleid'=>$teacherrole->id, 'name'=>'Učitel', 'contextid'=>$coursecontext->id);
+        $DB->insert_record('role_names', $teacherrename);
+
+        $roleids = explode(',', $CFG->profileroles); // Should include teacher and student in new installs.
+
+        $user1 = $this->getDataGenerator()->create_user();
+        role_assign($teacherrole->id, $user1->id, $coursecontext->id);
+        role_assign($studentrole->id, $user1->id, $coursecontext->id);
+        $user2 = $this->getDataGenerator()->create_user();
+        role_assign($studentrole->id, $user2->id, $coursecontext->id);
+        $user3 = $this->getDataGenerator()->create_user();
+
+        $u1roles = get_user_roles($coursecontext, $user1->id);
+
+        $u2roles = get_user_roles($coursecontext, $user2->id);
+
+        $allroles = get_users_roles($coursecontext);
+        $specificuserroles = get_users_roles($coursecontext, [$user1->id, $user2->id]);
+        $this->assertEquals($u1roles, $allroles[$user1->id]);
+        $this->assertEquals($u1roles, $specificuserroles[$user1->id]);
+        $this->assertEquals($u2roles, $allroles[$user2->id]);
+        $this->assertEquals($u2roles, $specificuserroles[$user2->id]);
     }
 
     /**
@@ -2504,6 +2559,12 @@ class core_accesslib_testcase extends advanced_testcase {
 
         assign_capability('mod/page:view', CAP_PREVENT, $allroles['guest'], $systemcontext, true);
 
+        // Prepare for prohibit test.
+        role_assign($allroles['editingteacher'], $testusers[19], context_system::instance());
+        role_assign($allroles['teacher'], $testusers[19], context_course::instance($testcourses[17]));
+        role_assign($allroles['editingteacher'], $testusers[19], context_course::instance($testcourses[17]));
+        assign_capability('moodle/course:update', CAP_PROHIBIT, $allroles['teacher'], context_course::instance($testcourses[17]), true);
+
         accesslib_clear_all_caches_for_unit_testing(); /// Must be done after assign_capability().
 
         // Extra tests for guests and not-logged-in users because they can not be verified by cross checking
@@ -2526,6 +2587,14 @@ class core_accesslib_testcase extends advanced_testcase {
         $this->assertFalse(has_capability('moodle/course:update', context_course::instance($testcourses[1]), $testusers[9]));
         $this->assertFalse(has_capability('moodle/course:update', context_course::instance($testcourses[19]), $testusers[9]));
         $this->assertFalse(has_capability('moodle/course:update', $systemcontext, $testusers[9]));
+
+        // Test prohibits.
+        $this->assertTrue(has_capability('moodle/course:update', context_system::instance(), $testusers[19]));
+        $ids = get_users_by_capability(context_system::instance(), 'moodle/course:update', 'u.id');
+        $this->assertArrayHasKey($testusers[19], $ids);
+        $this->assertFalse(has_capability('moodle/course:update', context_course::instance($testcourses[17]), $testusers[19]));
+        $ids = get_users_by_capability(context_course::instance($testcourses[17]), 'moodle/course:update', 'u.id');
+        $this->assertArrayNotHasKey($testusers[19], $ids);
 
         // Test the list of enrolled users.
         $coursecontext = context_course::instance($course1->id);
@@ -3119,6 +3188,143 @@ class core_accesslib_testcase extends advanced_testcase {
         $this->assertFalse(array_key_exists($admin->id, $users));
         $this->assertTrue(array_key_exists($student->id, $users));
         $this->assertFalse(array_key_exists($guest->id, $users));
+    }
+
+    /**
+     * Test the get_profile_roles() function.
+     */
+    public function test_get_profile_roles() {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $coursecontext = context_course::instance($course->id);
+
+        // Assign a student role.
+        $studentrole = $DB->get_record('role', array('shortname' => 'student'), '*', MUST_EXIST);
+        $user1 = $this->getDataGenerator()->create_user();
+        role_assign($studentrole->id, $user1->id, $coursecontext);
+
+        // Assign an editing teacher role.
+        $teacherrole = $DB->get_record('role', array('shortname' => 'editingteacher'), '*', MUST_EXIST);
+        $user2 = $this->getDataGenerator()->create_user();
+        role_assign($teacherrole->id, $user2->id, $coursecontext);
+
+        // Create a custom role that can be assigned at course level, but don't assign it yet.
+        create_role('Custom role', 'customrole', 'Custom course role');
+        $customrole = $DB->get_record('role', array('shortname' => 'customrole'), '*', MUST_EXIST);
+        set_role_contextlevels($customrole->id, [CONTEXT_COURSE]);
+        allow_assign($teacherrole->id, $customrole->id); // Allow teacher to assign the role in the course.
+
+        // Set the site policy 'profileroles' to show student, teacher and non-editing teacher roles (i.e. not the custom role).
+        $neteacherrole = $DB->get_record('role', array('shortname' => 'teacher'), '*', MUST_EXIST);
+        set_config('profileroles', "{$studentrole->id}, {$teacherrole->id}, {$neteacherrole->id}");
+
+        // A student in the course (given they can't assign roles) should see those roles which are:
+        // - listed in the 'profileroles' site policy AND
+        // - are assigned in the course context (or parent contexts).
+        // In this case, the non-editing teacher role is not assigned and should not be returned.
+        $expected = [
+            $teacherrole->id => (object) [
+                'id' => $teacherrole->id,
+                'name' => '',
+                'shortname' => $teacherrole->shortname,
+                'sortorder' => $teacherrole->sortorder,
+                'coursealias' => null
+            ],
+            $studentrole->id => (object) [
+                'id' => $studentrole->id,
+                'name' => '',
+                'shortname' => $studentrole->shortname,
+                'sortorder' => $studentrole->sortorder,
+                'coursealias' => null
+            ]
+        ];
+        $this->setUser($user1);
+        $this->assertEquals($expected, get_profile_roles($coursecontext));
+
+        // An editing teacher should also see only 2 roles at this stage as only 2 roles are assigned: 'teacher' and 'student'.
+        $this->setUser($user2);
+        $this->assertEquals($expected, get_profile_roles($coursecontext));
+
+        // Assign a custom role in the course.
+        $user3 = $this->getDataGenerator()->create_user();
+        role_assign($customrole->id, $user3->id, $coursecontext);
+
+        // Confirm that the teacher can see the custom role now that it's assigned.
+        $expectedteacher = [
+            $teacherrole->id => (object) [
+                'id' => $teacherrole->id,
+                'name' => '',
+                'shortname' => $teacherrole->shortname,
+                'sortorder' => $teacherrole->sortorder,
+                'coursealias' => null
+            ],
+            $studentrole->id => (object) [
+                'id' => $studentrole->id,
+                'name' => '',
+                'shortname' => $studentrole->shortname,
+                'sortorder' => $studentrole->sortorder,
+                'coursealias' => null
+            ],
+            $customrole->id => (object) [
+                'id' => $customrole->id,
+                'name' => 'Custom role',
+                'shortname' => $customrole->shortname,
+                'sortorder' => $customrole->sortorder,
+                'coursealias' => null
+            ]
+        ];
+        $this->setUser($user2);
+        $this->assertEquals($expectedteacher, get_profile_roles($coursecontext));
+
+        // And that the student can't, because the role isn't included in the 'profileroles' site policy.
+        $expectedstudent = [
+            $teacherrole->id => (object) [
+                'id' => $teacherrole->id,
+                'name' => '',
+                'shortname' => $teacherrole->shortname,
+                'sortorder' => $teacherrole->sortorder,
+                'coursealias' => null
+            ],
+            $studentrole->id => (object) [
+                'id' => $studentrole->id,
+                'name' => '',
+                'shortname' => $studentrole->shortname,
+                'sortorder' => $studentrole->sortorder,
+                'coursealias' => null
+            ]
+        ];
+        $this->setUser($user1);
+        $this->assertEquals($expectedstudent, get_profile_roles($coursecontext));
+
+        // If we have no roles listed in the site policy, the teacher should be able to see the assigned roles.
+        $expectedteacher = [
+            $studentrole->id => (object) [
+                'id' => $studentrole->id,
+                'name' => '',
+                'shortname' => $studentrole->shortname,
+                'sortorder' => $studentrole->sortorder,
+                'coursealias' => null
+            ],
+            $customrole->id => (object) [
+                'id' => $customrole->id,
+                'name' => 'Custom role',
+                'shortname' => $customrole->shortname,
+                'sortorder' => $customrole->sortorder,
+                'coursealias' => null
+            ],
+            $teacherrole->id => (object) [
+                'id' => $teacherrole->id,
+                'name' => '',
+                'shortname' => $teacherrole->shortname,
+                'sortorder' => $teacherrole->sortorder,
+                'coursealias' => null
+            ],
+        ];
+        set_config('profileroles', "");
+        $this->setUser($user2);
+        $this->assertEquals($expectedteacher, get_profile_roles($coursecontext));
     }
 }
 

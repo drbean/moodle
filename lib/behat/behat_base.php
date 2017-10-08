@@ -28,7 +28,8 @@
 
 // NOTE: no MOODLE_INTERNAL test here, this file may be required by behat before including /config.php.
 
-use Behat\Mink\Exception\ExpectationException as ExpectationException,
+use Behat\Mink\Exception\DriverException,
+    Behat\Mink\Exception\ExpectationException as ExpectationException,
     Behat\Mink\Exception\ElementNotFoundException as ElementNotFoundException,
     Behat\Mink\Element\NodeElement as NodeElement;
 
@@ -335,8 +336,6 @@ class behat_base extends Behat\MinkExtension\Context\RawMinkContext {
                 if (!$exception) {
                     $exception = $e;
                 }
-                // We wait until no exception is thrown or timeout expires.
-                continue;
             }
 
             if ($this->running_javascript()) {
@@ -727,7 +726,7 @@ class behat_base extends Behat\MinkExtension\Context\RawMinkContext {
             $pending = '';
             try {
                 $jscode = '
-                    return function() {
+                    return (function() {
                         if (typeof M === "undefined") {
                             if (document.readyState === "complete") {
                                 return "";
@@ -741,7 +740,7 @@ class behat_base extends Behat\MinkExtension\Context\RawMinkContext {
                         } else {
                             return "incomplete"
                         }
-                    }();';
+                    }());';
                 $pending = $this->getSession()->evaluateScript($jscode);
             } catch (NoSuchWindow $nsw) {
                 // We catch an exception here, in case we just closed the window we were interacting with.
@@ -883,6 +882,8 @@ class behat_base extends Behat\MinkExtension\Context\RawMinkContext {
 
         } catch (NoSuchWindow $e) {
             // If we were interacting with a popup window it will not exists after closing it.
+        } catch (DriverException $e) {
+            // Same reason as above.
         }
     }
 
@@ -924,5 +925,47 @@ class behat_base extends Behat\MinkExtension\Context\RawMinkContext {
 
         // Look for exceptions.
         $this->look_for_exceptions();
+    }
+
+    /**
+     * Get the actual user in the behat session (note $USER does not correspond to the behat session's user).
+     * @return mixed
+     * @throws coding_exception
+     */
+    protected function get_session_user() {
+        global $DB;
+
+        $sid = $this->getSession()->getCookie('MoodleSession');
+        if (empty($sid)) {
+            throw new coding_exception('failed to get moodle session');
+        }
+        $userid = $DB->get_field('sessions', 'userid', ['sid' => $sid]);
+        if (empty($userid)) {
+            throw new coding_exception('failed to get user from seession id '.$sid);
+        }
+        return $DB->get_record('user', ['id' => $userid]);
+    }
+
+    /**
+     * Trigger click on node via javascript instead of actually clicking on it via pointer.
+     *
+     * This function resolves the issue of nested elements with click listeners or links - in these cases clicking via
+     * the pointer may accidentally cause a click on the wrong element.
+     * Example of issue: clicking to expand navigation nodes when the config value linkadmincategories is enabled.
+     * @param NodeElement $node
+     */
+    protected function js_trigger_click($node) {
+        if (!$this->running_javascript()) {
+            $node->click();
+        }
+        $this->ensure_node_is_visible($node); // Ensures hidden elements can't be clicked.
+        $xpath = $node->getXpath();
+        $driver = $this->getSession()->getDriver();
+        if ($driver instanceof \Moodle\BehatExtension\Driver\MoodleSelenium2Driver) {
+            $script = "Syn.click({{ELEMENT}})";
+            $driver->triggerSynScript($xpath, $script);
+        } else {
+            $driver->click($xpath);
+        }
     }
 }

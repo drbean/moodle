@@ -787,7 +787,7 @@ function get_courses_search($searchterms, $sort, $page, $recordsperpage, &$total
             $searchcond[] = "$concat $REGEXP :ss$i";
             $params['ss'.$i] = "(^|[^a-zA-Z0-9])$searchterm([^a-zA-Z0-9]|$)";
 
-        } else if (substr($searchterm,0,1) == "-") {
+        } else if ((substr($searchterm,0,1) == "-") && (core_text::strlen($searchterm) > 1)) {
             $searchterm = trim($searchterm, '+-');
             $searchterm = preg_quote($searchterm, '|');
             $searchcond[] = "$concat $NOTREGEXP :ss$i";
@@ -1573,13 +1573,28 @@ function add_to_config_log($name, $oldvalue, $value, $plugin) {
     global $USER, $DB;
 
     $log = new stdClass();
-    $log->userid       = during_initial_install() ? 0 :$USER->id; // 0 as user id during install
+    // Use 0 as user id during install.
+    $log->userid       = during_initial_install() ? 0 : $USER->id;
     $log->timemodified = time();
     $log->name         = $name;
     $log->oldvalue  = $oldvalue;
     $log->value     = $value;
     $log->plugin    = $plugin;
-    $DB->insert_record('config_log', $log);
+
+    $id = $DB->insert_record('config_log', $log);
+
+    $event = core\event\config_log_created::create(array(
+            'objectid' => $id,
+            'userid' => $log->userid,
+            'context' => \context_system::instance(),
+            'other' => array(
+                'name' => $log->name,
+                'oldvalue' => $log->oldvalue,
+                'value' => $log->value,
+                'plugin' => $log->plugin
+            )
+        ));
+    $event->trigger();
 }
 
 /**
