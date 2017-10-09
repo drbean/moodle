@@ -746,7 +746,7 @@ class assign_grading_table extends table_sql implements renderable {
      * @param stdClass $row
      * @return string The team name
      */
-    public function col_team(stdClass $row) {
+    public function col_group(stdClass $row) {
         $submission = false;
         $group = false;
         $this->get_group_and_submission($row->id, $group, $submission, -1);
