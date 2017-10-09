@@ -165,17 +165,17 @@ class assign_grading_table extends table_sql implements renderable {
             $params['assignmentid4'] = (int) $this->assignment->get_instance()->id;
             $grademaxattempt = 'SELECT mxg.userid, MAX(mxg.attemptnumber) AS maxattempt
                                   FROM {assign_grades} mxg
-                                  LEFT JOIN mdl_groups_members gm
-                                         ON mxg.userid = gm.userid
-                                  LEFT JOIN mdl_groupings_groups gg
-                                         ON gm.groupid = gg.groupid
                                  WHERE mxg.assignment = :assignmentid4
-                                         AND gg.groupingid = 24
                               GROUP BY mxg.userid';
-            $fields .= ', gg.groupid as group ';
             $from .= 'LEFT JOIN (' . $grademaxattempt . ') gmx
                              ON u.id = gmx.userid
                             AND g.attemptnumber = gmx.maxattempt ';
+            $from .= 'LEFT JOIN mdl_groups_members gm
+                             ON u.id = gm.userid
+                      LEFT JOIN mdl_groupings_groups gg
+                             ON gm.groupid = gg.groupid
+                             AND gg.groupingid = 24 ';
+            $fields .= ', gg.groupid as group ';
         } else {
             $from .= 'AND g.attemptnumber = s.attemptnumber ';
         }
