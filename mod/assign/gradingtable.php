@@ -170,9 +170,9 @@ class assign_grading_table extends table_sql implements renderable {
             $from .= 'LEFT JOIN (' . $grademaxattempt . ') gmx
                              ON u.id = gmx.userid
                             AND g.attemptnumber = gmx.maxattempt ';
-            $from .= 'LEFT JOIN mdl_groups_members gm
+            $from .= 'LEFT JOIN {groups_members} gm
                              ON u.id = gm.userid
-                      LEFT JOIN mdl_groupings_groups gg
+                      LEFT JOIN {groupings_groups} gg
                              ON gm.groupid = gg.groupid
                              AND gg.groupingid = 24 ';
             $fields .= ', gg.groupid as groupid ';
