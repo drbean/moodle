@@ -175,7 +175,7 @@ class assign_grading_table extends table_sql implements renderable {
                       LEFT JOIN mdl_groupings_groups gg
                              ON gm.groupid = gg.groupid
                              AND gg.groupingid = 24 ';
-            $fields .= ', gg.groupid as "group" ';
+            $fields .= ', gg.groupid as groupid ';
         } else {
             $from .= 'AND g.attemptnumber = s.attemptnumber ';
         }
@@ -400,7 +400,7 @@ class assign_grading_table extends table_sql implements renderable {
 
         // Team submission columns.
         if ($assignment->get_instance()->teamsubmission) {
-            $columns[] = '"group"';
+            $columns[] = 'groupid';
             $headers[] = get_string('submissionteam', 'assign');
         }
         // Allocated marker.
@@ -746,7 +746,7 @@ class assign_grading_table extends table_sql implements renderable {
      * @param stdClass $row
      * @return string The team name
      */
-    public function col_group(stdClass $row) {
+    public function col_groupid(stdClass $row) {
         $submission = false;
         $group = false;
         $this->get_group_and_submission($row->id, $group, $submission, -1);
