@@ -400,7 +400,7 @@ class assign_grading_table extends table_sql implements renderable {
 
         // Team submission columns.
         if ($assignment->get_instance()->teamsubmission) {
-            $columns[] = 'team';
+            $columns[] = '"group"';
             $headers[] = get_string('submissionteam', 'assign');
         }
         // Allocated marker.
