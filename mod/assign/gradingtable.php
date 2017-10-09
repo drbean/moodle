@@ -172,6 +172,7 @@ class assign_grading_table extends table_sql implements renderable {
                                  WHERE mxg.assignment = :assignmentid4
                                          AND gg.groupingid = 24
                               GROUP BY mxg.userid';
+            $fields .= ', gg.groupid as group ';
             $from .= 'LEFT JOIN (' . $grademaxattempt . ') gmx
                              ON u.id = gmx.userid
                             AND g.attemptnumber = gmx.maxattempt ';
