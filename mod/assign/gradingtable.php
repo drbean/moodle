@@ -175,7 +175,7 @@ class assign_grading_table extends table_sql implements renderable {
                       LEFT JOIN mdl_groupings_groups gg
                              ON gm.groupid = gg.groupid
                              AND gg.groupingid = 24 ';
-            $fields .= ', gg.groupid as group ';
+            $fields .= ', gg.groupid as "group" ';
         } else {
             $from .= 'AND g.attemptnumber = s.attemptnumber ';
         }
