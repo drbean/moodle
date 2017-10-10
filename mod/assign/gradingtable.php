@@ -171,9 +171,11 @@ class assign_grading_table extends table_sql implements renderable {
                              ON u.id = gmx.userid
                             AND g.attemptnumber = gmx.maxattempt ';
             $from .= 'LEFT JOIN {groups_members} gm
-                             ON gm.groupid = s.groupid
-                             AND gm.userid = u.id ';
-            $fields .= ', s.groupid as groupid ';
+                             ON u.id = gm.userid
+                      LEFT JOIN {groupings_groups} gg
+                             ON gm.groupid = gg.groupid
+                             AND gg.groupingid = 24 ';
+            $fields .= ', gg.groupid as groupid ';
         } else {
             $from .= 'AND g.attemptnumber = s.attemptnumber ';
         }
