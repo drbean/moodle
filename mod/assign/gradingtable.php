@@ -170,12 +170,15 @@ class assign_grading_table extends table_sql implements renderable {
             $from .= 'LEFT JOIN (' . $grademaxattempt . ') gmx
                              ON u.id = gmx.userid
                             AND g.attemptnumber = gmx.maxattempt ';
-            $from .= 'LEFT JOIN {groups_members} gm
-                             ON u.id = gm.userid
+            $params['assignmentid99'] = (int)$this->assignment->get_instance()->id;
+            $from .= 'LEFT JOIN {assign} a
+                             ON a.id = :assignmentid99
                       LEFT JOIN {groupings_groups} gg
-                             ON gm.groupid = gg.groupid
-                             AND gg.groupingid = 24 ';
-            $fields .= ', gg.groupid as groupid ';
+                             ON gg.groupingid = a.teamsubmissiongroupingid
+                      LEFT JOIN {groups_members} gm
+                             ON gg.groupid = gm.groupid
+                             AND u.id = gm.userid ';
+            $fields .= ', gg.groupid as group ';
         } else {
             $from .= 'AND g.attemptnumber = s.attemptnumber ';
         }
