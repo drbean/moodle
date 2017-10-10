@@ -170,6 +170,12 @@ class assign_grading_table extends table_sql implements renderable {
             $from .= 'LEFT JOIN (' . $grademaxattempt . ') gmx
                              ON u.id = gmx.userid
                             AND g.attemptnumber = gmx.maxattempt ';
+            $from .= 'LEFT JOIN {groups_members} gm
+                             ON u.id = gm.userid
+                      LEFT JOIN {groupings_groups} gg
+                             ON gm.groupid = gg.groupid
+                             AND gg.groupingid = 24 ';
+            $fields .= ', gg.groupid as groupid ';
         } else {
             $from .= 'AND g.attemptnumber = s.attemptnumber ';
         }
@@ -743,7 +749,7 @@ class assign_grading_table extends table_sql implements renderable {
     public function col_groupid(stdClass $row) {
         $submission = false;
         $group = false;
-        $this->get_group_and_submission($row->userid, $group, $submission, -1);
+        $this->get_group_and_submission($row->id, $group, $submission, -1);
         if ($group) {
             return $group->name;
         } else if ($this->assignment->get_instance()->preventsubmissionnotingroup) {
