@@ -15,13 +15,32 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Strings for component 'block_messages', language 'en', branch 'MOODLE_20_STABLE'
+ * Test target.
  *
- * @package   block_messages
- * @copyright 1999 onwards Martin Dougiamas  {@link http://moodle.com}
+ * @package   core_analytics
+ * @copyright 2017 David Monllaó {@link http://www.davidmonllao.com}
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-$string['messages:addinstance'] = 'Add a new messages block';
-$string['messages:myaddinstance'] = 'Add a new messages block to Dashboard';
-$string['pluginname'] = 'Messages';
+defined('MOODLE_INTERNAL') || die();
+
+require_once(__DIR__ . '/test_target_shortname.php');
+
+/**
+ * Test target.
+ *
+ * @package   core_analytics
+ * @copyright 2017 David Monllaó {@link http://www.davidmonllao.com}
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class test_target_course_level_shortname extends test_target_shortname {
+
+    /**
+     * get_analyser_class
+     *
+     * @return string
+     */
+    public function get_analyser_class() {
+        return '\core\analytics\analyser\courses';
+    }
+}

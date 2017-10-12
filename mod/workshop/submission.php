@@ -52,19 +52,6 @@ if ($edit) {
 if ($id) { // submission is specified
     $submission = $workshop->get_submission_by_id($id);
 
-    $params = array(
-        'objectid' => $submission->id,
-        'context' => $workshop->context,
-        'courseid' => $workshop->course->id,
-        'relateduserid' => $submission->authorid,
-        'other' => array(
-            'workshopid' => $workshop->id
-        )
-    );
-
-    $event = \mod_workshop\event\submission_viewed::create($params);
-    $event->trigger();
-
 } else { // no submission specified
     if (!$submission = $workshop->get_submission_by_author($USER->id)) {
         $submission = new stdclass();
@@ -103,7 +90,7 @@ if ($submission->id and !$workshop->modifying_submission_allowed($USER->id)) {
 
 $canviewall = $canviewall && $workshop->check_group_membership($submission->authorid);
 
-$editable = $editable && $workshop->check_examples_assessed($USER->id);
+$editable = ($editable && $workshop->check_examples_assessed_before_submission($USER->id));
 $edit = ($editable and $edit);
 
 if (!$candeleteall and $ownsubmission and $editable) {
@@ -133,6 +120,11 @@ if ($submission->id and ($ownsubmission or $canviewall or $isreviewer)) {
     // ok you can go
 } else {
     print_error('nopermissions', 'error', $workshop->view_url(), 'view or create submission');
+}
+
+if ($submission->id) {
+    // Trigger submission viewed event.
+    $workshop->set_submission_viewed($submission);
 }
 
 if ($assess and $submission->id and !$isreviewer and $canallocate and $workshop->assessing_allowed($USER->id)) {
@@ -174,19 +166,7 @@ if (!$edit and ($canoverride or $canpublish)) {
         'overridablegrade' => $canoverride);
     $feedbackform = $workshop->get_feedbackauthor_form($PAGE->url, $submission, $options);
     if ($data = $feedbackform->get_data()) {
-        $data = file_postupdate_standard_editor($data, 'feedbackauthor', array(), $workshop->context);
-        $record = new stdclass();
-        $record->id = $submission->id;
-        if ($canoverride) {
-            $record->gradeover = $workshop->raw_grade_value($data->gradeover, $workshop->grade);
-            $record->gradeoverby = $USER->id;
-            $record->feedbackauthor = $data->feedbackauthor;
-            $record->feedbackauthorformat = $data->feedbackauthorformat;
-        }
-        if ($canpublish) {
-            $record->published = !empty($data->published);
-        }
-        $DB->update_record('workshop_submissions', $record);
+        $workshop->evaluate_submission($submission, $data, $canpublish, $canoverride);
         redirect($workshop->view_url());
     }
 }

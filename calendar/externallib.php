@@ -277,7 +277,7 @@ class core_calendar_external extends external_api {
                             (!empty($eventobj->groupid) && in_array($eventobj->groupid, $groups)) ||
                             (!empty($eventobj->courseid) && in_array($eventobj->courseid, $courses)) ||
                             ($USER->id == $eventobj->userid) ||
-                            (calendar_edit_event_allowed($eventid))) {
+                            (calendar_edit_event_allowed($eventobj))) {
                     $events[$eventid] = $event;
                 } else {
                     $warnings[] = array('item' => $eventid, 'warningcode' => 'nopermissions', 'message' => 'you do not have permissions to view this event');
@@ -882,10 +882,11 @@ class core_calendar_external extends external_api {
      * @param   int     $year The year to be shown
      * @param   int     $month The month to be shown
      * @param   int     $courseid The course to be included
+     * @param   int     $categoryid The category to be included
      * @param   bool    $includenavigation Whether to include navigation
      * @return  array
      */
-    public static function get_calendar_monthly_view($year, $month, $courseid, $includenavigation) {
+    public static function get_calendar_monthly_view($year, $month, $courseid, $categoryid, $includenavigation) {
         global $CFG, $DB, $USER, $PAGE;
         require_once($CFG->dirroot."/calendar/lib.php");
 
@@ -894,27 +895,45 @@ class core_calendar_external extends external_api {
             'year' => $year,
             'month' => $month,
             'courseid' => $courseid,
+            'categoryid' => $categoryid,
             'includenavigation' => $includenavigation,
         ]);
+
+        // TODO: Copy what we do in calendar/view.php.
+        $context = \context_user::instance($USER->id);
+        self::validate_context($context);
+        $PAGE->set_url('/calendar/');
 
         if ($courseid != SITEID && !empty($courseid)) {
             // Course ID must be valid and existing.
             $course = $DB->get_record('course', array('id' => $courseid), '*', MUST_EXIST);
             $courses = [$course->id => $course];
+
+            $coursecat = \coursecat::get($course->category);
+            $category = $coursecat->get_db_record();
         } else {
             $course = get_site();
             $courses = calendar_get_default_courses();
-        }
+            $category = null;
 
-        // TODO: Copy what we do in calendar/view.php.
-        $context = \context_user::instance($USER->id);
-        self::validate_context($context);
+            if ($categoryid) {
+                self::validate_context(context_coursecat::instance($categoryid));
+                $ids = [$categoryid];
+                $category = \coursecat::get($categoryid);
+                $ids += $category->get_parents();
+                $categories = \coursecat::get_many($ids);
+                $courses = array_filter($courses, function($course) use ($categories) {
+                    return array_search($course->category, $categories) !== false;
+                });
+                $category = $category->get_db_record();
+            }
+        }
 
         $type = \core_calendar\type_factory::get_calendar_instance();
 
         $time = $type->convert_to_timestamp($year, $month, 1);
         $calendar = new calendar_information(0, 0, 0, $time);
-        $calendar->prepare_for_view($course, $courses);
+        $calendar->set_sources($course, $courses, $category);
 
         list($data, $template) = calendar_get_view($calendar, 'month', $params['includenavigation']);
 
@@ -932,6 +951,7 @@ class core_calendar_external extends external_api {
                 'year' => new external_value(PARAM_INT, 'Month to be viewed', VALUE_REQUIRED),
                 'month' => new external_value(PARAM_INT, 'Year to be viewed', VALUE_REQUIRED),
                 'courseid' => new external_value(PARAM_INT, 'Course being viewed', VALUE_DEFAULT, SITEID, NULL_ALLOWED),
+                'categoryid' => new external_value(PARAM_INT, 'Category being viewed', VALUE_DEFAULT, null, NULL_ALLOWED),
                 'includenavigation' => new external_value(
                     PARAM_BOOL,
                     'Whether to show course navigation',
@@ -951,6 +971,95 @@ class core_calendar_external extends external_api {
     public static function get_calendar_monthly_view_returns() {
         return \core_calendar\external\month_exporter::get_read_structure();
     }
+
+    /**
+     * Get data for the daily calendar view.
+     *
+     * @param   int     $year The year to be shown
+     * @param   int     $month The month to be shown
+     * @param   int     $day The day to be shown
+     * @param   int     $courseid The course to be included
+     * @return  array
+     */
+    public static function get_calendar_day_view($year, $month, $day, $courseid, $categoryid) {
+        global $CFG, $DB, $USER, $PAGE;
+        require_once($CFG->dirroot."/calendar/lib.php");
+
+        // Parameter validation.
+        $params = self::validate_parameters(self::get_calendar_day_view_parameters(), [
+            'year' => $year,
+            'month' => $month,
+            'day' => $day,
+            'courseid' => $courseid,
+            'categoryid' => $categoryid,
+        ]);
+
+        if ($courseid != SITEID && !empty($courseid)) {
+            // Course ID must be valid and existing.
+            $course = $DB->get_record('course', array('id' => $courseid), '*', MUST_EXIST);
+            $courses = [$course->id => $course];
+
+            $coursecat = \coursecat::get($course->category);
+            $category = $coursecat->get_db_record();
+        } else {
+            $course = get_site();
+            $courses = calendar_get_default_courses();
+            $category = null;
+
+            if ($categoryid) {
+                self::validate_context(context_coursecat::instance($categoryid));
+                $ids = [$categoryid];
+                $category = \coursecat::get($categoryid);
+                $ids += $category->get_parents();
+                $categories = \coursecat::get_many($ids);
+                $courses = array_filter($courses, function($course) use ($categories) {
+                    return array_search($course->category, $categories) !== false;
+                });
+                $category = $category->get_db_record();
+            }
+        }
+
+        // TODO: Copy what we do in calendar/view.php.
+        $context = \context_user::instance($USER->id);
+        self::validate_context($context);
+
+        $type = \core_calendar\type_factory::get_calendar_instance();
+
+        $time = $type->convert_to_timestamp($year, $month, $day);
+        $calendar = new calendar_information(0, 0, 0, $time);
+        $calendar->set_sources($course, $courses, $category);
+
+        list($data, $template) = calendar_get_view($calendar, 'day', $params['includenavigation']);
+
+        return $data;
+    }
+
+    /**
+     * Returns description of method parameters.
+     *
+     * @return external_function_parameters
+     */
+    public static function get_calendar_day_view_parameters() {
+        return new external_function_parameters(
+            [
+                'year' => new external_value(PARAM_INT, 'Year to be viewed', VALUE_REQUIRED),
+                'month' => new external_value(PARAM_INT, 'Month to be viewed', VALUE_REQUIRED),
+                'day' => new external_value(PARAM_INT, 'Day to be viewed', VALUE_REQUIRED),
+                'courseid' => new external_value(PARAM_INT, 'Course being viewed', VALUE_DEFAULT, SITEID, NULL_ALLOWED),
+                'categoryid' => new external_value(PARAM_INT, 'Category being viewed', VALUE_DEFAULT, null, NULL_ALLOWED),
+            ]
+        );
+    }
+
+    /**
+     * Returns description of method result value.
+     *
+     * @return external_description
+     */
+    public static function get_calendar_day_view_returns() {
+        return \core_calendar\external\calendar_day_exporter::get_read_structure();
+    }
+
 
     /**
      * Returns description of method parameters.
@@ -1030,5 +1139,62 @@ class core_calendar_external extends external_api {
                 'event' => event_exporter::get_read_structure()
             )
         );
+    }
+
+    /**
+     * Get data for the monthly calendar view.
+     *
+     * @param   int     $courseid The course to be included
+     * @return  array
+     */
+    public static function get_calendar_upcoming_view($courseid) {
+        global $CFG, $DB, $USER, $PAGE;
+        require_once($CFG->dirroot."/calendar/lib.php");
+
+        // Parameter validation.
+        self::validate_parameters(self::get_calendar_upcoming_view_parameters(), [
+            'courseid' => $courseid,
+        ]);
+
+        if ($courseid != SITEID && !empty($courseid)) {
+            // Course ID must be valid and existing.
+            $course = $DB->get_record('course', array('id' => $courseid), '*', MUST_EXIST);
+            $courses = [$course->id => $course];
+        } else {
+            $course = get_site();
+            $courses = calendar_get_default_courses();
+        }
+
+        $context = \context_user::instance($USER->id);
+        self::validate_context($context);
+
+        $calendar = new calendar_information(0, 0, 0, time());
+        $calendar->set_sources($course, $courses);
+
+        list($data, $template) = calendar_get_view($calendar, 'upcoming');
+
+        return $data;
+    }
+
+    /**
+     * Returns description of method parameters.
+     *
+     * @return external_function_parameters
+     */
+    public static function get_calendar_upcoming_view_parameters() {
+        return new external_function_parameters(
+            [
+                'courseid' => new external_value(PARAM_INT, 'Course being viewed', VALUE_DEFAULT, SITEID, NULL_ALLOWED),
+            ]
+        );
+    }
+
+    /**
+     * Returns description of method result value.
+     *
+     * @return external_description
+     */
+    public static function get_calendar_upcoming_view_returns() {
+        return \core_calendar\external\calendar_upcoming_exporter::get_read_structure();
     }
 }
