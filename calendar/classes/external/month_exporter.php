@@ -75,8 +75,10 @@ class month_exporter extends exporter {
                 'time' => $calendar->time,
             ]);
 
-        if ($this->calendar->courseid) {
-            $this->url->param('course', $this->calendar->courseid);
+        if ($this->calendar->course && SITEID !== $this->calendar->course->id) {
+            $this->url->param('course', $this->calendar->course->id);
+        } else if ($this->calendar->categoryid) {
+            $this->url->param('category', $this->calendar->categoryid);
         }
 
         $related['type'] = $type;
@@ -105,6 +107,11 @@ class month_exporter extends exporter {
         return [
             'courseid' => [
                 'type' => PARAM_INT,
+            ],
+            'categoryid' => [
+                'type' => PARAM_INT,
+                'optional' => true,
+                'default' => 0,
             ],
             'filter_selector' => [
                 'type' => PARAM_RAW,
@@ -162,6 +169,10 @@ class month_exporter extends exporter {
                 // The right arrow defined by the theme.
                 'type' => PARAM_RAW,
             ],
+            'defaulteventcontext' => [
+                'type' => PARAM_INT,
+                'default' => null,
+            ],
         ];
     }
 
@@ -182,7 +193,7 @@ class month_exporter extends exporter {
         $previousperiodlink = new moodle_url($this->url);
         $previousperiodlink->param('time', $previousperiod[0]);
 
-        return [
+        $return = [
             'courseid' => $this->calendar->courseid,
             'filter_selector' => $this->get_course_filter_selector($output),
             'weeks' => $this->get_weeks($output),
@@ -200,6 +211,16 @@ class month_exporter extends exporter {
             'rarrow' => $output->rarrow(),
             'includenavigation' => $this->includenavigation,
         ];
+
+        if ($context = $this->get_default_add_context()) {
+            $return['defaulteventcontext'] = $context->id;
+        }
+
+        if ($this->calendar->categoryid) {
+            $return['categoryid'] = $this->calendar->categoryid;
+        }
+
+        return $return;
     }
 
     /**
@@ -211,9 +232,6 @@ class month_exporter extends exporter {
     protected function get_course_filter_selector(renderer_base $output) {
         $content = '';
         $content .= $output->course_filter_selector($this->url, get_string('detailedmonthviewfor', 'calendar'));
-        if (calendar_user_can_add_event($this->calendar->course)) {
-            $content .= $output->add_event_button($this->calendar->courseid, 0, 0, 0, $this->calendar->time);
-        }
 
         return $content;
     }
@@ -360,5 +378,18 @@ class month_exporter extends exporter {
         $this->includenavigation = $include;
 
         return $this;
+    }
+
+    /**
+     * Get the default context for use when adding a new event.
+     *
+     * @return null|\context
+     */
+    protected function get_default_add_context() {
+        if (calendar_user_can_add_event($this->calendar->course)) {
+            return \context_course::instance($this->calendar->course->id);
+        }
+
+        return null;
     }
 }

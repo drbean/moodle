@@ -26,12 +26,14 @@ define([], function() {
         eventFilterItem: "[data-action='filter-event-type']",
         eventType: {
             site: "[data-eventtype-site]",
+            category: "[data-eventtype-category]",
             course: "[data-eventtype-course]",
             group: "[data-eventtype-group]",
             user: "[data-eventtype-user]",
         },
         popoverType: {
             site: "[data-popover-eventtype-site]",
+            category: "[data-popover-eventtype-category]",
             course: "[data-popover-eventtype-course]",
             group: "[data-popover-eventtype-group]",
             user: "[data-popover-eventtype-user]",
@@ -39,5 +41,15 @@ define([], function() {
         calendarPeriods: {
             month: "[data-period='month']",
         },
+        courseSelector: 'select[name="course"]',
+        actions: {
+            create: '[data-action="new-event-button"]',
+            edit: '[data-action="edit"]',
+            remove: '[data-action="delete"]',
+        },
+        today: '.today',
+        day: '[data-region="day"]',
+        wrapper: '.calendarwrapper',
+        eventItem: '[data-type="event"]',
     };
 });
