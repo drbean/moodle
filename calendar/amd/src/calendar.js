@@ -70,7 +70,6 @@ define([
         LOADING_ICON: '.loading-icon',
         VIEW_DAY_LINK: "[data-action='view-day-link']",
         CALENDAR_MONTH_WRAPPER: ".calendarwrapper",
-        COURSE_SELECTOR: 'select[name="course"]',
         TODAY: '.today',
     };
 
@@ -88,17 +87,43 @@ define([
     };
 
     /**
+     * Get the CSS class to apply for the given event type.
+     *
+     * @param {String} eventType The calendar event type
+     * @return {String}
+     */
+    var getEventTypeClassFromType = function(eventType) {
+        switch (eventType) {
+            case 'user':
+                return 'calendar_event_user';
+            case 'site':
+                return 'calendar_event_site';
+            case 'group':
+                return 'calendar_event_group';
+            case 'category':
+                return 'calendar_event_category';
+            case 'course':
+                return 'calendar_event_course';
+            default:
+                return 'calendar_event_course';
+        }
+    };
+
+    /**
      * Render the event summary modal.
      *
      * @param {Number} eventId The calendar event id.
      */
     var renderEventSummaryModal = function(eventId) {
+        var typeClass = '';
+
         // Calendar repository promise.
         CalendarRepository.getEventById(eventId).then(function(getEventResponse) {
             if (!getEventResponse.event) {
                 throw new Error('Error encountered while trying to fetch calendar event with ID: ' + eventId);
             }
             var eventData = getEventResponse.event;
+            typeClass = getEventTypeClassFromType(eventData.eventtype);
 
             return getEventType(eventData.eventtype).then(function(eventType) {
                 eventData.eventtype = eventType;
@@ -113,6 +138,7 @@ define([
                 templateContext: {
                     canedit: eventData.canedit,
                     candelete: eventData.candelete,
+                    headerclasses: typeClass,
                     isactionevent: eventData.isactionevent,
                     url: eventData.url
                 }
@@ -268,13 +294,13 @@ define([
             renderEventSummaryModal(eventId);
         });
 
-        root.on('change', SELECTORS.COURSE_SELECTOR, function() {
+        root.on('change', CalendarSelectors.elements.courseSelector, function() {
             var selectElement = $(this);
             var courseId = selectElement.val();
             CalendarViewManager.reloadCurrentMonth(root, courseId, null)
                 .then(function() {
                     // We need to get the selector again because the content has changed.
-                    return root.find(SELECTORS.COURSE_SELECTOR).val(courseId);
+                    return root.find(CalendarSelectors.elements.courseSelector).val(courseId);
                 })
                 .fail(Notification.exception);
         });
