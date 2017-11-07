@@ -2851,7 +2851,7 @@ function forum_get_discussion_neighbours($cm, $discussion, $forum) {
  * @param bool $pinned sort pinned posts to the top
  * @return string
  */
-function forum_get_default_sort_order($desc = true, $compare = 'd.timemodified', $prefix = 'd', $pinned = true) {
+function forum_get_default_sort_order($desc = true, $compare = 'p.created', $prefix = 'd', $pinned = true) {
     global $CFG;
 
     if (!empty($prefix)) {
