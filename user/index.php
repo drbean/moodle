@@ -25,17 +25,13 @@
 require_once('../config.php');
 require_once($CFG->dirroot.'/user/lib.php');
 require_once($CFG->dirroot.'/course/lib.php');
+require_once($CFG->dirroot.'/notes/lib.php');
 require_once($CFG->libdir.'/tablelib.php');
 require_once($CFG->libdir.'/filelib.php');
 require_once($CFG->dirroot.'/enrol/locallib.php');
 
 define('DEFAULT_PAGE_SIZE', 20);
 define('SHOW_ALL_PAGE_SIZE', 5000);
-define('USER_FILTER_ENROLMENT', 1);
-define('USER_FILTER_GROUP', 2);
-define('USER_FILTER_LAST_ACCESS', 3);
-define('USER_FILTER_ROLE', 4);
-define('USER_FILTER_STATUS', 5);
 
 $page         = optional_param('page', 0, PARAM_INT); // Which page to show.
 $perpage      = optional_param('perpage', DEFAULT_PAGE_SIZE, PARAM_INT); // How many per page.
@@ -104,7 +100,7 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('participants'));
 
 // Get the currently applied filters.
-$filtersapplied = optional_param_array('unified-filters', [], PARAM_TEXT);
+$filtersapplied = optional_param_array('unified-filters', [], PARAM_NOTAGS);
 $filterwassubmitted = optional_param('unified-filter-submitted', 0, PARAM_BOOL);
 
 // If they passed a role make sure they can view that role.
@@ -152,7 +148,8 @@ foreach ($filtersapplied as $filter) {
         $value = clean_param($filtervalue[1], PARAM_INT);
     } else {
         // Search string.
-        $key = clean_param($filtervalue[0], PARAM_TEXT);
+        $key = USER_FILTER_STRING;
+        $value = clean_param($filtervalue[0], PARAM_TEXT);
     }
 
     switch ($key) {
@@ -177,9 +174,7 @@ foreach ($filtersapplied as $filter) {
             break;
         default:
             // Search string.
-            if (!empty($key) && empty($value)) {
-                $searchkeywords[] = $key;
-            }
+            $searchkeywords[] = $value;
             break;
     }
 }
@@ -200,6 +195,12 @@ if ($groupid !== false) {
     } else if (!$hasgroupfilter) { // No need for the group id to be set.
         $groupid = false;
     }
+}
+
+if ($groupid && ($course->groupmode != SEPARATEGROUPS || $canaccessallgroups)) {
+    $grouprenderer = $PAGE->get_renderer('core_group');
+    $groupdetailpage = new \core_group\output\group_details($groupid);
+    echo $grouprenderer->group_details($groupdetailpage);
 }
 
 // Manage enrolments.
@@ -242,6 +243,8 @@ if ($bulkoperations) {
 }
 
 echo $participanttablehtml;
+
+$PAGE->requires->js_call_amd('core_user/name_page_filter', 'init');
 
 $perpageurl = clone($baseurl);
 $perpageurl->remove_params('perpage');
@@ -286,10 +289,9 @@ if ($bulkoperations) {
         'value' => get_string('deselectall')));
     echo html_writer::end_tag('div');
     $displaylist = array();
-    $displaylist['messageselect.php'] = get_string('messageselectadd');
+    $displaylist['#messageselect'] = get_string('messageselectadd');
     if (!empty($CFG->enablenotes) && has_capability('moodle/notes:manage', $context) && $context->id != $frontpagectx->id) {
-        $displaylist['addnote.php'] = get_string('addnewnote', 'notes');
-        $displaylist['groupaddnote.php'] = get_string('groupaddnewnote', 'notes');
+        $displaylist['#addgroupnote'] = get_string('addnewnote', 'notes');
     }
 
     if ($context->id != $frontpagectx->id) {
@@ -327,8 +329,11 @@ if ($bulkoperations) {
     echo '</div></div>';
     echo '</form>';
 
-    $module = array('name' => 'core_user', 'fullpath' => '/user/module.js');
-    $PAGE->requires->js_init_call('M.core_user.init_participation', null, false, $module);
+    $options = new stdClass();
+    $options->courseid = $course->id;
+    $options->noteStateNames = note_get_state_names();
+    $options->stateHelpIcon = $OUTPUT->help_icon('publishstate', 'notes');
+    $PAGE->requires->js_call_amd('core_user/participants', 'init', [$options]);
 }
 
 echo '</div>';  // Userlist.
