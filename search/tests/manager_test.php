@@ -281,6 +281,90 @@ class search_manager_testcase extends advanced_testcase {
     }
 
     /**
+     * Tests the progress display while indexing.
+     *
+     * This tests the different logic about displaying progress for slow/fast and
+     * complete/incomplete processing.
+     */
+    public function test_index_progress() {
+        $this->resetAfterTest();
+        $generator = $this->getDataGenerator();
+
+        // Set up the fake search area.
+        $search = testable_core_search::instance();
+        $area = new \core_mocksearch\search\mock_search_area();
+        $search->add_search_area('whatever', $area);
+        $searchgenerator = $generator->get_plugin_generator('core_search');
+        $searchgenerator->setUp();
+
+        // Add records with specific time modified values.
+        $time = strtotime('2017-11-01 01:00');
+        for ($i = 0; $i < 8; $i ++) {
+            $searchgenerator->create_record((object)['timemodified' => $time]);
+            $time += 60;
+        }
+
+        // Simulate slow progress on indexing and initial query.
+        $now = strtotime('2017-11-11 01:00');
+        \testable_core_search::fake_current_time($now);
+        $area->set_indexing_delay(10.123);
+        $search->get_engine()->set_add_delay(15.789);
+
+        // Run search indexing and check output.
+        $progress = new progress_trace_buffer(new text_progress_trace(), false);
+        $search->index(false, 75, $progress);
+        $out = $progress->get_buffer();
+        $progress->reset_buffer();
+
+        // Check for the standard text.
+        $this->assertContains('Processing area: Mock search area', $out);
+        $this->assertContains('Stopping indexing due to time limit', $out);
+
+        // Check for initial query performance indication.
+        $this->assertContains('Initial query took 10.1 seconds.', $out);
+
+        // Check for the two (approximately) every-30-seconds messages.
+        $this->assertContains('01:00:41: Done to 1/11/17, 01:01', $out);
+        $this->assertContains('01:01:13: Done to 1/11/17, 01:03', $out);
+
+        // Check for the 'not complete' indicator showing when it was done until.
+        $this->assertContains('Processed 5 records containing 5 documents, in 89.1 seconds ' .
+                '(not complete; done to 1/11/17, 01:04)', $out);
+
+        // Make the initial query delay less than 5 seconds, so it won't appear. Make the documents
+        // quicker, so that the 30-second delay won't be needed.
+        $area->set_indexing_delay(4.9);
+        $search->get_engine()->set_add_delay(1);
+
+        // Run search indexing (still partial) and check output.
+        $progress = new progress_trace_buffer(new text_progress_trace(), false);
+        $search->index(false, 5, $progress);
+        $out = $progress->get_buffer();
+        $progress->reset_buffer();
+
+        $this->assertContains('Processing area: Mock search area', $out);
+        $this->assertContains('Stopping indexing due to time limit', $out);
+        $this->assertNotContains('Initial query took', $out);
+        $this->assertNotContains(': Done to', $out);
+        $this->assertContains('Processed 2 records containing 2 documents, in 6.9 seconds ' .
+                '(not complete; done to 1/11/17, 01:05).', $out);
+
+        // Run the remaining items to complete it.
+        $progress = new progress_trace_buffer(new text_progress_trace(), false);
+        $search->index(false, 100, $progress);
+        $out = $progress->get_buffer();
+        $progress->reset_buffer();
+
+        $this->assertContains('Processing area: Mock search area', $out);
+        $this->assertNotContains('Stopping indexing due to time limit', $out);
+        $this->assertNotContains('Initial query took', $out);
+        $this->assertNotContains(': Done to', $out);
+        $this->assertContains('Processed 3 records containing 3 documents, in 7.9 seconds.', $out);
+
+        $searchgenerator->tearDown();
+    }
+
+    /**
      * Tests that documents with modified time in the future are NOT indexed (as this would cause
      * a problem by preventing it from indexing other documents modified between now and the future
      * date).
@@ -442,6 +526,7 @@ class search_manager_testcase extends advanced_testcase {
         $this->resetAfterTest();
 
         $frontpage = $DB->get_record('course', array('id' => SITEID));
+        $frontpagectx = context_course::instance($frontpage->id);
         $course1 = $this->getDataGenerator()->create_course();
         $course1ctx = context_course::instance($course1->id);
         $course2 = $this->getDataGenerator()->create_course();
@@ -473,14 +558,13 @@ class search_manager_testcase extends advanced_testcase {
         $this->assertTrue($search->get_areas_user_accesses());
 
         $sitectx = \context_course::instance(SITEID);
-        $systemctxid = \context_system::instance()->id;
 
         // Can access the frontpage ones.
         $this->setUser($noaccess);
         $contexts = $search->get_areas_user_accesses();
         $this->assertEquals(array($frontpageforumcontext->id => $frontpageforumcontext->id), $contexts[$this->forumpostareaid]);
         $this->assertEquals(array($sitectx->id => $sitectx->id), $contexts[$this->mycoursesareaid]);
-        $mockctxs = array($noaccessctx->id => $noaccessctx->id, $systemctxid => $systemctxid);
+        $mockctxs = array($noaccessctx->id => $noaccessctx->id, $frontpagectx->id => $frontpagectx->id);
         $this->assertEquals($mockctxs, $contexts[$mockareaid]);
 
         $this->setUser($teacher);
@@ -490,7 +574,8 @@ class search_manager_testcase extends advanced_testcase {
         $this->assertEquals($frontpageandcourse1, $contexts[$this->forumpostareaid]);
         $this->assertEquals(array($sitectx->id => $sitectx->id, $course1ctx->id => $course1ctx->id),
             $contexts[$this->mycoursesareaid]);
-        $mockctxs = array($teacherctx->id => $teacherctx->id, $systemctxid => $systemctxid);
+        $mockctxs = array($teacherctx->id => $teacherctx->id,
+                $frontpagectx->id => $frontpagectx->id, $course1ctx->id => $course1ctx->id);
         $this->assertEquals($mockctxs, $contexts[$mockareaid]);
 
         $this->setUser($student);
@@ -498,7 +583,8 @@ class search_manager_testcase extends advanced_testcase {
         $this->assertEquals($frontpageandcourse1, $contexts[$this->forumpostareaid]);
         $this->assertEquals(array($sitectx->id => $sitectx->id, $course1ctx->id => $course1ctx->id),
             $contexts[$this->mycoursesareaid]);
-        $mockctxs = array($studentctx->id => $studentctx->id, $systemctxid => $systemctxid);
+        $mockctxs = array($studentctx->id => $studentctx->id,
+                $frontpagectx->id => $frontpagectx->id, $course1ctx->id => $course1ctx->id);
         $this->assertEquals($mockctxs, $contexts[$mockareaid]);
 
         // Hide the activity.
@@ -532,6 +618,32 @@ class search_manager_testcase extends advanced_testcase {
         $allcontexts = array($context1->id => $context1->id, $context2->id => $context2->id);
         $this->assertEquals($allcontexts, $contexts[$this->forumpostareaid]);
         $this->assertEquals(array($course1ctx->id => $course1ctx->id), $contexts[$this->mycoursesareaid]);
+
+        // Test context limited search with no course limit.
+        $contexts = $search->get_areas_user_accesses(false,
+                [$frontpageforumcontext->id, $course2ctx->id]);
+        $this->assertEquals([$frontpageforumcontext->id => $frontpageforumcontext->id],
+                $contexts[$this->forumpostareaid]);
+        $this->assertEquals([$course2ctx->id => $course2ctx->id],
+                $contexts[$this->mycoursesareaid]);
+
+        // Test context limited search with course limit.
+        $contexts = $search->get_areas_user_accesses([$course1->id, $course2->id],
+                [$frontpageforumcontext->id, $course2ctx->id]);
+        $this->assertArrayNotHasKey($this->forumpostareaid, $contexts);
+        $this->assertEquals([$course2ctx->id => $course2ctx->id],
+                $contexts[$this->mycoursesareaid]);
+
+        // Single context and course.
+        $contexts = $search->get_areas_user_accesses([$course1->id], [$context1->id]);
+        $this->assertEquals([$context1->id => $context1->id], $contexts[$this->forumpostareaid]);
+        $this->assertArrayNotHasKey($this->mycoursesareaid, $contexts);
+
+        // For admins, this is still limited only if we specify the things, so it should be same.
+        $this->setAdminUser();
+        $contexts = $search->get_areas_user_accesses([$course1->id], [$context1->id]);
+        $this->assertEquals([$context1->id => $context1->id], $contexts[$this->forumpostareaid]);
+        $this->assertArrayNotHasKey($this->mycoursesareaid, $contexts);
     }
 
     /**
@@ -540,6 +652,8 @@ class search_manager_testcase extends advanced_testcase {
      * @return void
      */
     public function test_search_user_accesses_blocks() {
+        global $DB;
+
         $this->resetAfterTest();
         $this->setAdminUser();
 
@@ -631,6 +745,26 @@ class search_manager_testcase extends advanced_testcase {
         $this->setUser($student1);
         $limitedcontexts = $search->get_areas_user_accesses([$course3->id]);
         $this->assertEquals($contexts['block_html-content'], $limitedcontexts['block_html-content']);
+
+        // Get block context ids for the blocks that appear.
+        global $DB;
+        $blockcontextids = $DB->get_fieldset_sql('
+            SELECT x.id
+              FROM {block_instances} bi
+              JOIN {context} x ON x.instanceid = bi.id AND x.contextlevel = ?
+             WHERE (parentcontextid = ? OR parentcontextid = ?)
+                   AND blockname = ?
+          ORDER BY bi.id', [CONTEXT_BLOCK, $context1->id, $context3->id, 'html']);
+
+        // Context limited search (no course).
+        $contexts = $search->get_areas_user_accesses(false,
+                [$blockcontextids[0], $blockcontextids[2]]);
+        $this->assertCount(2, $contexts['block_html-content']);
+
+        // Context limited search (with course 3).
+        $contexts = $search->get_areas_user_accesses([$course2->id, $course3->id],
+                [$blockcontextids[0], $blockcontextids[2]]);
+        $this->assertCount(1, $contexts['block_html-content']);
     }
 
     /**
