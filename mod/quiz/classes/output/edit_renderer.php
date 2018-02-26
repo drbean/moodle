@@ -100,10 +100,9 @@ class edit_renderer extends \plugin_renderer_base {
         if ($structure->can_be_edited()) {
             $popups = '';
 
-            $popups .= $this->question_bank_loading();
-            $this->page->requires->yui_module('moodle-mod_quiz-quizquestionbank',
-                    'M.mod_quiz.quizquestionbank.init',
-                    array('class' => 'questionbank', 'cmid' => $structure->get_cmid()));
+            $this->page->requires->js_call_amd('mod_quiz/quizquestionbank', 'init', [
+                $contexts->lowest()->id
+            ]);
 
             $popups .= $this->random_question_form($pageurl, $contexts, $pagevars);
             $this->page->requires->yui_module('moodle-mod_quiz-randomquestion',
@@ -443,11 +442,12 @@ class edit_renderer extends \plugin_renderer_base {
             $help = '';
         }
 
+        $helpspan = html_writer::span($help, 'shuffle-help-tip');
         $progressspan = html_writer::span('', 'shuffle-progress');
         $checkbox = html_writer::empty_tag('input', $checkboxattributes);
-        $label = html_writer::label(get_string('shufflequestions', 'quiz') . ' ' . $help,
+        $label = html_writer::label(get_string('shufflequestions', 'quiz'),
                 $checkboxattributes['id'], false);
-        return html_writer::span($progressspan . $checkbox . $label,
+        return html_writer::span($progressspan . $checkbox . $label. ' ' . $helpspan,
                 'instanceshufflequestions', array('data-action' => 'shuffle_questions'));
     }
 
@@ -631,17 +631,6 @@ class edit_renderer extends \plugin_renderer_base {
         // Get section, page, slotnumber and maxmark.
         $actions = array();
 
-        // Add a new section to the add_menu if possible. This is always added to the HTML
-        // then hidden with CSS when no needed, so that as things are re-ordered, etc. with
-        // Ajax it can be relevaled again when necessary.
-        $params = array('cmid' => $structure->get_cmid(), 'addsectionatpage' => $page);
-
-        $actions['addasection'] = new \action_menu_link_secondary(
-                new \moodle_url($pageurl, $params),
-                new \pix_icon('t/add', $str->addasection, 'moodle', array('class' => 'iconsmall', 'title' => '')),
-                $str->addasection, array('class' => 'cm-edit-action addasection', 'data-action' => 'addasection')
-        );
-
         // Add a new question to the quiz.
         $returnurl = new \moodle_url($pageurl, array('addonpage' => $page));
         $params = array('returnurl' => $returnurl->out_as_local_url(false),
@@ -678,6 +667,17 @@ class edit_renderer extends \plugin_renderer_base {
         }
         $attributes = array_merge(array('data-header' => $title, 'data-addonpage' => $page), $attributes);
         $actions['addarandomquestion'] = new \action_menu_link_secondary($url, $icon, $str->addarandomquestion, $attributes);
+
+        // Add a new section to the add_menu if possible. This is always added to the HTML
+        // then hidden with CSS when no needed, so that as things are re-ordered, etc. with
+        // Ajax it can be relevaled again when necessary.
+        $params = array('cmid' => $structure->get_cmid(), 'addsectionatpage' => $page);
+
+        $actions['addasection'] = new \action_menu_link_secondary(
+            new \moodle_url($pageurl, $params),
+            new \pix_icon('t/add', $str->addasection, 'moodle', array('class' => 'iconsmall', 'title' => '')),
+            $str->addasection, array('class' => 'cm-edit-action addasection', 'data-action' => 'addasection')
+        );
 
         return $actions;
     }
@@ -1249,7 +1249,8 @@ class edit_renderer extends \plugin_renderer_base {
     public function question_bank_contents(\mod_quiz\question\bank\custom_view $questionbank, array $pagevars) {
 
         $qbank = $questionbank->render('editq', $pagevars['qpage'], $pagevars['qperpage'],
-                $pagevars['cat'], $pagevars['recurse'], $pagevars['showhidden'], $pagevars['qbshowtext']);
+                $pagevars['cat'], $pagevars['recurse'], $pagevars['showhidden'], $pagevars['qbshowtext'],
+                $pagevars['qtagids']);
         return html_writer::div(html_writer::div($qbank, 'bd'), 'questionbankformforpopup');
     }
 }

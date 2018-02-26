@@ -88,6 +88,16 @@ class manager {
     const DISPLAY_INDEXING_PROGRESS_EVERY = 30.0;
 
     /**
+     * @var int Context indexing: normal priority.
+     */
+    const INDEX_PRIORITY_NORMAL = 100;
+
+    /**
+     * @var int Context indexing: low priority for reindexing.
+     */
+    const INDEX_PRIORITY_REINDEXING = 50;
+
+    /**
      * @var \core_search\base[] Enabled search areas.
      */
     protected static $enabledsearchareas = null;
@@ -354,11 +364,15 @@ class manager {
     }
 
     /**
-     * Returns the contexts the user can access.
+     * Returns information about the areas which the user can access.
      *
-     * The returned value is a multidimensional array because some search engines can group
-     * information and there will be a performance benefit on passing only some contexts
-     * instead of the whole context array set.
+     * The returned value is a stdClass object with the following fields:
+     * - everything (bool, true for admin only)
+     * - usercontexts (indexed by area identifier then context
+     * - separategroupscontexts (contexts within which group restrictions apply)
+     * - visiblegroupscontextsareas (overrides to the above when the same contexts also have
+     *   'visible groups' for certain search area ids - hopefully rare)
+     * - usergroups (groups which the current user belongs to)
      *
      * The areas can be limited by course id and context id. If specifying context ids, results
      * are limited to the exact context ids specified and not their children (for example, giving
@@ -368,7 +382,7 @@ class manager {
      *
      * @param array|false $limitcourseids An array of course ids to limit the search to. False for no limiting.
      * @param array|false $limitcontextids An array of context ids to limit the search to. False for no limiting.
-     * @return bool|array Indexed by area identifier (component + area name). Returns true if the user can see everything.
+     * @return \stdClass Object as described above
      */
     protected function get_areas_user_accesses($limitcourseids = false, $limitcontextids = false) {
         global $DB, $USER;
@@ -376,7 +390,7 @@ class manager {
         // All results for admins (unless they have chosen to limit results). Eventually we could
         // add a new capability for managers.
         if (is_siteadmin() && !$limitcourseids && !$limitcontextids) {
-            return true;
+            return (object)array('everything' => true);
         }
 
         $areasbylevel = array();
@@ -393,6 +407,11 @@ class manager {
 
         // This will store area - allowed contexts relations.
         $areascontexts = array();
+
+        // Initialise two special-case arrays for storing other information related to the contexts.
+        $separategroupscontexts = array();
+        $visiblegroupscontextsareas = array();
+        $usergroups = array();
 
         if (empty($limitcourseids) && !empty($areasbylevel[CONTEXT_SYSTEM])) {
             // We add system context to all search areas working at this level. Here each area is fully responsible of
@@ -443,6 +462,7 @@ class manager {
 
         // Keep a list of included course context ids (needed for the block calculation below).
         $coursecontextids = [];
+        $modulecms = [];
 
         foreach ($courses as $course) {
             if (!empty($limitcourseids) && !in_array($course->id, $limitcourseids)) {
@@ -452,6 +472,7 @@ class manager {
 
             $coursecontext = \context_course::instance($course->id);
             $coursecontextids[] = $coursecontext->id;
+            $hasgrouprestrictions = false;
 
             // Info about the course modules.
             $modinfo = get_fast_modinfo($course);
@@ -481,10 +502,46 @@ class manager {
                             continue;
                         }
                         if ($modinstance->uservisible) {
-                            $areascontexts[$areaid][$modinstance->context->id] = $modinstance->context->id;
+                            $contextid = $modinstance->context->id;
+                            $areascontexts[$areaid][$contextid] = $contextid;
+                            $modulecms[$modinstance->id] = $modinstance;
+
+                            if (!has_capability('moodle/site:accessallgroups', $modinstance->context) &&
+                                    ($searchclass instanceof base_mod) &&
+                                    $searchclass->supports_group_restriction()) {
+                                if ($searchclass->restrict_cm_access_by_group($modinstance)) {
+                                    $separategroupscontexts[$contextid] = $contextid;
+                                    $hasgrouprestrictions = true;
+                                } else {
+                                    // Track a list of anything that has a group id (so might get
+                                    // filtered) and doesn't want to be, in this context.
+                                    if (!array_key_exists($contextid, $visiblegroupscontextsareas)) {
+                                        $visiblegroupscontextsareas[$contextid] = array();
+                                    }
+                                    $visiblegroupscontextsareas[$contextid][$areaid] = $areaid;
+                                }
+                            }
                         }
                     }
                 }
+            }
+
+            // Insert group information for course (unless there aren't any modules restricted by
+            // group for this user in this course, in which case don't bother).
+            if ($hasgrouprestrictions) {
+                $groups = groups_get_all_groups($course->id, $USER->id, 0, 'g.id');
+                foreach ($groups as $group) {
+                    $usergroups[$group->id] = $group->id;
+                }
+            }
+        }
+
+        // Chuck away all the 'visible groups contexts' data unless there is actually something
+        // that does use separate groups in the same context (this data is only used as an
+        // 'override' in cases where the search is restricting to separate groups).
+        foreach ($visiblegroupscontextsareas as $contextid => $areas) {
+            if (!array_key_exists($contextid, $separategroupscontexts)) {
+                unset($visiblegroupscontextsareas[$contextid]);
             }
         }
 
@@ -554,7 +611,10 @@ class manager {
             }
         }
 
-        return $areascontexts;
+        // Return all the data.
+        return (object)array('everything' => false, 'usercontexts' => $areascontexts,
+                'separategroupscontexts' => $separategroupscontexts, 'usergroups' => $usergroups,
+                'visiblegroupscontextsareas' => $visiblegroupscontextsareas);
     }
 
     /**
@@ -677,12 +737,19 @@ class manager {
         // Clears previous query errors.
         $this->engine->clear_query_error();
 
-        $areascontexts = $this->get_areas_user_accesses($limitcourseids, $limitcontextids);
-        if (!$areascontexts) {
+        $contextinfo = $this->get_areas_user_accesses($limitcourseids, $limitcontextids);
+        if (!$contextinfo->everything && !$contextinfo->usercontexts) {
             // User can not access any context.
             $docs = array();
         } else {
-            $docs = $this->engine->execute_query($formdata, $areascontexts, $limit);
+            // If engine does not support groups, remove group information from the context info -
+            // use the old format instead (true = admin, array = user contexts).
+            if (!$this->engine->supports_group_filtering()) {
+                $contextinfo = $contextinfo->everything ? true : $contextinfo->usercontexts;
+            }
+
+            // Execute the actual query.
+            $docs = $this->engine->execute_query($formdata, $contextinfo, $limit);
         }
 
         return $docs;
@@ -1143,36 +1210,55 @@ class manager {
      * added to a queue which is processed by the task.
      *
      * This is used after a restore to ensure that restored items are indexed, even though their
-     * modified time will be older than the latest indexed.
+     * modified time will be older than the latest indexed. It is also used by the 'Gradual reindex'
+     * admin feature from the search areas screen.
      *
      * @param \context $context Context to index within
      * @param string $areaid Area to index, '' = all areas
+     * @param int $priority Priority (INDEX_PRIORITY_xx constant)
      */
-    public static function request_index(\context $context, $areaid = '') {
+    public static function request_index(\context $context, $areaid = '',
+            $priority = self::INDEX_PRIORITY_NORMAL) {
         global $DB;
 
         // Check through existing requests for this context or any parent context.
         list ($contextsql, $contextparams) = $DB->get_in_or_equal(
                 $context->get_parent_context_ids(true));
         $existing = $DB->get_records_select('search_index_requests',
-                'contextid ' . $contextsql, $contextparams, '', 'id, searcharea, partialarea');
+                'contextid ' . $contextsql, $contextparams, '',
+                'id, searcharea, partialarea, indexpriority');
         foreach ($existing as $rec) {
             // If we haven't started processing the existing request yet, and it covers the same
             // area (or all areas) then that will be sufficient so don't add anything else.
             if ($rec->partialarea === '' && ($rec->searcharea === $areaid || $rec->searcharea === '')) {
-                return;
+                // If the existing request has the same (or higher) priority, no need to add anything.
+                if ($rec->indexpriority >= $priority) {
+                    return;
+                }
+                // The existing request has lower priority. If it is exactly the same, then just
+                // adjust the priority of the existing request.
+                if ($rec->searcharea === $areaid) {
+                    $DB->set_field('search_index_requests', 'indexpriority', $priority,
+                            ['id' => $rec->id]);
+                    return;
+                }
+                // The existing request would cover this area but is a lower priority. We need to
+                // add the new request even though that means we will index part of it twice.
             }
         }
 
         // No suitable existing request, so add a new one.
         $newrecord = [ 'contextid' => $context->id, 'searcharea' => $areaid,
-                'timerequested' => time(), 'partialarea' => '', 'partialtime' => 0 ];
+                'timerequested' => (int)self::get_current_time(),
+                'partialarea' => '', 'partialtime' => 0,
+                'indexpriority' => $priority ];
         $DB->insert_record('search_index_requests', $newrecord);
     }
 
     /**
-     * Processes outstanding index requests. This will take the first item from the queue and
-     * process it, continuing until an optional time limit is reached.
+     * Processes outstanding index requests. This will take the first item from the queue (taking
+     * account the indexing priority) and process it, continuing until an optional time limit is
+     * reached.
      *
      * If there are no index requests, the function will do nothing.
      *
@@ -1186,7 +1272,6 @@ class manager {
             $progress = new \null_progress_trace();
         }
 
-        $complete = false;
         $before = self::get_current_time();
         if ($timelimit) {
             $stopat = $before + $timelimit;
@@ -1194,11 +1279,10 @@ class manager {
         while (true) {
             // Retrieve first request, using fully defined ordering.
             $requests = $DB->get_records('search_index_requests', null,
-                    'timerequested, contextid, searcharea',
+                    'indexpriority DESC, timerequested, contextid, searcharea',
                     'id, contextid, searcharea, partialarea, partialtime', 0, 1);
             if (!$requests) {
                 // If there are no more requests, stop.
-                $complete = true;
                 break;
             }
             $request = reset($requests);
@@ -1208,6 +1292,12 @@ class manager {
             $beforeindex = self::get_current_time();
             if ($timelimit) {
                 $remainingtime = $stopat - $beforeindex;
+
+                // If the time limit expired already, stop now. (Otherwise we might accidentally
+                // index with no time limit or a negative time limit.)
+                if ($remainingtime <= 0) {
+                    break;
+                }
             }
 
             // Show a message before each request, indicating what will be indexed.
@@ -1241,6 +1331,52 @@ class manager {
                 break;
             }
         }
+    }
+
+    /**
+     * Gets information about the request queue, in the form of a plain object suitable for passing
+     * to a template for rendering.
+     *
+     * @return \stdClass Information about queued index requests
+     */
+    public function get_index_requests_info() {
+        global $DB;
+
+        $result = new \stdClass();
+
+        $result->total = $DB->count_records('search_index_requests');
+        $result->topten = $DB->get_records('search_index_requests', null,
+                'indexpriority DESC, timerequested, contextid, searcharea',
+                'id, contextid, timerequested, searcharea, partialarea, partialtime, indexpriority',
+                0, 10);
+        foreach ($result->topten as $item) {
+            $context = \context::instance_by_id($item->contextid);
+            $item->contextlink = \html_writer::link($context->get_url(),
+                    s($context->get_context_name()));
+            if ($item->searcharea) {
+                $item->areaname = $this->get_search_area($item->searcharea)->get_visible_name();
+            }
+            if ($item->partialarea) {
+                $item->partialareaname = $this->get_search_area($item->partialarea)->get_visible_name();
+            }
+            switch ($item->indexpriority) {
+                case self::INDEX_PRIORITY_REINDEXING :
+                    $item->priorityname = get_string('priority_reindexing', 'search');
+                    break;
+                case self::INDEX_PRIORITY_NORMAL :
+                    $item->priorityname = get_string('priority_normal', 'search');
+                    break;
+            }
+        }
+
+        // Normalise array indices.
+        $result->topten = array_values($result->topten);
+
+        if ($result->total > 10) {
+            $result->ellipsis = true;
+        }
+
+        return $result;
     }
 
     /**

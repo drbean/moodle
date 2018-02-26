@@ -4795,8 +4795,9 @@ h3.sectionname .inplaceeditable.inplaceeditingon .editinstructions {
   transform: translate(-50%, -50%);
 }
 .overlay-icon-container .loading-icon .icon {
-  height: 40px;
-  width: 40px;
+  height: 30px;
+  width: 30px;
+  font-size: 30px;
 }
 [data-drag-type="move"] {
   cursor: move;
@@ -9684,6 +9685,9 @@ body.path-question-type .mform fieldset.hidden {
   padding: 0;
   margin: 0.7em 0 0;
 }
+.tag-condition-container {
+  position: relative;
+}
 /* user.less */
 .userprofile .fullprofilelink {
   text-align: center;
@@ -10045,6 +10049,13 @@ body.path-question-type .mform fieldset.hidden {
 }
 .search-areas-actions > div {
   display: inline-block;
+}
+#core-search-areas .lastcol li {
+  margin-left: 24px;
+  text-indent: -24px;
+}
+#core-search-areas .lastcol li > i {
+  text-indent: 0;
 }
 .popover-region {
   float: right;
@@ -17888,6 +17899,15 @@ div#dock {
 .userloggedinas .usermenu .userbutton .avatars .avatar img {
   width: inherit;
   height: inherit;
+}
+#page-mod-quiz-edit ul.slots li.section li.activity .instancemaxmarkcontainer form input {
+  margin: 0;
+  padding: 0.2em;
+  height: 1em;
+}
+#mod_quiz_preflight_form .femptylabel .felement {
+  margin: 0;
+  padding: 0;
 }
 .path-mod-quiz #mod_quiz_navblock .qnbutton {
   text-decoration: none;
