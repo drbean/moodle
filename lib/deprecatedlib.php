@@ -839,32 +839,10 @@ function print_container_end($return=false) {
 }
 
 /**
- * Print a bold message in an optional color.
- *
  * @deprecated since Moodle 2.0 MDL-19077 - use $OUTPUT->notification instead.
- * @todo MDL-50469 This will be deleted in Moodle 3.3.
- * @param string $message The message to print out
- * @param string $classes Optional style to display message text in
- * @param string $align Alignment option
- * @param bool $return whether to return an output string or echo now
- * @return string|bool Depending on $result
  */
-function notify($message, $classes = 'error', $align = 'center', $return = false) {
-    global $OUTPUT;
-
-    debugging('notify() is deprecated, please use $OUTPUT->notification() instead', DEBUG_DEVELOPER);
-
-    if ($classes == 'green') {
-        debugging('Use of deprecated class name "green" in notify. Please change to "success".', DEBUG_DEVELOPER);
-        $classes = 'success'; // Backward compatible with old color system.
-    }
-
-    $output = $OUTPUT->notification($message, $classes);
-    if ($return) {
-        return $output;
-    } else {
-        echo $output;
-    }
+function notify() {
+    throw new coding_exception('notify() is removed, please use $OUTPUT->notification() instead');
 }
 
 /**
@@ -6510,4 +6488,91 @@ function calendar_get_upcoming($courses, $groups, $users, $daysinfuture, $maxeve
     }
 
     return $output;
+}
+
+/**
+ * Creates a record in the role_allow_override table
+ *
+ * @param int $sroleid source roleid
+ * @param int $troleid target roleid
+ * @return void
+ * @deprecated since Moodle 3.4. MDL-50666
+ */
+function allow_override($sroleid, $troleid) {
+    debugging('allow_override() has been deprecated. Please update your code to use core_role_set_override_allowed.',
+            DEBUG_DEVELOPER);
+
+    core_role_set_override_allowed($sroleid, $troleid);
+}
+
+/**
+ * Creates a record in the role_allow_assign table
+ *
+ * @param int $fromroleid source roleid
+ * @param int $targetroleid target roleid
+ * @return void
+ * @deprecated since Moodle 3.4. MDL-50666
+ */
+function allow_assign($fromroleid, $targetroleid) {
+    debugging('allow_assign() has been deprecated. Please update your code to use core_role_set_assign_allowed.',
+            DEBUG_DEVELOPER);
+
+    core_role_set_assign_allowed($fromroleid, $targetroleid);
+}
+
+/**
+ * Creates a record in the role_allow_switch table
+ *
+ * @param int $fromroleid source roleid
+ * @param int $targetroleid target roleid
+ * @return void
+ * @deprecated since Moodle 3.4. MDL-50666
+ */
+function allow_switch($fromroleid, $targetroleid) {
+    debugging('allow_switch() has been deprecated. Please update your code to use core_role_set_switch_allowed.',
+            DEBUG_DEVELOPER);
+
+    core_role_set_switch_allowed($fromroleid, $targetroleid);
+}
+
+/**
+ * Organise categories into a single parent category (called the 'Top' category) per context.
+ *
+ * @param array $categories List of question categories in the format of ["$categoryid,$contextid" => $category].
+ * @param array $pcontexts List of context ids.
+ * @return array
+ * @deprecated since Moodle 3.5. MDL-61132
+ */
+function question_add_tops($categories, $pcontexts) {
+    debugging('question_add_tops() has been deprecated. You may want to pass $top = true to get_categories_for_contexts().',
+            DEBUG_DEVELOPER);
+
+    $topcats = array();
+    foreach ($pcontexts as $context) {
+        $topcat = question_get_top_category($context, true);
+
+        $newcat = new stdClass();
+        $newcat->id = "{$topcat->id},$context";
+        $newcat->name = get_string('top');
+        $newcat->parent = 0;
+        $newcat->contextid = $context;
+        $topcats["{$topcat->id},$context"] = $newcat;
+    }
+    // Put topcats in at beginning of array - they'll be sorted into different contexts later.
+    return array_merge($topcats, $categories);
+}
+
+/**
+ * Checks if the question category is the highest-level category in the context that can be edited, and has no siblings.
+ *
+ * @param int $categoryid a category id.
+ * @return bool
+ * @deprecated since Moodle 3.5. MDL-61132
+ */
+function question_is_only_toplevel_category_in_context($categoryid) {
+    debugging('question_is_only_toplevel_category_in_context() has been deprecated. '
+            . 'Please update your code to use question_is_only_child_of_top_category_in_context() instead.',
+            DEBUG_DEVELOPER);
+
+    return question_is_only_child_of_top_category_in_context($categoryid);
 }
