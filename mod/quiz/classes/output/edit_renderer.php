@@ -657,18 +657,16 @@ class edit_renderer extends \plugin_renderer_base {
         $attributes = array_merge(array('data-header' => $title, 'data-addonpage' => $page), $attributes);
         $actions['addarandomquestion'] = new \action_menu_link_secondary($url, $icon, $str->addarandomquestion, $attributes);
 
-	// Was in HEAD
-        //// Call question bank.
-        //$icon = new \pix_icon('t/add', $str->questionbank, 'moodle', array('class' => 'iconsmall', 'title' => ''));
-        //if ($page) {
-        //    $title = get_string('addquestionfrombanktopage', 'quiz', $page);
-        //} else {
-        //    $title = get_string('addquestionfrombankatend', 'quiz');
-        //}
-        //$attributes = array('class' => 'cm-edit-action questionbank',
-        //        'data-header' => $title, 'data-action' => 'questionbank', 'data-addonpage' => $page);
-        //$actions['questionbank'] = new \action_menu_link_secondary($pageurl, $icon, $str->questionbank, $attributes);
-	// HEAD to here
+        // Call question bank.
+        $icon = new \pix_icon('t/add', $str->questionbank, 'moodle', array('class' => 'iconsmall', 'title' => ''));
+        if ($page) {
+            $title = get_string('addquestionfrombanktopage', 'quiz', $page);
+        } else {
+            $title = get_string('addquestionfrombankatend', 'quiz');
+        }
+        $attributes = array('class' => 'cm-edit-action questionbank',
+                'data-header' => $title, 'data-action' => 'questionbank', 'data-addonpage' => $page);
+        $actions['questionbank'] = new \action_menu_link_secondary($pageurl, $icon, $str->questionbank, $attributes);
 
         // Add a new section to the add_menu if possible. This is always added to the HTML
         // then hidden with CSS when no needed, so that as things are re-ordered, etc. with
