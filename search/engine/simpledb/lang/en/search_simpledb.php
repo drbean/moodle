@@ -15,22 +15,13 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Event observers definition.
+ * Strings for component 'search_simpledb'.
  *
- * @package message_popup
- * @category event
- * @copyright 2016 Ryan Wyllie <ryan@moodle.com>
- * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @package   search_simpledb
+ * @copyright 2016 David Monllao {@link http://www.davidmonllao.com}
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
-$observers = array(
-
-    // Message viewed.
-    array(
-        'eventname' => '\core\event\message_viewed',
-        'callback' => 'message_output_popup::message_viewed',
-        'includefile' => '/message/output/popup/message_output_popup.php'
-    )
-);
+$string['pluginname'] = 'Simple search';
+$string['searchinfo'] = 'Search queries';
+$string['searchinfo_help'] = 'Enter the search query.';
