@@ -30,7 +30,7 @@ $string['assignrole'] = 'Assign role';
 $string['assignroles'] = 'Assign roles';
 $string['browseusers'] = 'Browse users';
 $string['browsecohorts'] = 'Browse cohorts';
-$string['confirmbulkdeleteenrolment'] = 'Are you sure you want to delete these users enrolments?';
+$string['confirmbulkdeleteenrolment'] = 'Are you sure you want to delete these user enrolments?';
 $string['defaultstart'] = 'Default enrolment start';
 $string['defaultperiod'] = 'Default enrolment duration';
 $string['defaultperiod_desc'] = 'Default length of time that the enrolment is valid. If set to zero, the enrolment duration will be unlimited by default.';
@@ -82,3 +82,4 @@ $string['wscannotenrol'] = 'Plugin instance cannot manually enrol a user in the 
 $string['wsnoinstance'] = 'Manual enrolment plugin instance doesn\'t exist or is disabled for the course (id = {$a->courseid})';
 $string['wsusercannotassign'] = 'You don\'t have the permission to assign this role ({$a->roleid}) to this user ({$a->userid}) in this course({$a->courseid}).';
 $string['manualpluginnotinstalled'] = 'The "Manual" plugin has not yet been installed';
+$string['privacy:metadata'] = 'The Manual enrolments plugin does not store any personal data.';

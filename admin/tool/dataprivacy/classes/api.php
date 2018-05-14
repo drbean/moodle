@@ -220,6 +220,7 @@ class api {
     public static function get_data_requests($userid = 0) {
         global $USER;
         $results = [];
+        $sort = 'status ASC, timemodified ASC';
         if ($userid) {
             // Get the data requests for the user or data requests made by the user.
             $select = "userid = :userid OR requestedby = :requestedby";
@@ -227,11 +228,11 @@ class api {
                 'userid' => $userid,
                 'requestedby' => $userid
             ];
-            $results = data_request::get_records_select($select, $params, 'status DESC, timemodified DESC');
+            $results = data_request::get_records_select($select, $params, $sort);
         } else {
             // If the current user is one of the site's Data Protection Officers, then fetch all data requests.
             if (self::is_site_dpo($USER->id)) {
-                $results = data_request::get_records(null, 'status DESC, timemodified DESC', '');
+                $results = data_request::get_records(null, $sort, '');
             }
         }
 
@@ -476,6 +477,10 @@ class api {
      */
     public static function update_purpose(stdClass $record) {
         self::check_can_manage_data_registry();
+
+        if (!isset($record->sensitivedatareasons)) {
+            $record->sensitivedatareasons = '';
+        }
 
         $purpose = new purpose($record->id);
         $purpose->from_record($record);
@@ -764,6 +769,7 @@ class api {
      * @param int $status the status to set the contexts to.
      */
     public static function add_request_contexts_with_status(contextlist_collection $clcollection, int $requestid, int $status) {
+        $request = new data_request($requestid);
         foreach ($clcollection as $contextlist) {
             // Convert the \core_privacy\local\request\contextlist into a contextlist persistent and store it.
             $clp = \tool_dataprivacy\contextlist::from_contextlist($contextlist);
@@ -772,6 +778,12 @@ class api {
 
             // Store the associated contexts in the contextlist.
             foreach ($contextlist->get_contextids() as $contextid) {
+                if ($request->get('type') == static::DATAREQUEST_TYPE_DELETE) {
+                    $context = \context::instance_by_id($contextid);
+                    if (($purpose = static::get_effective_context_purpose($context)) && !empty($purpose->get('protected'))) {
+                        continue;
+                    }
+                }
                 $context = new contextlist_context();
                 $context->set('contextid', $contextid)
                     ->set('contextlistid', $contextlistid)
@@ -868,6 +880,7 @@ class api {
                 }
                 $contexts = [];
             }
+
             $contexts[] = $record->contextid;
             $lastcomponent = $record->component;
         }
