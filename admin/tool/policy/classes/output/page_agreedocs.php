@@ -29,6 +29,7 @@ defined('MOODLE_INTERNAL') || die();
 
 use context_system;
 use core\output\notification;
+use core\session\manager;
 use core_user;
 use html_writer;
 use moodle_url;
@@ -77,21 +78,19 @@ class page_agreedocs implements renderable, templatable {
      */
     public function __construct($agreedocs = null, $behalfid = 0, $action = null) {
         global $USER;
+        $realuser = manager::get_realuser();
 
         $this->agreedocs = $agreedocs;
         if (empty($this->agreedocs)) {
             $this->agreedocs = [];
         }
 
-        $this->behalfid = $behalfid;
         $this->action = $action;
 
-        if (!empty($this->behalfid) && $USER->id != $this->behalfid) {
-            $this->behalfuser = core_user::get_user($this->behalfid, '*');
-            // If behalf user doesn't exist, behalfid parameter will be ignored.
-            if ($this->behalfuser === false) {
-                $this->behalfid = 0;
-            }
+        $behalfid = $behalfid ?: $USER->id;
+        if ($realuser->id != $behalfid) {
+            $this->behalfuser = core_user::get_user($behalfid, '*', MUST_EXIST);
+            $this->behalfid = $this->behalfuser->id;
         }
 
         $this->policies = api::list_current_versions(policy_version::AUDIENCE_LOGGEDIN);
@@ -238,13 +237,13 @@ class page_agreedocs implements renderable, templatable {
      * Redirect to $SESSION->wantsurl if defined or to $CFG->wwwroot if not.
      */
     protected function redirect_to_previous_url() {
-        global $SESSION, $CFG;
+        global $SESSION;
 
         if (!empty($SESSION->wantsurl)) {
             $returnurl = $SESSION->wantsurl;
             unset($SESSION->wantsurl);
         } else {
-            $returnurl = $CFG->wwwroot.'/';
+            $returnurl = (new moodle_url('/admin/tool/policy/user.php'))->out();
         }
 
         redirect($returnurl);
@@ -267,12 +266,7 @@ class page_agreedocs implements renderable, templatable {
         // Check for correct user capabilities.
         if (!empty($USER->id)) {
             // For existing users, it's needed to check if they have the capability for accepting policies.
-            if (empty($this->behalfid) || $this->behalfid == $USER->id) {
-                require_capability('tool/policy:accept', context_system::instance());
-            } else {
-                $usercontext = \context_user::instance($this->behalfid);
-                require_capability('tool/policy:acceptbehalf', $usercontext);
-            }
+            api::can_accept_policies($this->behalfid, true);
         } else {
             // For new users, the behalfid parameter is ignored.
             if ($this->behalfid != $USER->id) {
@@ -284,7 +278,9 @@ class page_agreedocs implements renderable, templatable {
         // and $SESSION->wantsurl is defined, redirect to the return page.
         $hasagreedsignupuser = empty($USER->id) && $this->signupuserpolicyagreed;
         $hasagreedloggeduser = $USER->id == $userid && !empty($USER->policyagreed);
-        if (!is_siteadmin() && ($hasagreedsignupuser || ($hasagreedloggeduser && !empty($SESSION->wantsurl)))) {
+        $canrevoke = api::can_revoke_policies($USER->id);
+        if (!is_siteadmin() && ($hasagreedsignupuser ||
+            ($hasagreedloggeduser && !$canrevoke))) {
             $this->redirect_to_previous_url();
         }
 
