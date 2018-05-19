@@ -65,6 +65,8 @@ define([
         this.eventId = null;
         this.startTime = null;
         this.courseId = null;
+        this.categoryId = null;
+        this.contextId = null;
         this.reloadingBody = false;
         this.reloadingTitle = false;
         this.saveButton = this.getFooter().find(SELECTORS.SAVE_BUTTON);
@@ -73,6 +75,26 @@ define([
     ModalEventForm.TYPE = 'core_calendar-modal_event_form';
     ModalEventForm.prototype = Object.create(Modal.prototype);
     ModalEventForm.prototype.constructor = ModalEventForm;
+
+    /**
+     * Set the context id to the given value.
+     *
+     * @method setContextId
+     * @param {Number} id The event id
+     */
+    ModalEventForm.prototype.setContextId = function(id) {
+        this.contextId = id;
+    };
+
+    /**
+     * Retrieve the current context id, if any.
+     *
+     * @method getContextId
+     * @return {Number|null} The event id
+     */
+    ModalEventForm.prototype.getContextId = function() {
+        return this.contextId;
+    };
 
     /**
      * Set the course id to the given value.
@@ -95,6 +117,26 @@ define([
     };
 
     /**
+     * Set the category id to the given value.
+     *
+     * @method setCategoryId
+     * @param {int} id The event id
+     */
+    ModalEventForm.prototype.setCategoryId = function(id) {
+        this.categoryId = id;
+    };
+
+    /**
+     * Retrieve the current category id, if any.
+     *
+     * @method getCategoryId
+     * @return {int|null} The event id
+     */
+    ModalEventForm.prototype.getCategoryId = function() {
+        return this.categoryId;
+    };
+
+    /**
      * Check if the modal has an course id.
      *
      * @method hasCourseId
@@ -102,6 +144,16 @@ define([
      */
     ModalEventForm.prototype.hasCourseId = function() {
         return this.courseId !== null;
+    };
+
+    /**
+     * Check if the modal has an category id.
+     *
+     * @method hasCategoryId
+     * @return {bool}
+     */
+    ModalEventForm.prototype.hasCategoryId = function() {
+        return this.categoryId !== null;
     };
 
     /**
@@ -220,7 +272,8 @@ define([
         .always(function() {
             this.reloadingTitle = false;
             return;
-        }.bind(this));
+        }.bind(this))
+        .fail(Notification.exception);
 
         return this.titlePromise;
     };
@@ -246,7 +299,6 @@ define([
         this.reloadingBody = true;
         this.disableButtons();
 
-        var contextId = this.saveButton.attr('data-context-id');
         var args = {};
 
         if (this.hasEventId()) {
@@ -261,11 +313,15 @@ define([
             args.courseid = this.getCourseId();
         }
 
+        if (this.hasCategoryId()) {
+            args.categoryid = this.getCategoryId();
+        }
+
         if (typeof formData !== 'undefined') {
             args.formdata = formData;
         }
 
-        this.bodyPromise = Fragment.loadFragment('calendar', 'event_form', contextId, args);
+        this.bodyPromise = Fragment.loadFragment('calendar', 'event_form', this.getContextId(), args);
 
         this.setBody(this.bodyPromise);
 
@@ -273,11 +329,12 @@ define([
             this.enableButtons();
             return;
         }.bind(this))
-        .catch(Notification.exception)
+        .fail(Notification.exception)
         .always(function() {
             this.reloadingBody = false;
             return;
-        }.bind(this));
+        }.bind(this))
+        .fail(Notification.exception);
 
         return this.bodyPromise;
     };
@@ -321,6 +378,8 @@ define([
         Modal.prototype.hide.call(this);
         this.setEventId(null);
         this.setStartTime(null);
+        this.setCourseId(null);
+        this.setCategoryId(null);
     };
 
     /**
@@ -361,14 +420,18 @@ define([
                     // If there was a server side validation error then
                     // we need to re-request the rendered form from the server
                     // in order to display the error for the user.
-                    return this.reloadBodyContent(formData);
+                    this.reloadBodyContent(formData);
+                    return;
                 } else {
+                    // Check whether this was a new event or not.
+                    // The hide function unsets the form data so grab this before the hide.
+                    var isExisting = this.hasEventId();
+
                     // No problemo! Our work here is done.
                     this.hide();
 
-                    // Trigger the appropriate calendar event so that the view can
-                    // be updated.
-                    if (this.hasEventId()) {
+                    // Trigger the appropriate calendar event so that the view can be updated.
+                    if (isExisting) {
                         $('body').trigger(CalendarEvents.updated, [response.event]);
                     } else {
                         $('body').trigger(CalendarEvents.created, [response.event]);
@@ -382,8 +445,10 @@ define([
                 // the loading icon and re-enable the buttons.
                 loadingContainer.addClass('hidden');
                 this.enableButtons();
+
+                return;
             }.bind(this))
-            .catch(Notification.exception);
+            .fail(Notification.exception);
     };
 
     /**

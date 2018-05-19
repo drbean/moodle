@@ -115,8 +115,8 @@ define('PARAM_CAPABILITY',   'capability');
 
 /**
  * PARAM_CLEANHTML - cleans submitted HTML code. Note that you almost never want
- * to use this. The normal mode of operation is to use PARAM_RAW when recieving
- * the input (required/optional_param or formslib) and then sanitse the HTML
+ * to use this. The normal mode of operation is to use PARAM_RAW when receiving
+ * the input (required/optional_param or formslib) and then sanitise the HTML
  * using format_text on output. This is for the rare cases when you want to
  * sanitise the HTML on input. This cleaning may also fix xhtml strictness.
  */
@@ -438,6 +438,11 @@ define('FEATURE_SHOW_DESCRIPTION', 'showdescription');
 
 /** True if module uses the question bank */
 define('FEATURE_USES_QUESTIONS', 'usesquestions');
+
+/**
+ * Maximum filename char size
+ */
+define('MAX_FILENAME_SIZE', 100);
 
 /** Unspecified module archetype */
 define('MOD_ARCHETYPE_OTHER', 0);
@@ -1034,10 +1039,11 @@ function clean_param($param, $type) {
             }
             return $param;
 
-        case PARAM_URL:          // Allow safe ftp, http, mailto urls.
+        case PARAM_URL:
+            // Allow safe urls.
             $param = fix_utf8($param);
             include_once($CFG->dirroot . '/lib/validateurlsyntax.php');
-            if (!empty($param) && validateUrlSyntax($param, 's?H?S?F?E?u-P-a?I?p?f?q?r?')) {
+            if (!empty($param) && validateUrlSyntax($param, 's?H?S?F?E-u-P-a?I?p?f?q?r?')) {
                 // All is ok, param is respected.
             } else {
                 // Not really ok.
@@ -1050,19 +1056,12 @@ function clean_param($param, $type) {
             $param = clean_param($param, PARAM_URL);
             if (!empty($param)) {
 
-                // Simulate the HTTPS version of the site.
-                $httpswwwroot = str_replace('http://', 'https://', $CFG->wwwroot);
-
                 if ($param === $CFG->wwwroot) {
-                    // Exact match;
-                } else if (!empty($CFG->loginhttps) && $param === $httpswwwroot) {
                     // Exact match;
                 } else if (preg_match(':^/:', $param)) {
                     // Root-relative, ok!
                 } else if (preg_match('/^' . preg_quote($CFG->wwwroot . '/', '/') . '/i', $param)) {
                     // Absolute, and matches our wwwroot.
-                } else if (!empty($CFG->loginhttps) && preg_match('/^' . preg_quote($httpswwwroot . '/', '/') . '/i', $param)) {
-                    // Absolute, and matches our httpswwwroot.
                 } else {
                     // Relative - let's make sure there are no tricks.
                     if (validateUrlSyntax('/' . $param, 's-u-P-a-p-f+q?r?')) {
@@ -2117,7 +2116,7 @@ function make_timestamp($year, $month=1, $day=1, $hour=0, $minute=0, $second=0, 
  * Format a date/time (seconds) as weeks, days, hours etc as needed
  *
  * Given an amount of time in seconds, returns string
- * formatted nicely as weeks, days, hours etc as needed
+ * formatted nicely as years, days, hours etc as needed
  *
  * @package core
  * @category time
@@ -2358,8 +2357,10 @@ function get_user_timezone($tz = 99) {
     $tz = 99;
 
     // Loop while $tz is, empty but not zero, or 99, and there is another timezone is the array.
-    while (((empty($tz) && !is_numeric($tz)) || $tz == 99) && $next = each($timezones)) {
-        $tz = $next['value'];
+    foreach ($timezones as $nextvalue) {
+        if ((empty($tz) && !is_numeric($tz)) || $tz == 99) {
+            $tz = $nextvalue;
+        }
     }
     return is_numeric($tz) ? (float) $tz : $tz;
 }
@@ -2488,13 +2489,7 @@ function dayofweek($day, $month, $year) {
 function get_login_url() {
     global $CFG;
 
-    $url = "$CFG->wwwroot/login/index.php";
-
-    if (!empty($CFG->loginhttps)) {
-        $url = str_replace('http:', 'https:', $url);
-    }
-
-    return $url;
+    return "$CFG->wwwroot/login/index.php";
 }
 
 /**
@@ -2659,12 +2654,7 @@ function require_login($courseorid = null, $autologinguest = true, $cm = null, $
                 redirect($changeurl);
             } else {
                 // Use moodle internal method.
-                if (empty($CFG->loginhttps)) {
-                    redirect($CFG->wwwroot .'/login/change_password.php');
-                } else {
-                    $wwwroot = str_replace('http:', 'https:', $CFG->wwwroot);
-                    redirect($wwwroot .'/login/change_password.php');
-                }
+                redirect($CFG->wwwroot .'/login/change_password.php');
             }
         } else if ($userauth->can_change_password()) {
             throw new moodle_exception('forcepasswordchangenotice');
@@ -2710,24 +2700,24 @@ function require_login($courseorid = null, $autologinguest = true, $cm = null, $
         return;
     }
 
+    // Scripts have a chance to declare that $USER->policyagreed should not be checked.
+    // This is mostly for places where users are actually accepting the policies, to avoid the redirect loop.
+    if (!defined('NO_SITEPOLICY_CHECK')) {
+        define('NO_SITEPOLICY_CHECK', false);
+    }
+
     // Check that the user has agreed to a site policy if there is one - do not test in case of admins.
-    if (!$USER->policyagreed and !is_siteadmin()) {
-        if (!empty($CFG->sitepolicy) and !isguestuser()) {
+    // Do not test if the script explicitly asked for skipping the site policies check.
+    if (!$USER->policyagreed && !is_siteadmin() && !NO_SITEPOLICY_CHECK) {
+        $manager = new \core_privacy\local\sitepolicy\manager();
+        if ($policyurl = $manager->get_redirect_url(isguestuser())) {
             if ($preventredirect) {
-                throw new moodle_exception('sitepolicynotagreed', 'error', '', $CFG->sitepolicy);
+                throw new moodle_exception('sitepolicynotagreed', 'error', '', $policyurl->out());
             }
             if ($setwantsurltome) {
                 $SESSION->wantsurl = qualified_me();
             }
-            redirect($CFG->wwwroot .'/user/policy.php');
-        } else if (!empty($CFG->sitepolicyguest) and isguestuser()) {
-            if ($preventredirect) {
-                throw new moodle_exception('sitepolicynotagreed', 'error', '', $CFG->sitepolicyguest);
-            }
-            if ($setwantsurltome) {
-                $SESSION->wantsurl = qualified_me();
-            }
-            redirect($CFG->wwwroot .'/user/policy.php');
+            redirect($policyurl);
         }
     }
 
@@ -3013,6 +3003,10 @@ function require_course_login($courseorid, $autologinguest = true, $cm = null, $
 
     } else if ($issite && !empty($cm) and !$cm->uservisible) {
         // Always login for hidden activities.
+        require_login($courseorid, $autologinguest, $cm, $setwantsurltome, $preventredirect);
+
+    } else if (isloggedin() && !isguestuser()) {
+        // User is already logged in. Make sure the login is complete (user is fully setup, policies agreed).
         require_login($courseorid, $autologinguest, $cm, $setwantsurltome, $preventredirect);
 
     } else if ($issite) {
@@ -3682,6 +3676,9 @@ function get_user_field_name($field) {
         case 'msn' : {
             return get_string('msnid');
         }
+        case 'picture' : {
+            return get_string('pictureofuser');
+        }
     }
     // Otherwise just use the same lang string.
     return get_string($field);
@@ -3932,11 +3929,11 @@ function update_user_record_by_id($id) {
                 // Unknown or must not be changed.
                 continue;
             }
-            $confval = $userauth->config->{'field_updatelocal_' . $key};
-            $lockval = $userauth->config->{'field_lock_' . $key};
-            if (empty($confval) || empty($lockval)) {
+            if (empty($userauth->config->{'field_updatelocal_' . $key}) || empty($userauth->config->{'field_lock_' . $key})) {
                 continue;
             }
+            $confval = $userauth->config->{'field_updatelocal_' . $key};
+            $lockval = $userauth->config->{'field_lock_' . $key};
             if ($confval === 'onlogin') {
                 // MDL-4207 Don't overwrite modified user profile values with
                 // empty LDAP values when 'unlocked if empty' is set. The purpose
@@ -4062,9 +4059,6 @@ function delete_user(stdClass $user) {
 
     // Delete all grades - backup is kept in grade_grades_history table.
     grade_user_delete($user->id);
-
-    // Move unread messages from this user to read.
-    message_move_userfrom_unread2read($user->id);
 
     // TODO: remove from cohorts using standard API here.
 
@@ -4415,7 +4409,7 @@ function authenticate_user_login($username, $password, $ignorelockout=false, &$f
  * @return stdClass A {@link $USER} object - BC only, do not use
  */
 function complete_user_login($user) {
-    global $CFG, $USER, $SESSION;
+    global $CFG, $DB, $USER, $SESSION;
 
     \core\session\manager::login_user($user);
 
@@ -4439,6 +4433,16 @@ function complete_user_login($user) {
     );
     $event->trigger();
 
+    // Queue migrating the messaging data, if we need to.
+    if (!get_user_preferences('core_message_migrate_data', false, $USER->id)) {
+        // Check if there are any legacy messages to migrate.
+        if (\core_message\helper::legacy_messages_exist($USER->id)) {
+            \core_message\task\migrate_message_data::queue_task($USER->id);
+        } else {
+            set_user_preference('core_message_migrate_data', true, $USER->id);
+        }
+    }
+
     if (isguestuser()) {
         // No need to continue when user is THE guest.
         return $USER;
@@ -4460,7 +4464,7 @@ function complete_user_login($user) {
             } else {
                 require_once($CFG->dirroot . '/login/lib.php');
                 $SESSION->wantsurl = core_login_get_return_url();
-                redirect($CFG->httpswwwroot.'/login/change_password.php');
+                redirect($CFG->wwwroot.'/login/change_password.php');
             }
         } else {
             print_error('nopasswordchangeforced', 'auth');
@@ -4701,6 +4705,14 @@ function get_complete_user_data($field, $value, $mnethostid = null) {
                 }
                 $user->groupmember[$group->courseid][$group->id] = $group->id;
             }
+        }
+    }
+
+    // Add cohort theme.
+    if (!empty($CFG->allowcohortthemes)) {
+        require_once($CFG->dirroot . '/cohort/lib.php');
+        if ($cohorttheme = cohort_get_user_cohort_theme($user->id)) {
+            $user->cohorttheme = $cohorttheme;
         }
     }
 
@@ -5578,7 +5590,7 @@ function get_mailer($action='get') {
             // Use SMTP directly.
             $mailer->isSMTP();
             if (!empty($CFG->debugsmtp)) {
-                $mailer->SMTPDebug = true;
+                $mailer->SMTPDebug = 3;
             }
             // Specify main and backup servers.
             $mailer->Host          = $CFG->smtphosts;
@@ -6175,7 +6187,7 @@ function reset_password_and_mail($user) {
     $a->sitename    = format_string($site->fullname);
     $a->username    = $user->username;
     $a->newpassword = $newpassword;
-    $a->link        = $CFG->httpswwwroot .'/login/change_password.php';
+    $a->link        = $CFG->wwwroot .'/login/change_password.php';
     $a->signoff     = generate_email_signoff();
 
     $message = get_string('newpasswordtext', '', $a);
@@ -6256,7 +6268,7 @@ function send_password_change_confirmation_email($user, $resetrecord) {
     $data->lastname  = $user->lastname;
     $data->username  = $user->username;
     $data->sitename  = format_string($site->fullname);
-    $data->link      = $CFG->httpswwwroot .'/login/forgot_password.php?token='. $resetrecord->token;
+    $data->link      = $CFG->wwwroot .'/login/forgot_password.php?token='. $resetrecord->token;
     $data->admin     = generate_email_signoff();
     $data->resetminutes = $pwresetmins;
 
@@ -6284,6 +6296,7 @@ function send_password_change_info($user) {
     $data = new stdClass();
     $data->firstname = $user->firstname;
     $data->lastname  = $user->lastname;
+    $data->username  = $user->username;
     $data->sitename  = format_string($site->fullname);
     $data->admin     = generate_email_signoff();
 
@@ -6806,7 +6819,6 @@ function display_size($size) {
 function clean_filename($string) {
     return clean_param($string, PARAM_FILE);
 }
-
 
 // STRING TRANSLATION.
 
@@ -7496,13 +7508,22 @@ function get_plugins_with_function($function, $file = 'lib.php', $include = true
     $key = $function . '_' . clean_param($file, PARAM_ALPHA);
     $pluginfunctions = $cache->get($key);
 
+    // Use the plugin manager to check that plugins are currently installed.
+    $pluginmanager = \core_plugin_manager::instance();
+
     if ($pluginfunctions !== false) {
 
         // Checking that the files are still available.
         foreach ($pluginfunctions as $plugintype => $plugins) {
 
             $allplugins = \core_component::get_plugin_list($plugintype);
-            foreach ($plugins as $plugin => $fullpath) {
+            $installedplugins = $pluginmanager->get_installed_plugins($plugintype);
+            foreach ($plugins as $plugin => $function) {
+                if (!isset($installedplugins[$plugin])) {
+                    // Plugin code is still present on disk but it is not installed.
+                    unset($pluginfunctions[$plugintype][$plugin]);
+                    continue;
+                }
 
                 // Cache might be out of sync with the codebase, skip the plugin if it is not available.
                 if (empty($allplugins[$plugin])) {
@@ -7531,7 +7552,12 @@ function get_plugins_with_function($function, $file = 'lib.php', $include = true
 
         // We need to include files here.
         $pluginswithfile = \core_component::get_plugin_list_with_file($plugintype, $file, true);
+        $installedplugins = $pluginmanager->get_installed_plugins($plugintype);
         foreach ($pluginswithfile as $plugin => $notused) {
+
+            if (!isset($installedplugins[$plugin])) {
+                continue;
+            }
 
             $fullfunction = $plugintype . '_' . $plugin . '_' . $function;
 
@@ -7711,6 +7737,37 @@ function component_callback_exists($component, $function) {
         return $function;
     }
     return false;
+}
+
+/**
+ * Call the specified callback method on the provided class.
+ *
+ * If the callback returns null, then the default value is returned instead.
+ * If the class does not exist, then the default value is returned.
+ *
+ * @param   string      $classname The name of the class to call upon.
+ * @param   string      $methodname The name of the staticically defined method on the class.
+ * @param   array       $params The arguments to pass into the method.
+ * @param   mixed       $default The default value.
+ * @return  mixed       The return value.
+ */
+function component_class_callback($classname, $methodname, array $params, $default = null) {
+    if (!class_exists($classname)) {
+        return $default;
+    }
+
+    if (!method_exists($classname, $methodname)) {
+        return $default;
+    }
+
+    $fullfunction = $classname . '::' . $methodname;
+    $result = call_user_func_array($fullfunction, $params);
+
+    if (null === $result) {
+        return $default;
+    } else {
+        return $result;
+    }
 }
 
 /**
@@ -8207,6 +8264,54 @@ function shorten_text($text, $ideal=30, $exact = false, $ending='...') {
     return $truncate;
 }
 
+/**
+ * Shortens a given filename by removing characters positioned after the ideal string length.
+ * When the filename is too long, the file cannot be created on the filesystem due to exceeding max byte size.
+ * Limiting the filename to a certain size (considering multibyte characters) will prevent this.
+ *
+ * @param string $filename file name
+ * @param int $length ideal string length
+ * @param bool $includehash Whether to include a file hash in the shortened version. This ensures uniqueness.
+ * @return string $shortened shortened file name
+ */
+function shorten_filename($filename, $length = MAX_FILENAME_SIZE, $includehash = false) {
+    $shortened = $filename;
+    // Extract a part of the filename if it's char size exceeds the ideal string length.
+    if (core_text::strlen($filename) > $length) {
+        // Exclude extension if present in filename.
+        $mimetypes = get_mimetypes_array();
+        $extension = pathinfo($filename, PATHINFO_EXTENSION);
+        if ($extension && !empty($mimetypes[$extension])) {
+            $basename = pathinfo($filename, PATHINFO_FILENAME);
+            $hash = empty($includehash) ? '' : ' - ' . substr(sha1($basename), 0, 10);
+            $shortened = core_text::substr($basename, 0, $length - strlen($hash)) . $hash;
+            $shortened .= '.' . $extension;
+        } else {
+            $hash = empty($includehash) ? '' : ' - ' . substr(sha1($filename), 0, 10);
+            $shortened = core_text::substr($filename, 0, $length - strlen($hash)) . $hash;
+        }
+    }
+    return $shortened;
+}
+
+/**
+ * Shortens a given array of filenames by removing characters positioned after the ideal string length.
+ *
+ * @param array $path The paths to reduce the length.
+ * @param int $length Ideal string length
+ * @param bool $includehash Whether to include a file hash in the shortened version. This ensures uniqueness.
+ * @return array $result Shortened paths in array.
+ */
+function shorten_filenames(array $path, $length = MAX_FILENAME_SIZE, $includehash = false) {
+    $result = null;
+
+    $result = array_reduce($path, function($carry, $singlepath) use ($length, $includehash) {
+        $carry[] = shorten_filename($singlepath, $length, $includehash);
+        return $carry;
+    }, []);
+
+    return $result;
+}
 
 /**
  * Given dates in seconds, how many weeks is the date from startdate
@@ -9161,8 +9266,8 @@ function get_performance_info() {
                     $mode = ' <span title="request cache">[r]</span>';
                     break;
             }
-            $html .= '<ul class="cache-definition-stats list-unstyled m-l-1 cache-mode-'.$modeclass.' card d-inline-block">';
-            $html .= '<li class="cache-definition-stats-heading p-t-1 card-header bg-inverse font-weight-bold">' .
+            $html .= '<ul class="cache-definition-stats list-unstyled m-l-1 m-b-1 cache-mode-'.$modeclass.' card d-inline-block">';
+            $html .= '<li class="cache-definition-stats-heading p-t-1 card-header bg-dark bg-inverse font-weight-bold">' .
                 $definition . $mode.'</li>';
             $text .= "$definition {";
             foreach ($details['stores'] as $store => $data) {

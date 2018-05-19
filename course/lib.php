@@ -1404,7 +1404,9 @@ function course_module_update_calendar_events($modulename, $instance = null, $cm
         if (!isset($cm)) {
             $cm = get_coursemodule_from_instance($modulename, $instance->id, $instance->course);
         }
-        course_module_calendar_event_update_process($instance, $cm);
+        if (!empty($cm)) {
+            course_module_calendar_event_update_process($instance, $cm);
+        }
         return true;
     }
     return false;
@@ -1433,8 +1435,9 @@ function course_module_bulk_update_calendar_events($modulename, $courseid = 0) {
     }
 
     foreach ($instances as $instance) {
-        $cm = get_coursemodule_from_instance($modulename, $instance->id, $instance->course);
-        course_module_calendar_event_update_process($instance, $cm);
+        if ($cm = get_coursemodule_from_instance($modulename, $instance->id, $instance->course)) {
+            course_module_calendar_event_update_process($instance, $cm);
+        }
     }
     return true;
 }
@@ -2985,6 +2988,8 @@ class course_request {
     public function approve() {
         global $CFG, $DB, $USER;
 
+        require_once($CFG->dirroot . '/backup/util/includes/restore_includes.php');
+
         $user = $DB->get_record('user', array('id' => $this->properties->requester, 'deleted'=>0), '*', MUST_EXIST);
 
         $courseconfig = get_config('moodlecourse');
@@ -3014,6 +3019,12 @@ class course_request {
         $data->lang               = $courseconfig->lang;
         $data->enablecompletion   = $courseconfig->enablecompletion;
         $data->numsections        = $courseconfig->numsections;
+        $data->startdate          = usergetmidnight(time());
+        if ($courseconfig->courseenddateenabled) {
+            $data->enddate        = usergetmidnight(time()) + $courseconfig->courseduration;
+        }
+
+        list($data->fullname, $data->shortname) = restore_dbops::calculate_course_names(0, $data->fullname, $data->shortname);
 
         $course = create_course($data);
         $context = context_course::instance($course->id, MUST_EXIST);
@@ -4265,4 +4276,33 @@ function course_require_view_participants($context) {
         }
         throw new required_capability_exception($context, $viewparticipantscap, 'nopermissions', '');
     }
+}
+
+/**
+ * Return whether the user can download from the specified backup file area in the given context.
+ *
+ * @param string $filearea the backup file area. E.g. 'course', 'backup' or 'automated'.
+ * @param \context $context
+ * @param stdClass $user the user object. If not provided, the current user will be checked.
+ * @return bool true if the user is allowed to download in the context, false otherwise.
+ */
+function can_download_from_backup_filearea($filearea, \context $context, stdClass $user = null) {
+    $candownload = false;
+    switch ($filearea) {
+        case 'course':
+        case 'backup':
+            $candownload = has_capability('moodle/backup:downloadfile', $context, $user);
+            break;
+        case 'automated':
+            // Given the automated backups may contain userinfo, we restrict access such that only users who are able to
+            // restore with userinfo are able to download the file. Users can't create these backups, so checking 'backup:userinfo'
+            // doesn't make sense here.
+            $candownload = has_capability('moodle/backup:downloadfile', $context, $user) &&
+                           has_capability('moodle/restore:userinfo', $context, $user);
+            break;
+        default:
+            break;
+
+    }
+    return $candownload;
 }

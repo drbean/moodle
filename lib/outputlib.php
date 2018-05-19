@@ -201,10 +201,13 @@ function theme_build_css_for_themes($themeconfigs = [], $directions = ['rtl', 'l
 
         // First generate all the new css.
         foreach ($directions as $direction) {
+            // Lock it on. Technically we should build all themes for SVG and no SVG - but ie9 is out of support.
+            $themeconfig->force_svg_use(true);
             $themeconfig->set_rtl_mode(($direction === 'rtl'));
 
             $themecss[$direction] = $themeconfig->get_css_content();
             if ($cache) {
+                $themeconfig->set_css_content_cache($themecss[$direction]);
                 $filename = theme_get_css_filename($themeconfig->name, $themerev, $newrevision, $direction);
                 css_store_css($themeconfig, $filename, $themecss[$direction]);
             }
@@ -894,7 +897,15 @@ class theme_config {
         global $CFG;
         $rev = theme_get_revision();
         if ($rev > -1) {
-            $url = new moodle_url("$CFG->httpswwwroot/theme/styles.php");
+            $themesubrevision = theme_get_sub_revision_for_theme($this->name);
+
+            // Provide the sub revision to allow us to invalidate cached theme CSS
+            // on a per theme basis, rather than globally.
+            if ($themesubrevision && $themesubrevision > 0) {
+                $rev .= "_{$themesubrevision}";
+            }
+
+            $url = new moodle_url("/theme/styles.php");
             if (!empty($CFG->slasharguments)) {
                 $url->set_slashargument('/'.$this->name.'/'.$rev.'/editor', 'noparam', true);
             } else {
@@ -902,7 +913,7 @@ class theme_config {
             }
         } else {
             $params = array('theme'=>$this->name, 'type'=>'editor');
-            $url = new moodle_url($CFG->httpswwwroot.'/theme/styles_debug.php', $params);
+            $url = new moodle_url('/theme/styles_debug.php', $params);
         }
         return $url;
     }
@@ -966,7 +977,7 @@ class theme_config {
 
         if ($rev > -1) {
             $filename = right_to_left() ? 'all-rtl' : 'all';
-            $url = new moodle_url("$CFG->httpswwwroot/theme/styles.php");
+            $url = new moodle_url("/theme/styles.php");
             $themesubrevision = theme_get_sub_revision_for_theme($this->name);
 
             // Provide the sub revision to allow us to invalidate cached theme CSS
@@ -1002,7 +1013,7 @@ class theme_config {
             $urls[] = $url;
 
         } else {
-            $baseurl = new moodle_url($CFG->httpswwwroot.'/theme/styles_debug.php');
+            $baseurl = new moodle_url('/theme/styles_debug.php');
 
             $css = $this->get_css_files(true);
             if (!$svg) {
@@ -1464,7 +1475,7 @@ class theme_config {
             // Compile!
             $compiled = $compiler->to_css();
 
-        } catch (\Leafo\ScssPhp\Exception $e) {
+        } catch (\Exception $e) {
             $compiled = false;
             debugging('Error while compiling SCSS: ' . $e->getMessage(), DEBUG_DEVELOPER);
         }
@@ -1686,11 +1697,11 @@ class theme_config {
         }
 
         if (!empty($CFG->slasharguments) and $rev > 0) {
-            $url = new moodle_url("$CFG->httpswwwroot/theme/javascript.php");
+            $url = new moodle_url("/theme/javascript.php");
             $url->set_slashargument('/'.$this->name.'/'.$rev.'/'.$params['type'], 'noparam', true);
             return $url;
         } else {
-            return new moodle_url($CFG->httpswwwroot.'/theme/javascript.php', $params);
+            return new moodle_url('/theme/javascript.php', $params);
         }
     }
 
@@ -1922,7 +1933,7 @@ class theme_config {
 
         $params['image'] = $imagename;
 
-        $url = new moodle_url("$CFG->httpswwwroot/theme/image.php");
+        $url = new moodle_url("/theme/image.php");
         if (!empty($CFG->slasharguments) and $rev > 0) {
             $path = '/'.$params['theme'].'/'.$params['component'].'/'.$params['rev'].'/'.$params['image'];
             if (!$svg) {
@@ -1968,7 +1979,7 @@ class theme_config {
 
         $params['font'] = $font;
 
-        $url = new moodle_url("$CFG->httpswwwroot/theme/font.php");
+        $url = new moodle_url("/theme/font.php");
         if (!empty($CFG->slasharguments) and $rev > 0) {
             $path = '/'.$params['theme'].'/'.$params['component'].'/'.$params['rev'].'/'.$params['font'];
             $url->set_slashargument($path, 'noparam', true);

@@ -887,6 +887,69 @@ class workshop {
     }
 
     /**
+     * Returns submissions from this workshop that are viewable by the current user (except example submissions).
+     *
+     * @param mixed $authorid int|array If set to [array of] integer, return submission[s] of the given user[s] only
+     * @param int $groupid If non-zero, return only submissions by authors in the specified group. 0 for all groups.
+     * @param int $limitfrom Return a subset of records, starting at this point (optional)
+     * @param int $limitnum Return a subset containing this many records in total (optional, required if $limitfrom is set)
+     * @return array of records and the total submissions count
+     * @since  Moodle 3.4
+     */
+    public function get_visible_submissions($authorid = 0, $groupid = 0, $limitfrom = 0, $limitnum = 0) {
+        global $DB, $USER;
+
+        $submissions = array();
+        $select = "SELECT s.*";
+        $selectcount = "SELECT COUNT(s.id)";
+        $from = " FROM {workshop_submissions} s";
+        $params = array('workshopid' => $this->id);
+
+        // Check if the passed group (or all groups when groupid is 0) is visible by the current user.
+        if (!groups_group_visible($groupid, $this->course, $this->cm)) {
+            return array($submissions, 0);
+        }
+
+        if ($groupid) {
+            $from .= " JOIN {groups_members} gm ON (gm.userid = s.authorid AND gm.groupid = :groupid)";
+            $params['groupid'] = $groupid;
+        }
+        $where = " WHERE s.workshopid = :workshopid AND s.example = 0";
+
+        if (!has_capability('mod/workshop:viewallsubmissions', $this->context)) {
+            // Check published submissions.
+            $workshopclosed = $this->phase == self::PHASE_CLOSED;
+            $canviewpublished = has_capability('mod/workshop:viewpublishedsubmissions', $this->context);
+            if ($workshopclosed && $canviewpublished) {
+                $published = " OR s.published = 1";
+            } else {
+                $published = '';
+            }
+
+            // Always get submissions I did or I provided feedback to.
+            $where .= " AND (s.authorid = :authorid OR s.gradeoverby = :graderid $published)";
+            $params['authorid'] = $USER->id;
+            $params['graderid'] = $USER->id;
+        }
+
+        // Now, user filtering.
+        if (!empty($authorid)) {
+            list($usql, $uparams) = $DB->get_in_or_equal($authorid, SQL_PARAMS_NAMED);
+            $where .= " AND s.authorid $usql";
+            $params = array_merge($params, $uparams);
+        }
+
+        $order = " ORDER BY s.timecreated";
+
+        $totalcount = $DB->count_records_sql($selectcount.$from.$where, $params);
+        if ($totalcount) {
+            $submissions = $DB->get_records_sql($select.$from.$where.$order, $params, $limitfrom, $limitnum);
+        }
+        return array($submissions, $totalcount);
+    }
+
+
+    /**
      * Returns a submission record with the author's data
      *
      * @param int $id submission id
@@ -2392,12 +2455,12 @@ class workshop {
     /**
      * Returns the mform the teachers use to put a feedback for the reviewer
      *
-     * @param moodle_url $actionurl
+     * @param mixed moodle_url|null $actionurl
      * @param stdClass $assessment
      * @param array $options editable, editableweight, overridablegradinggrade
      * @return workshop_feedbackreviewer_form
      */
-    public function get_feedbackreviewer_form(moodle_url $actionurl, stdclass $assessment, $options=array()) {
+    public function get_feedbackreviewer_form($actionurl, stdclass $assessment, $options=array()) {
         global $CFG;
         require_once(__DIR__ . '/feedbackreviewer_form.php');
 
@@ -2428,12 +2491,12 @@ class workshop {
     /**
      * Returns the mform the teachers use to put a feedback for the author on their submission
      *
-     * @param moodle_url $actionurl
+     * @mixed moodle_url|null $actionurl
      * @param stdClass $submission
      * @param array $options editable
      * @return workshop_feedbackauthor_form
      */
-    public function get_feedbackauthor_form(moodle_url $actionurl, stdclass $submission, $options=array()) {
+    public function get_feedbackauthor_form($actionurl, stdclass $submission, $options=array()) {
         global $CFG;
         require_once(__DIR__ . '/feedbackauthor_form.php');
 
@@ -2704,13 +2767,13 @@ class workshop {
     }
 
     /**
-     * Check whether the given user has assessed all his required examples.
+     * Check whether the given user has assessed all his required examples before submission.
      *
      * @param  int $userid the user to check
      * @return bool        false if there are examples missing assessment, true otherwise.
      * @since  Moodle 3.4
      */
-    public function check_examples_assessed($userid) {
+    public function check_examples_assessed_before_submission($userid) {
 
         if ($this->useexamples and $this->examplesmode == self::EXAMPLES_BEFORE_SUBMISSION
             and !has_capability('mod/workshop:manageexamples', $this->context)) {
@@ -2727,6 +2790,35 @@ class workshop {
             }
         }
         return true;
+    }
+
+    /**
+     * Check that all required examples have been assessed by the given user.
+     *
+     * @param  stdClass $userid     the user (reviewer) to check
+     * @return mixed bool|state     false and notice code if there are examples missing assessment, true otherwise.
+     * @since  Moodle 3.4
+     */
+    public function check_examples_assessed_before_assessment($userid) {
+
+        if ($this->useexamples and $this->examplesmode == self::EXAMPLES_BEFORE_ASSESSMENT
+                and !has_capability('mod/workshop:manageexamples', $this->context)) {
+
+            // The reviewer must have submitted their own submission.
+            $reviewersubmission = $this->get_submission_by_author($userid);
+            if (!$reviewersubmission) {
+                // No money, no love.
+                return array(false, 'exampleneedsubmission');
+            } else {
+                $examples = $this->get_examples_for_reviewer($userid);
+                foreach ($examples as $exampleid => $example) {
+                    if (is_null($example->grade)) {
+                        return array(false, 'exampleneedassessed');
+                    }
+                }
+            }
+        }
+        return array(true, null);
     }
 
     /**
@@ -2875,6 +2967,204 @@ class workshop {
         $event->trigger();
 
         return $submission->id;
+    }
+
+    /**
+     * Helper method for validating if the current user can view the given assessment.
+     *
+     * @param  stdClass   $assessment assessment object
+     * @param  stdClass   $submission submission object
+     * @return void
+     * @throws moodle_exception
+     * @since  Moodle 3.4
+     */
+    public function check_view_assessment($assessment, $submission) {
+        global $USER;
+
+        $isauthor = $submission->authorid == $USER->id;
+        $isreviewer = $assessment->reviewerid == $USER->id;
+        $canviewallassessments  = has_capability('mod/workshop:viewallassessments', $this->context);
+        $canviewallsubmissions  = has_capability('mod/workshop:viewallsubmissions', $this->context);
+
+        $canviewallsubmissions = $canviewallsubmissions && $this->check_group_membership($submission->authorid);
+
+        if (!$isreviewer and !$isauthor and !($canviewallassessments and $canviewallsubmissions)) {
+            print_error('nopermissions', 'error', $this->view_url(), 'view this assessment');
+        }
+
+        if ($isauthor and !$isreviewer and !$canviewallassessments and $this->phase != self::PHASE_CLOSED) {
+            // Authors can see assessments of their work at the end of workshop only.
+            print_error('nopermissions', 'error', $this->view_url(), 'view assessment of own work before workshop is closed');
+        }
+    }
+
+    /**
+     * Helper method for validating if the current user can edit the given assessment.
+     *
+     * @param  stdClass   $assessment assessment object
+     * @param  stdClass   $submission submission object
+     * @return void
+     * @throws moodle_exception
+     * @since  Moodle 3.4
+     */
+    public function check_edit_assessment($assessment, $submission) {
+        global $USER;
+
+        $this->check_view_assessment($assessment, $submission);
+        // Further checks.
+        $isreviewer = ($USER->id == $assessment->reviewerid);
+
+        $assessmenteditable = $isreviewer && $this->assessing_allowed($USER->id);
+        if (!$assessmenteditable) {
+            throw new moodle_exception('nopermissions', 'error', '', 'edit assessments');
+        }
+
+        list($assessed, $notice) = $this->check_examples_assessed_before_assessment($assessment->reviewerid);
+        if (!$assessed) {
+            throw new moodle_exception($notice, 'mod_workshop');
+        }
+    }
+
+    /**
+     * Adds information to an allocated assessment (function used the first time a review is done or when updating an existing one).
+     *
+     * @param  stdClass $assessment the assessment
+     * @param  stdClass $submission the submission
+     * @param  stdClass $data       the assessment data to be added or Updated
+     * @param  stdClass $strategy   the strategy instance
+     * @return float|null           Raw percentual grade (0.00000 to 100.00000) for submission
+     * @since  Moodle 3.4
+     */
+    public function edit_assessment($assessment, $submission, $data, $strategy) {
+        global $DB;
+
+        $cansetassessmentweight = has_capability('mod/workshop:allocate', $this->context);
+
+        // Let the grading strategy subplugin save its data.
+        $rawgrade = $strategy->save_assessment($assessment, $data);
+
+        // Store the data managed by the workshop core.
+        $coredata = (object)array('id' => $assessment->id);
+        if (isset($data->feedbackauthor_editor)) {
+            $coredata->feedbackauthor_editor = $data->feedbackauthor_editor;
+            $coredata = file_postupdate_standard_editor($coredata, 'feedbackauthor', $this->overall_feedback_content_options(),
+                $this->context, 'mod_workshop', 'overallfeedback_content', $assessment->id);
+            unset($coredata->feedbackauthor_editor);
+        }
+        if (isset($data->feedbackauthorattachment_filemanager)) {
+            $coredata->feedbackauthorattachment_filemanager = $data->feedbackauthorattachment_filemanager;
+            $coredata = file_postupdate_standard_filemanager($coredata, 'feedbackauthorattachment',
+                $this->overall_feedback_attachment_options(), $this->context, 'mod_workshop', 'overallfeedback_attachment',
+                $assessment->id);
+            unset($coredata->feedbackauthorattachment_filemanager);
+            if (empty($coredata->feedbackauthorattachment)) {
+                $coredata->feedbackauthorattachment = 0;
+            }
+        }
+        if (isset($data->weight) and $cansetassessmentweight) {
+            $coredata->weight = $data->weight;
+        }
+        // Update the assessment data if there is something other than just the 'id'.
+        if (count((array)$coredata) > 1 ) {
+            $DB->update_record('workshop_assessments', $coredata);
+            $params = array(
+                'relateduserid' => $submission->authorid,
+                'objectid' => $assessment->id,
+                'context' => $this->context,
+                'other' => array(
+                    'workshopid' => $this->id,
+                    'submissionid' => $assessment->submissionid
+                )
+            );
+
+            if (is_null($assessment->grade)) {
+                // All workshop_assessments are created when allocations are made. The create event is of more use located here.
+                $event = \mod_workshop\event\submission_assessed::create($params);
+                $event->trigger();
+            } else {
+                $params['other']['grade'] = $assessment->grade;
+                $event = \mod_workshop\event\submission_reassessed::create($params);
+                $event->trigger();
+            }
+        }
+        return $rawgrade;
+    }
+
+    /**
+     * Evaluates an assessment.
+     *
+     * @param  stdClass $assessment the assessment
+     * @param  stdClass $data       the assessment data to be updated
+     * @param  bool $cansetassessmentweight   whether the user can change the assessment weight
+     * @param  bool $canoverridegrades   whether the user can override the assessment grades
+     * @return void
+     * @since  Moodle 3.4
+     */
+    public function evaluate_assessment($assessment, $data, $cansetassessmentweight, $canoverridegrades) {
+        global $DB, $USER;
+
+        $data = file_postupdate_standard_editor($data, 'feedbackreviewer', array(), $this->context);
+        $record = new stdclass();
+        $record->id = $assessment->id;
+        if ($cansetassessmentweight) {
+            $record->weight = $data->weight;
+        }
+        if ($canoverridegrades) {
+            $record->gradinggradeover = $this->raw_grade_value($data->gradinggradeover, $this->gradinggrade);
+            $record->gradinggradeoverby = $USER->id;
+            $record->feedbackreviewer = $data->feedbackreviewer;
+            $record->feedbackreviewerformat = $data->feedbackreviewerformat;
+        }
+        $DB->update_record('workshop_assessments', $record);
+    }
+
+    /**
+     * Trigger submission viewed event.
+     *
+     * @param stdClass $submission submission object
+     * @since  Moodle 3.4
+     */
+    public function set_submission_viewed($submission) {
+        $params = array(
+            'objectid' => $submission->id,
+            'context' => $this->context,
+            'courseid' => $this->course->id,
+            'relateduserid' => $submission->authorid,
+            'other' => array(
+                'workshopid' => $this->id
+            )
+        );
+
+        $event = \mod_workshop\event\submission_viewed::create($params);
+        $event->trigger();
+    }
+
+    /**
+     * Evaluates a submission.
+     *
+     * @param  stdClass $submission the submission
+     * @param  stdClass $data       the submission data to be updated
+     * @param  bool $canpublish     whether the user can publish the submission
+     * @param  bool $canoverride    whether the user can override the submission grade
+     * @return void
+     * @since  Moodle 3.4
+     */
+    public function evaluate_submission($submission, $data, $canpublish, $canoverride) {
+        global $DB, $USER;
+
+        $data = file_postupdate_standard_editor($data, 'feedbackauthor', array(), $this->context);
+        $record = new stdclass();
+        $record->id = $submission->id;
+        if ($canoverride) {
+            $record->gradeover = $this->raw_grade_value($data->gradeover, $this->grade);
+            $record->gradeoverby = $USER->id;
+            $record->feedbackauthor = $data->feedbackauthor;
+            $record->feedbackauthorformat = $data->feedbackauthorformat;
+        }
+        if ($canpublish) {
+            $record->published = !empty($data->published);
+        }
+        $DB->update_record('workshop_submissions', $record);
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -3404,10 +3694,15 @@ class workshop_user_plan implements renderable {
             $phase->tasks['submissionenddatetime'] = $task;
         }
         if (($workshop->submissionstart < time()) and $workshop->latesubmissions) {
-            $task = new stdclass();
-            $task->title = get_string('latesubmissionsallowed', 'workshop');
-            $task->completed = 'info';
-            $phase->tasks['latesubmissionsallowed'] = $task;
+            // If submission deadline has passed and late submissions are allowed, only display 'latesubmissionsallowed' text to
+            // users (students) who have not submitted and users(teachers, admins)  who can switch pahase..
+            if (has_capability('mod/workshop:switchphase', $workshop->context, $userid) ||
+                    (!$workshop->get_submission_by_author($userid) && $workshop->submissionend < time())) {
+                $task = new stdclass();
+                $task->title = get_string('latesubmissionsallowed', 'workshop');
+                $task->completed = 'info';
+                $phase->tasks['latesubmissionsallowed'] = $task;
+            }
         }
         if (isset($phase->tasks['submissionstartdatetime']) or isset($phase->tasks['submissionenddatetime'])) {
             if (has_capability('mod/workshop:ignoredeadlines', $workshop->context, $userid)) {
@@ -4262,6 +4557,54 @@ class workshop_grading_report implements renderable {
      */
     public function get_options() {
         return $this->options;
+    }
+
+    /**
+     * Prepare the data to be exported to a external system via Web Services.
+     *
+     * This function applies extra capabilities checks.
+     * @return stdClass the data ready for external systems
+     */
+    public function export_data_for_external() {
+        $data = $this->get_data();
+        $options = $this->get_options();
+
+        foreach ($data->grades as $reportdata) {
+            // If we are in submission phase ignore the following data.
+            if ($options->workshopphase == workshop::PHASE_SUBMISSION) {
+                unset($reportdata->submissiongrade);
+                unset($reportdata->gradinggrade);
+                unset($reportdata->submissiongradeover);
+                unset($reportdata->submissiongradeoverby);
+                unset($reportdata->submissionpublished);
+                unset($reportdata->reviewedby);
+                unset($reportdata->reviewerof);
+                continue;
+            }
+
+            if (!$options->showsubmissiongrade) {
+                unset($reportdata->submissiongrade);
+                unset($reportdata->submissiongradeover);
+            }
+
+            if (!$options->showgradinggrade and $tr == 0) {
+                unset($reportdata->gradinggrade);
+            }
+
+            if (!$options->showreviewernames) {
+                foreach ($reportdata->reviewedby as $reviewedby) {
+                    $reviewedby->userid = 0;
+                }
+            }
+
+            if (!$options->showauthornames) {
+                foreach ($reportdata->reviewerof as $reviewerof) {
+                    $reviewerof->userid = 0;
+                }
+            }
+        }
+
+        return $data;
     }
 }
 

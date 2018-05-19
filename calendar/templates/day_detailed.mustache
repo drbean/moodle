@@ -31,9 +31,20 @@
     {
     }
 }}
-<div class="header">
-    {{{filter_selector}}}
-    {{{new_event_button}}}
+<div{{!
+    }} class="calendarwrapper"{{!
+    }} data-context-id="{{defaulteventcontext}}"{{!
+    }}{{#courseid}} data-courseid="{{courseid}}"{{/courseid}}{{!
+    }}{{#categoryid}} data-categoryid="{{categoryid}}"{{/categoryid}}{{!
+    }} data-view="day"{{!
+    }} data-year="{{date.year}}"{{!
+    }} data-month="{{date.mon}}"{{!
+    }} data-day="{{date.mday}}"{{!
+    }} data-region="day"{{!
+    }} data-new-event-timestamp="{{neweventtimestamp}}"{{!
+}}>
+    {{> core_calendar/header}}
+    {{> core_calendar/day_navigation }}
+    {{> core/overlay_loading}}
+    {{> core_calendar/event_list }}
 </div>
-{{> core_calendar/day_navigation }}
-{{> core_calendar/event_list }}

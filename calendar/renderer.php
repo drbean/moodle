@@ -64,30 +64,32 @@ class core_calendar_renderer extends plugin_renderer_base {
         $time = $calendartype->timestamp_to_date_array($calendar->time);
 
         $current = $calendar->time;
+        $prevmonthyear = $calendartype->get_prev_month($time['year'], $time['mon']);
         $prev = $calendartype->convert_to_timestamp(
-                $time['year'],
-                $time['mon'] - 1,
-                $time['mday']
+                $prevmonthyear[1],
+                $prevmonthyear[0],
+                1
             );
+        $nextmonthyear = $calendartype->get_next_month($time['year'], $time['mon']);
         $next = $calendartype->convert_to_timestamp(
-                $time['year'],
-                $time['mon'] + 1,
-                $time['mday']
+                $nextmonthyear[1],
+                $nextmonthyear[0],
+                1
             );
 
         $content = '';
 
         // Previous.
         $calendar->set_time($prev);
-        list($previousmonth, ) = calendar_get_view($calendar, 'minithree', false);
+        list($previousmonth, ) = calendar_get_view($calendar, 'minithree', false, true);
 
         // Current month.
         $calendar->set_time($current);
-        list($currentmonth, ) = calendar_get_view($calendar, 'minithree', false);
+        list($currentmonth, ) = calendar_get_view($calendar, 'minithree', false, true);
 
         // Next month.
         $calendar->set_time($next);
-        list($nextmonth, ) = calendar_get_view($calendar, 'minithree', false);
+        list($nextmonth, ) = calendar_get_view($calendar, 'minithree', false, true);
 
         // Reset the time back.
         $calendar->set_time($current);
@@ -114,37 +116,20 @@ class core_calendar_renderer extends plugin_renderer_base {
     }
 
     /**
-     * Creates a button to add a new event
+     * Creates a button to add a new event.
      *
      * @param int $courseid
-     * @param int $day
-     * @param int $month
-     * @param int $year
-     * @param int $time the unixtime, used for multiple calendar support. The values $day,
-     *     $month and $year are kept for backwards compatibility.
+     * @param int $unused1
+     * @param int $unused2
+     * @param int $unused3
+     * @param int $unused4
      * @return string
      */
-    public function add_event_button($courseid, $day = null, $month = null, $year = null, $time = null) {
-        // If a day, month and year were passed then convert it to a timestamp. If these were passed
-        // then we can assume the day, month and year are passed as Gregorian, as no where in core
-        // should we be passing these values rather than the time. This is done for BC.
-        if (!empty($day) && !empty($month) && !empty($year)) {
-            if (checkdate($month, $day, $year)) {
-                $time = make_timestamp($year, $month, $day);
-            } else {
-                $time = time();
-            }
-        } else if (empty($time)) {
-            $time = time();
-        }
-
-        $coursecontext = \context_course::instance($courseid);
-        $attributes = [
-            'class' => 'btn btn-secondary pull-xs-right pull-right',
-            'data-context-id' => $coursecontext->id,
-            'data-action' => 'new-event-button'
+    public function add_event_button($courseid, $unused1 = null, $unused2 = null, $unused3 = null, $unused4 = null) {
+        $data = [
+            'contextid' => (\context_course::instance($courseid))->id,
         ];
-        return html_writer::tag('button', get_string('newevent', 'calendar'), $attributes);
+        return $this->render_from_template('core_calendar/add_event_button', $data);
     }
 
     /**
@@ -250,291 +235,39 @@ class core_calendar_renderer extends plugin_renderer_base {
     }
 
     /**
-     * Displays a month in detail
-     *
-     * @param calendar_information $calendar
-     * @param moodle_url $returnurl the url to return to
-     * @return string
-     */
-    public function show_month_detailed(calendar_information $calendar, moodle_url $returnurl  = null) {
-        global $CFG;
-
-        if (empty($returnurl)) {
-            $returnurl = $this->page->url;
-        }
-
-        // Get the calendar type we are using.
-        $calendartype = \core_calendar\type_factory::get_calendar_instance();
-
-        // Store the display settings.
-        $display = new stdClass;
-        $display->thismonth = false;
-
-        // Get the specified date in the calendar type being used.
-        $date = $calendartype->timestamp_to_date_array($calendar->time);
-        $thisdate = $calendartype->timestamp_to_date_array(time());
-        if ($date['mon'] == $thisdate['mon'] && $date['year'] == $thisdate['year']) {
-            $display->thismonth = true;
-            $date = $thisdate;
-            $calendar->time = time();
-        }
-
-        // Get Gregorian date for the start of the month.
-        $gregoriandate = $calendartype->convert_to_gregorian($date['year'], $date['mon'], 1);
-        // Store the gregorian date values to be used later.
-        list($gy, $gm, $gd, $gh, $gmin) = array($gregoriandate['year'], $gregoriandate['month'], $gregoriandate['day'],
-            $gregoriandate['hour'], $gregoriandate['minute']);
-
-        // Get the starting week day for this month.
-        $startwday = dayofweek(1, $date['mon'], $date['year']);
-        // Get the days in a week.
-        $daynames = calendar_get_days();
-        // Store the number of days in a week.
-        $numberofdaysinweek = $calendartype->get_num_weekdays();
-
-        $display->minwday = calendar_get_starting_weekday();
-        $display->maxwday = $display->minwday + ($numberofdaysinweek - 1);
-        $display->maxdays = calendar_days_in_month($date['mon'], $date['year']);
-
-        // These are used for DB queries, so we want unixtime, so we need to use Gregorian dates.
-        $display->tstart = make_timestamp($gy, $gm, $gd, $gh, $gmin, 0);
-        $display->tend = $display->tstart + ($display->maxdays * DAYSECS) - 1;
-
-        // Align the starting weekday to fall in our display range
-        // This is simple, not foolproof.
-        if ($startwday < $display->minwday) {
-            $startwday += $numberofdaysinweek;
-        }
-
-        // Get events from database
-        $events = calendar_get_legacy_events($display->tstart, $display->tend, $calendar->users, $calendar->groups,
-            $calendar->courses);
-        if (!empty($events)) {
-            foreach($events as $eventid => $event) {
-                $event = new calendar_event($event);
-                if (!empty($event->modulename)) {
-                    $instances = get_fast_modinfo($event->courseid)->get_instances_of($event->modulename);
-                    if (empty($instances[$event->instance]->uservisible)) {
-                        unset($events[$eventid]);
-                    }
-                }
-            }
-        }
-
-        // Extract information: events vs. time
-        calendar_events_by_day($events, $date['mon'], $date['year'], $eventsbyday, $durationbyday,
-            $typesbyday, $calendar->courses);
-
-        $output  = html_writer::start_tag('div', array('class'=>'header'));
-        $output .= $this->course_filter_selector($returnurl, get_string('detailedmonthviewfor', 'calendar'));
-        if (calendar_user_can_add_event($calendar->course)) {
-            $output .= $this->add_event_button($calendar->course->id, 0, 0, 0, $calendar->time);
-        }
-        $output .= html_writer::end_tag('div', array('class'=>'header'));
-        // Controls
-        $output .= html_writer::tag('div', calendar_top_controls('month', array('id' => $calendar->courseid,
-            'time' => $calendar->time)), array('class' => 'controls'));
-
-        $table = new html_table();
-        $table->attributes = array('class'=>'calendarmonth calendartable');
-        $table->summary = get_string('calendarheading', 'calendar', userdate($calendar->time, get_string('strftimemonthyear')));
-        $table->data = array();
-
-        // Get the day names as the header.
-        $header = array();
-        for($i = $display->minwday; $i <= $display->maxwday; ++$i) {
-            $header[] = $daynames[$i % $numberofdaysinweek]['shortname'];
-        }
-        $table->head = $header;
-
-        // For the table display. $week is the row; $dayweek is the column.
-        $week = 1;
-        $dayweek = $startwday;
-
-        $row = new html_table_row(array());
-
-        // Paddding (the first week may have blank days in the beginning)
-        for($i = $display->minwday; $i < $startwday; ++$i) {
-            $cell = new html_table_cell('&nbsp;');
-            $cell->attributes = array('class'=>'nottoday dayblank');
-            $row->cells[] = $cell;
-        }
-
-        // Now display all the calendar
-        $weekend = CALENDAR_DEFAULT_WEEKEND;
-        if (isset($CFG->calendar_weekend)) {
-            $weekend = intval($CFG->calendar_weekend);
-        }
-
-        $daytime = strtotime('-1 day', $display->tstart);
-        for ($day = 1; $day <= $display->maxdays; ++$day, ++$dayweek) {
-            $daytime = strtotime('+1 day', $daytime);
-            if($dayweek > $display->maxwday) {
-                // We need to change week (table row)
-                $table->data[] = $row;
-                $row = new html_table_row(array());
-                $dayweek = $display->minwday;
-                ++$week;
-            }
-
-            // Reset vars
-            $cell = new html_table_cell();
-            $dayhref = calendar_get_link_href(new moodle_url(CALENDAR_URL . 'view.php',
-                array('view' => 'day', 'course' => $calendar->courseid)), 0, 0, 0, $daytime);
-
-            $cellclasses = array();
-
-            if ($weekend & (1 << ($dayweek % $numberofdaysinweek))) {
-                // Weekend. This is true no matter what the exact range is.
-                $cellclasses[] = 'weekend';
-            }
-
-            // Special visual fx if an event is defined
-            if (isset($eventsbyday[$day])) {
-                if(count($eventsbyday[$day]) == 1) {
-                    $title = get_string('oneevent', 'calendar');
-                } else {
-                    $title = get_string('manyevents', 'calendar', count($eventsbyday[$day]));
-                }
-                $cell->text = html_writer::tag('div', html_writer::link($dayhref, $day, array('title'=>$title)), array('class'=>'day'));
-            } else {
-                $cell->text = html_writer::tag('div', $day, array('class'=>'day'));
-            }
-
-            // Special visual fx if an event spans many days
-            $durationclass = false;
-            if (isset($typesbyday[$day]['durationglobal'])) {
-                $durationclass = 'duration_global';
-            } else if (isset($typesbyday[$day]['durationcourse'])) {
-                $durationclass = 'duration_course';
-            } else if (isset($typesbyday[$day]['durationgroup'])) {
-                $durationclass = 'duration_group';
-            } else if (isset($typesbyday[$day]['durationuser'])) {
-                $durationclass = 'duration_user';
-            }
-            if ($durationclass) {
-                $cellclasses[] = 'duration';
-                $cellclasses[] = $durationclass;
-            }
-
-            // Special visual fx for today
-            if ($display->thismonth && $day == $date['mday']) {
-                $cellclasses[] = 'day today';
-            } else {
-                $cellclasses[] = 'day nottoday';
-            }
-            $cell->attributes = array('class'=>join(' ',$cellclasses));
-
-            if (isset($eventsbyday[$day])) {
-                $cell->text .= html_writer::start_tag('ul', array('class'=>'events-new'));
-                foreach($eventsbyday[$day] as $eventindex) {
-                    // If event has a class set then add it to the event <li> tag
-                    $attributes = array();
-                    if (!empty($events[$eventindex]->class)) {
-                        $attributes['class'] = $events[$eventindex]->class;
-                    }
-                    $dayhref->set_anchor('event_'.$events[$eventindex]->id);
-
-                    $eventcontext = $events[$eventindex]->context;
-                    $eventformatopts = array('context' => $eventcontext);
-                    // Get event name.
-                    $eventname = format_string($events[$eventindex]->name, true, $eventformatopts);
-                    // Include course's shortname into the event name, if applicable.
-                    $courseid = $events[$eventindex]->courseid;
-                    if (!empty($courseid) && $courseid !== SITEID) {
-                        $course = get_course($courseid);
-                        $eventnameparams = (object)[
-                            'name' => $eventname,
-                            'course' => format_string($course->shortname, true, $eventformatopts)
-                        ];
-                        $eventname = get_string('eventnameandcourse', 'calendar', $eventnameparams);
-                    }
-                    $link = html_writer::link($dayhref, $eventname, ['data-action' => 'view-event',
-                            'data-event-id' => $events[$eventindex]->id]);
-                    $cell->text .= html_writer::tag('li', $link, $attributes);
-                }
-                $cell->text .= html_writer::end_tag('ul');
-            }
-            if (isset($durationbyday[$day])) {
-                $cell->text .= html_writer::start_tag('ul', array('class'=>'events-underway'));
-                foreach($durationbyday[$day] as $eventindex) {
-                    $cell->text .= html_writer::tag('li', '['.format_string($events[$eventindex]->name,true).']', array('class'=>'events-underway'));
-                }
-                $cell->text .= html_writer::end_tag('ul');
-            }
-            $row->cells[] = $cell;
-        }
-
-        // Paddding (the last week may have blank days at the end)
-        for($i = $dayweek; $i <= $display->maxwday; ++$i) {
-            $cell = new html_table_cell('&nbsp;');
-            $cell->attributes = array('class'=>'nottoday dayblank');
-            $row->cells[] = $cell;
-        }
-        $table->data[] = $row;
-        $output .= html_writer::table($table);
-
-        return $output;
-    }
-
-    /**
-     * Displays upcoming events
-     *
-     * @param calendar_information $calendar
-     * @param int $futuredays
-     * @param int $maxevents
-     * @return string
-     */
-    public function show_upcoming_events(calendar_information $calendar, $futuredays, $maxevents, moodle_url $returnurl = null) {
-
-        if ($returnurl === null) {
-            $returnurl = $this->page->url;
-        }
-
-        $events = calendar_get_upcoming($calendar->courses, $calendar->groups, $calendar->users,
-            $futuredays, $maxevents);
-
-        $output  = html_writer::start_tag('div', array('class'=>'header'));
-        $output .= $this->course_filter_selector($returnurl, get_string('upcomingeventsfor', 'calendar'));
-        if (calendar_user_can_add_event($calendar->course)) {
-            $output .= $this->add_event_button($calendar->course->id);
-        }
-        $output .= html_writer::end_tag('div');
-
-        if ($events) {
-            $output .= html_writer::start_tag('div', array('class' => 'eventlist'));
-            foreach ($events as $event) {
-                // Convert to calendar_event object so that we transform description accordingly.
-                $event = new calendar_event($event);
-                $event->calendarcourseid = $calendar->courseid;
-                $output .= $this->event($event);
-            }
-            $output .= html_writer::end_tag('div');
-        } else {
-            $output .= html_writer::span(get_string('noupcomingevents', 'calendar'), 'calendar-information calendar-no-results');
-        }
-
-        return $output;
-    }
-
-    /**
      * Displays a course filter selector
      *
      * @param moodle_url $returnurl The URL that the user should be taken too upon selecting a course.
      * @param string $label The label to use for the course select.
+     * @param int $courseid The id of the course to be selected.
      * @return string
      */
-    public function course_filter_selector(moodle_url $returnurl, $label=null) {
-        global $USER, $SESSION, $CFG;
+    public function course_filter_selector(moodle_url $returnurl, $label = null, $courseid = null) {
+        global $CFG, $DB;
 
         if (!isloggedin() or isguestuser()) {
             return '';
         }
 
-        if (has_capability('moodle/calendar:manageentries', context_system::instance()) && !empty($CFG->calendar_adminseesall)) {
-            $courses = get_courses('all', 'c.shortname','c.id,c.shortname');
-        } else {
-            $courses = enrol_get_my_courses();
+        $contextrecords = [];
+        $courses = calendar_get_default_courses($courseid, 'id, shortname');
+
+        if (!empty($courses) && count($courses) > CONTEXT_CACHE_MAX_SIZE) {
+            // We need to pull the context records from the DB to preload them
+            // below. The calendar_get_default_courses code will actually preload
+            // the contexts itself however the context cache is capped to a certain
+            // amount before it starts recycling. Unfortunately that starts to happen
+            // quite a bit if a user has access to a large number of courses (e.g. admin).
+            // So in order to avoid hitting the DB for each context as we loop below we
+            // can load all of the context records and add them to the cache just in time.
+            $courseids = array_map(function($c) {
+                return $c->id;
+            }, $courses);
+            list($insql, $params) = $DB->get_in_or_equal($courseids);
+            $contextsql = "SELECT ctx.instanceid, " . context_helper::get_preload_record_columns_sql('ctx') .
+                          " FROM {context} ctx WHERE ctx.contextlevel = ? AND ctx.instanceid $insql";
+            array_unshift($params, CONTEXT_COURSE);
+            $contextrecords = $DB->get_records_sql($contextsql, $params);
         }
 
         unset($courses[SITEID]);
@@ -542,11 +275,16 @@ class core_calendar_renderer extends plugin_renderer_base {
         $courseoptions = array();
         $courseoptions[SITEID] = get_string('fulllistofcourses');
         foreach ($courses as $course) {
+            if (isset($contextrecords[$course->id])) {
+                context_helper::preload_from_record($contextrecords[$course->id]);
+            }
             $coursecontext = context_course::instance($course->id);
             $courseoptions[$course->id] = format_string($course->shortname, true, array('context' => $coursecontext));
         }
 
-        if ($this->page->course->id !== SITEID) {
+        if ($courseid) {
+            $selected = $courseid;
+        } else if ($this->page->course->id !== SITEID) {
             $selected = $this->page->course->id;
         } else {
             $selected = '';
@@ -567,12 +305,12 @@ class core_calendar_renderer extends plugin_renderer_base {
     /**
      * Renders a table containing information about calendar subscriptions.
      *
-     * @param int $courseid
+     * @param int $unused
      * @param array $subscriptions
      * @param string $importresults
      * @return string
      */
-    public function subscription_details($courseid, $subscriptions, $importresults = '') {
+    public function subscription_details($unused = null, $subscriptions, $importresults = '') {
         $table = new html_table();
         $table->head  = array(
             get_string('colcalendar', 'calendar'),
@@ -602,7 +340,7 @@ class core_calendar_renderer extends plugin_renderer_base {
                 $lastupdated = userdate($sub->lastupdated, get_string('strftimedatetimeshort', 'langconfig'));
             }
 
-            $cell = new html_table_cell($this->subscription_action_form($sub, $courseid));
+            $cell = new html_table_cell($this->subscription_action_form($sub));
             $cell->colspan = 2;
             $type = $sub->eventtype . 'events';
 
@@ -626,10 +364,9 @@ class core_calendar_renderer extends plugin_renderer_base {
      * Creates a form to perform actions on a given subscription.
      *
      * @param stdClass $subscription
-     * @param int $courseid
      * @return string
      */
-    protected function subscription_action_form($subscription, $courseid) {
+    protected function subscription_action_form($subscription) {
         // Assemble form for the subscription row.
         $html = html_writer::start_tag('form', array('action' => new moodle_url('/calendar/managesubscriptions.php'), 'method' => 'post'));
         if (empty($subscription->url)) {
@@ -651,7 +388,6 @@ class core_calendar_renderer extends plugin_renderer_base {
             $html .= html_writer::end_tag('div');
         }
         $html .= html_writer::empty_tag('input', array('type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()));
-        $html .= html_writer::empty_tag('input', array('type' => 'hidden', 'name' => 'course', 'value' => $courseid));
         $html .= html_writer::empty_tag('input', array('type' => 'hidden', 'name' => 'id', 'value' => $subscription->id));
         $html .= html_writer::start_tag('div', array('class' => 'btn-group pull-right'));
         if (!empty($subscription->url)) {

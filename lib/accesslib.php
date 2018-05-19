@@ -319,8 +319,7 @@ function get_role_definitions_uncached(array $roleids) {
     $sql = "SELECT ctx.path, rc.roleid, rc.capability, rc.permission
               FROM {role_capabilities} rc
               JOIN {context} ctx ON rc.contextid = ctx.id
-             WHERE rc.roleid $sql
-          ORDER BY ctx.path, rc.roleid, rc.capability";
+             WHERE rc.roleid $sql";
     $rs = $DB->get_recordset_sql($sql, $params);
 
     foreach ($rs as $rd) {
@@ -334,6 +333,15 @@ function get_role_definitions_uncached(array $roleids) {
     }
 
     $rs->close();
+
+    // Sometimes (e.g. get_user_capability_course_helper::get_capability_info_at_each_context)
+    // we process role definitinons in a way that requires we see parent contexts
+    // before child contexts. This sort ensures that works (and is faster than
+    // sorting in the SQL query).
+    foreach ($rdefs as $roleid => $rdef) {
+        ksort($rdefs[$roleid]);
+    }
+
     return $rdefs;
 }
 
@@ -1976,7 +1984,7 @@ function get_default_capabilities($archetype) {
  * Return default roles that can be assigned, overridden or switched
  * by give role archetype.
  *
- * @param string $type  assign|override|switch
+ * @param string $type  assign|override|switch|view
  * @param string $archetype
  * @return array of role ids
  */
@@ -2022,6 +2030,16 @@ function get_default_role_archetype_allows($type, $archetype) {
             'editingteacher' => array('teacher', 'student', 'guest'),
             'teacher'        => array('student', 'guest'),
             'student'        => array(),
+            'guest'          => array(),
+            'user'           => array(),
+            'frontpage'      => array(),
+        ),
+        'view' => array(
+            'manager'        => array('manager', 'coursecreator', 'editingteacher', 'teacher', 'student', 'guest', 'user', 'frontpage'),
+            'coursecreator'  => array('coursecreator', 'editingteacher', 'teacher', 'student'),
+            'editingteacher' => array('coursecreator', 'editingteacher', 'teacher', 'student'),
+            'teacher'        => array('coursecreator', 'editingteacher', 'teacher', 'student'),
+            'student'        => array('coursecreator', 'editingteacher', 'teacher', 'student'),
             'guest'          => array(),
             'user'           => array(),
             'frontpage'      => array(),
@@ -2594,10 +2612,14 @@ function get_user_roles_in_course($userid, $courseid) {
     $rolestring = '';
 
     if ($roles = $DB->get_records_sql($sql, $params)) {
-        $rolenames = role_fix_names($roles, $context, ROLENAME_ALIAS, true);   // Substitute aliases
+        $viewableroles = get_viewable_roles($context, $userid);
 
-        foreach ($rolenames as $roleid => $rolename) {
-            $rolenames[$roleid] = '<a href="'.$CFG->wwwroot.'/user/index.php?contextid='.$context->id.'&amp;roleid='.$roleid.'">'.$rolename.'</a>';
+        $rolenames = array();
+        foreach ($roles as $roleid => $unused) {
+            if (isset($viewableroles[$roleid])) {
+                $url = new moodle_url('/user/index.php', ['contextid' => $context->id, 'roleid' => $roleid]);
+                $rolenames[] = '<a href="' . $url . '">' . $viewableroles[$roleid] . '</a>';
+            }
         }
         $rolestring = implode(',', $rolenames);
     }
@@ -2830,16 +2852,16 @@ function get_user_roles_with_special(context $context, $userid = 0) {
 /**
  * Creates a record in the role_allow_override table
  *
- * @param int $sroleid source roleid
- * @param int $troleid target roleid
+ * @param int $fromroleid source roleid
+ * @param int $targetroleid target roleid
  * @return void
  */
-function allow_override($sroleid, $troleid) {
+function core_role_set_override_allowed($fromroleid, $targetroleid) {
     global $DB;
 
     $record = new stdClass();
-    $record->roleid        = $sroleid;
-    $record->allowoverride = $troleid;
+    $record->roleid        = $fromroleid;
+    $record->allowoverride = $targetroleid;
     $DB->insert_record('role_allow_override', $record);
 }
 
@@ -2850,7 +2872,7 @@ function allow_override($sroleid, $troleid) {
  * @param int $targetroleid target roleid
  * @return void
  */
-function allow_assign($fromroleid, $targetroleid) {
+function core_role_set_assign_allowed($fromroleid, $targetroleid) {
     global $DB;
 
     $record = new stdClass();
@@ -2866,13 +2888,29 @@ function allow_assign($fromroleid, $targetroleid) {
  * @param int $targetroleid target roleid
  * @return void
  */
-function allow_switch($fromroleid, $targetroleid) {
+function core_role_set_switch_allowed($fromroleid, $targetroleid) {
     global $DB;
 
     $record = new stdClass();
     $record->roleid      = $fromroleid;
     $record->allowswitch = $targetroleid;
     $DB->insert_record('role_allow_switch', $record);
+}
+
+/**
+ * Creates a record in the role_allow_view table
+ *
+ * @param int $fromroleid source roleid
+ * @param int $targetroleid target roleid
+ * @return void
+ */
+function core_role_set_view_allowed($fromroleid, $targetroleid) {
+    global $DB;
+
+    $record = new stdClass();
+    $record->roleid      = $fromroleid;
+    $record->allowview = $targetroleid;
+    $DB->insert_record('role_allow_view', $record);
 }
 
 /**
@@ -3009,6 +3047,58 @@ function get_switchable_roles(context $context) {
                   $extrawhere) idlist
           JOIN {role} r ON r.id = idlist.roleid
      LEFT JOIN {role_names} rn ON (rn.contextid = :coursecontext AND rn.roleid = r.id)
+      ORDER BY r.sortorder";
+    $roles = $DB->get_records_sql($query, $params);
+
+    return role_fix_names($roles, $context, ROLENAME_ALIAS, true);
+}
+
+/**
+ * Gets a list of roles that this user can view in a context
+ *
+ * @param context $context a context.
+ * @param int $userid id of user.
+ * @return array an array $roleid => $rolename.
+ */
+function get_viewable_roles(context $context, $userid = null) {
+    global $USER, $DB;
+
+    if ($userid == null) {
+        $userid = $USER->id;
+    }
+
+    $params = array();
+    $extrajoins = '';
+    $extrawhere = '';
+    if (!is_siteadmin()) {
+        // Admins are allowed to view any role.
+        // Others are subject to the additional constraint that the view role must be allowed by
+        // 'role_allow_view' for some role they have assigned in this context or any parent.
+        $contexts = $context->get_parent_context_ids(true);
+        list($insql, $inparams) = $DB->get_in_or_equal($contexts, SQL_PARAMS_NAMED);
+
+        $extrajoins = "JOIN {role_allow_view} ras ON ras.allowview = r.id
+                       JOIN {role_assignments} ra ON ra.roleid = ras.roleid";
+        $extrawhere = "WHERE ra.userid = :userid AND ra.contextid $insql";
+
+        $params += $inparams;
+        $params['userid'] = $userid;
+    }
+
+    if ($coursecontext = $context->get_course_context(false)) {
+        $params['coursecontext'] = $coursecontext->id;
+    } else {
+        $params['coursecontext'] = 0; // No course aliases.
+        $coursecontext = null;
+    }
+
+    $query = "
+        SELECT r.id, r.name, r.shortname, rn.name AS coursealias, r.sortorder
+          FROM {role} r
+          $extrajoins
+     LEFT JOIN {role_names} rn ON (rn.contextid = :coursecontext AND rn.roleid = r.id)
+          $extrawhere
+      GROUP BY r.id, r.name, r.shortname, rn.name, r.sortorder
       ORDER BY r.sortorder";
     $roles = $DB->get_records_sql($query, $params);
 
@@ -3784,7 +3874,9 @@ function count_role_users($roleid, context $context, $parent = false) {
 
 /**
  * This function gets the list of courses that this user has a particular capability in.
- * It is still not very efficient.
+ *
+ * It is now reasonably efficient, but bear in mind that if there are users who have the capability
+ * everywhere, it may return an array of all courses.
  *
  * @param string $capability Capability in question
  * @param int $userid User ID or null for current user
@@ -3799,15 +3891,50 @@ function count_role_users($roleid, context $context, $parent = false) {
  */
 function get_user_capability_course($capability, $userid = null, $doanything = true, $fieldsexceptid = '', $orderby = '',
         $limit = 0) {
-    global $DB;
+    global $DB, $USER;
+
+    // Default to current user.
+    if (!$userid) {
+        $userid = $USER->id;
+    }
+
+    if ($doanything && is_siteadmin($userid)) {
+        // If the user is a site admin and $doanything is enabled then there is no need to restrict
+        // the list of courses.
+        $contextlimitsql = '';
+        $contextlimitparams = [];
+    } else {
+        // Gets SQL to limit contexts ('x' table) to those where the user has this capability.
+        list ($contextlimitsql, $contextlimitparams) = \core\access\get_user_capability_course_helper::get_sql(
+                $userid, $capability);
+        if (!$contextlimitsql) {
+            // If the does not have this capability in any context, return false without querying.
+            return false;
+        }
+
+        $contextlimitsql = 'WHERE' . $contextlimitsql;
+    }
 
     // Convert fields list and ordering
     $fieldlist = '';
     if ($fieldsexceptid) {
         $fields = array_map('trim', explode(',', $fieldsexceptid));
         foreach($fields as $field) {
-            // Context fields have a different alias and are added further down.
-            if (strpos($field, 'ctx') !== 0) {
+            // Context fields have a different alias.
+            if (strpos($field, 'ctx') === 0) {
+                switch($field) {
+                    case 'ctxlevel' :
+                        $realfield = 'contextlevel';
+                        break;
+                    case 'ctxinstance' :
+                        $realfield = 'instanceid';
+                        break;
+                    default:
+                        $realfield = substr($field, 3);
+                        break;
+                }
+                $fieldlist .= ',x.' . $realfield . ' AS ' . $field;
+            } else {
                 $fieldlist .= ',c.'.$field;
             }
         }
@@ -3824,43 +3951,18 @@ function get_user_capability_course($capability, $userid = null, $doanything = t
         $orderby = 'ORDER BY '.$orderby;
     }
 
-    // Obtain a list of everything relevant about all courses including context.
-    // Note the result can be used directly as a context (we are going to), the course
-    // fields are just appended.
-
-    $contextpreload = context_helper::get_preload_record_columns_sql('x');
-
-    $contextlist = ['ctxid', 'ctxpath', 'ctxdepth', 'ctxlevel', 'ctxinstance'];
-    $unsetitems = $contextlist;
-    if ($fieldsexceptid) {
-        $coursefields = array_map('trim', explode(',', $fieldsexceptid));
-        $unsetitems = array_diff($contextlist, $coursefields);
-    }
-
     $courses = array();
-    $rs = $DB->get_recordset_sql("SELECT c.id $fieldlist, $contextpreload
-                                    FROM {course} c
-                                    JOIN {context} x ON (c.id=x.instanceid AND x.contextlevel=".CONTEXT_COURSE.")
-                                $orderby");
-    // Check capability for each course in turn
+    $rs = $DB->get_recordset_sql("
+            SELECT c.id $fieldlist
+              FROM {course} c
+              JOIN {context} x ON c.id = x.instanceid AND x.contextlevel = ?
+            $contextlimitsql
+            $orderby", array_merge([CONTEXT_COURSE], $contextlimitparams));
     foreach ($rs as $course) {
-        // The preload_from_record() unsets the context related fields, but it is possible that our caller may
-        // want them returned too (so they can use them for their own context preloading). For that reason we
-        // pass a clone.
-        context_helper::preload_from_record(clone($course));
-        $context = context_course::instance($course->id);
-        if (has_capability($capability, $context, $userid, $doanything)) {
-            // Unset context fields if they were not asked for.
-            foreach ($unsetitems as $item) {
-                unset($course->$item);
-            }
-            // We've got the capability. Make the record look like a course record
-            // and store it
-            $courses[] = $course;
-            $limit--;
-            if ($limit == 0) {
-                break;
-            }
+        $courses[] = $course;
+        $limit--;
+        if ($limit == 0) {
+            break;
         }
     }
     $rs->close();

@@ -544,25 +544,31 @@ function enrol_add_course_navigation(navigation_node $coursenode, $course) {
 /**
  * Returns list of courses current $USER is enrolled in and can access
  *
- * - $fields is an array of field names to ADD
- *   so name the fields you really need, which will
- *   be added and uniq'd
+ * The $fields param is a list of field names to ADD so name just the fields you really need,
+ * which will be added and uniq'd.
  *
  * If $allaccessible is true, this will additionally return courses that the current user is not
  * enrolled in, but can access because they are open to the user for other reasons (course view
  * permission, currently viewing course as a guest, or course allows guest access without
  * password).
  *
- * @param string|array $fields
- * @param string $sort
+ * @param string|array $fields Extra fields to be returned (array or comma-separated list).
+ * @param string|null $sort Comma separated list of fields to sort by, defaults to respecting navsortmycoursessort.
  * @param int $limit max number of courses
  * @param array $courseids the list of course ids to filter by
  * @param bool $allaccessible Include courses user is not enrolled in, but can access
  * @return array
  */
-function enrol_get_my_courses($fields = null, $sort = 'visible DESC,sortorder ASC',
-          $limit = 0, $courseids = [], $allaccessible = false) {
+function enrol_get_my_courses($fields = null, $sort = null, $limit = 0, $courseids = [], $allaccessible = false) {
     global $DB, $USER, $CFG;
+
+    if ($sort === null) {
+        if (empty($CFG->navsortmycoursessort)) {
+            $sort = 'visible DESC, sortorder ASC';
+        } else {
+            $sort = 'visible DESC, '.$CFG->navsortmycoursessort.' ASC';
+        }
+    }
 
     // Guest account does not have any enrolled courses.
     if (!$allaccessible && (isguestuser() or !isloggedin())) {
@@ -584,7 +590,7 @@ function enrol_get_my_courses($fields = null, $sort = 'visible DESC,sortorder AS
     } else if (is_array($fields)) {
         $fields = array_unique(array_merge($basefields, $fields));
     } else {
-        throw new coding_exception('Invalid $fileds parameter in enrol_get_my_courses()');
+        throw new coding_exception('Invalid $fields parameter in enrol_get_my_courses()');
     }
     if (in_array('*', $fields)) {
         $fields = array('*');
@@ -788,19 +794,19 @@ function enrol_get_course_description_texts($course) {
 
 /**
  * Returns list of courses user is enrolled into.
- * (Note: use enrol_get_all_users_courses if you want to use the list wihtout any cap checks )
  *
- * - $fields is an array of fieldnames to ADD
- *   so name the fields you really need, which will
- *   be added and uniq'd
+ * Note: Use {@link enrol_get_all_users_courses()} if you need the list without any capability checks.
  *
- * @param int $userid
- * @param bool $onlyactive return only active enrolments in courses user may see
- * @param string|array $fields
- * @param string $sort
+ * The $fields param is a list of field names to ADD so name just the fields you really need,
+ * which will be added and uniq'd.
+ *
+ * @param int $userid User whose courses are returned, defaults to the current user.
+ * @param bool $onlyactive Return only active enrolments in courses user may see.
+ * @param string|array $fields Extra fields to be returned (array or comma-separated list).
+ * @param string|null $sort Comma separated list of fields to sort by, defaults to respecting navsortmycoursessort.
  * @return array
  */
-function enrol_get_users_courses($userid, $onlyactive = false, $fields = NULL, $sort = 'visible DESC,sortorder ASC') {
+function enrol_get_users_courses($userid, $onlyactive = false, $fields = null, $sort = null) {
     global $DB;
 
     $courses = enrol_get_all_users_courses($userid, $onlyactive, $fields, $sort);
@@ -877,19 +883,27 @@ function enrol_user_sees_own_courses($user = null) {
 }
 
 /**
- * Returns list of courses user is enrolled into without any capability checks
- * - $fields is an array of fieldnames to ADD
- *   so name the fields you really need, which will
- *   be added and uniq'd
+ * Returns list of courses user is enrolled into without performing any capability checks.
  *
- * @param int $userid
- * @param bool $onlyactive return only active enrolments in courses user may see
- * @param string|array $fields
- * @param string $sort
+ * The $fields param is a list of field names to ADD so name just the fields you really need,
+ * which will be added and uniq'd.
+ *
+ * @param int $userid User whose courses are returned, defaults to the current user.
+ * @param bool $onlyactive Return only active enrolments in courses user may see.
+ * @param string|array $fields Extra fields to be returned (array or comma-separated list).
+ * @param string|null $sort Comma separated list of fields to sort by, defaults to respecting navsortmycoursessort.
  * @return array
  */
-function enrol_get_all_users_courses($userid, $onlyactive = false, $fields = NULL, $sort = 'visible DESC,sortorder ASC') {
-    global $DB;
+function enrol_get_all_users_courses($userid, $onlyactive = false, $fields = null, $sort = null) {
+    global $CFG, $DB;
+
+    if ($sort === null) {
+        if (empty($CFG->navsortmycoursessort)) {
+            $sort = 'visible DESC, sortorder ASC';
+        } else {
+            $sort = 'visible DESC, '.$CFG->navsortmycoursessort.' ASC';
+        }
+    }
 
     // Guest account does not have any courses
     if (isguestuser($userid) or empty($userid)) {
@@ -912,7 +926,7 @@ function enrol_get_all_users_courses($userid, $onlyactive = false, $fields = NUL
     } else if (is_array($fields)) {
         $fields = array_unique(array_merge($basefields, $fields));
     } else {
-        throw new coding_exception('Invalid $fileds parameter in enrol_get_my_courses()');
+        throw new coding_exception('Invalid $fields parameter in enrol_get_all_users_courses()');
     }
     if (in_array('*', $fields)) {
         $fields = array('*');
@@ -1419,8 +1433,8 @@ function get_enrolled_join(context $context, $useridcolumn, $onlyactive = false,
                 "{$prefix}e1.courseid = :{$prefix}_e1_courseid",
             );
             if ($enrolid) {
-                $enrolconditions[] = "{$prefix}e1.id = :{$prefix}e1.enrolid";
-                $params[$prefix . 'e1.enrolid'] = $enrolid;
+                $enrolconditions[] = "{$prefix}e1.id = :{$prefix}e1_enrolid";
+                $params[$prefix . 'e1_enrolid'] = $enrolid;
             }
             $enrolconditionssql = implode(" AND ", $enrolconditions);
             $joins[] = "JOIN {enrol} {$prefix}e1 ON ($enrolconditionssql)";
@@ -1528,9 +1542,12 @@ function enrol_output_fragment_user_enrolment_form($args) {
 
     $ueid = $args->ueid;
     $userenrolment = $DB->get_record('user_enrolments', ['id' => $ueid], '*', MUST_EXIST);
+    $instance = $DB->get_record('enrol', ['id' => $userenrolment->enrolid], '*', MUST_EXIST);
+    $plugin = enrol_get_plugin($instance->enrol);
     $customdata = [
         'ue' => $userenrolment,
         'modal' => true,
+        'enrolinstancename' => $plugin->get_instance_name($instance)
     ];
 
     // Set the data if applicable.
@@ -2428,7 +2445,11 @@ abstract class enrol_plugin {
         $participants->close();
 
         // now clean up all remainders that were not removed correctly
-        $DB->delete_records('groups_members', array('itemid'=>$instance->id, 'component'=>'enrol_'.$name));
+        if ($gms = $DB->get_records('groups_members', array('itemid' => $instance->id, 'component' => 'enrol_' . $name))) {
+            foreach ($gms as $gm) {
+                groups_remove_member($gm->groupid, $gm->userid);
+            }
+        }
         $DB->delete_records('role_assignments', array('itemid'=>$instance->id, 'component'=>'enrol_'.$name));
         $DB->delete_records('user_enrolments', array('enrolid'=>$instance->id));
 
@@ -2588,7 +2609,38 @@ abstract class enrol_plugin {
      * @return array An array of user_enrolment_actions
      */
     public function get_user_enrolment_actions(course_enrolment_manager $manager, $ue) {
-        return array();
+        $actions = [];
+        $context = $manager->get_context();
+        $instance = $ue->enrolmentinstance;
+        $params = $manager->get_moodlepage()->url->params();
+        $params['ue'] = $ue->id;
+
+        // Edit enrolment action.
+        if ($this->allow_manage($instance) && has_capability("enrol/{$instance->enrol}:manage", $context)) {
+            $title = get_string('editenrolment', 'enrol');
+            $icon = new pix_icon('t/edit', $title);
+            $url = new moodle_url('/enrol/editenrolment.php', $params);
+            $actionparams = [
+                'class' => 'editenrollink',
+                'rel' => $ue->id,
+                'data-action' => ENROL_ACTION_EDIT
+            ];
+            $actions[] = new user_enrolment_action($icon, $title, $url, $actionparams);
+        }
+
+        // Unenrol action.
+        if ($this->allow_unenrol_user($instance, $ue) && has_capability("enrol/{$instance->enrol}:unenrol", $context)) {
+            $title = get_string('unenrol', 'enrol');
+            $icon = new pix_icon('t/delete', $title);
+            $url = new moodle_url('/enrol/unenroluser.php', $params);
+            $actionparams = [
+                'class' => 'unenrollink',
+                'rel' => $ue->id,
+                'data-action' => ENROL_ACTION_UNENROL
+            ];
+            $actions[] = new user_enrolment_action($icon, $title, $url, $actionparams);
+        }
+        return $actions;
     }
 
     /**

@@ -56,17 +56,25 @@ class post extends \core_search\base_mod {
      * Returns recordset containing required data for indexing forum posts.
      *
      * @param int $modifiedfrom timestamp
-     * @return moodle_recordset
+     * @param \context|null $context Optional context to restrict scope of returned results
+     * @return moodle_recordset|null Recordset (or null if no results)
      */
-    public function get_recordset_by_timestamp($modifiedfrom = 0) {
+    public function get_document_recordset($modifiedfrom = 0, \context $context = null) {
         global $DB;
 
-        $sql = 'SELECT fp.*, f.id AS forumid, f.course AS courseid
+        list ($contextjoin, $contextparams) = $this->get_context_restriction_sql(
+                $context, 'forum', 'f');
+        if ($contextjoin === null) {
+            return null;
+        }
+
+        $sql = "SELECT fp.*, f.id AS forumid, f.course AS courseid, fd.groupid AS groupid
                   FROM {forum_posts} fp
                   JOIN {forum_discussions} fd ON fd.id = fp.discussion
                   JOIN {forum} f ON f.id = fd.forum
-                 WHERE fp.modified >= ? ORDER BY fp.modified ASC';
-        return $DB->get_recordset_sql($sql, array($modifiedfrom));
+          $contextjoin
+                 WHERE fp.modified >= ? ORDER BY fp.modified ASC";
+        return $DB->get_recordset_sql($sql, array_merge($contextparams, [$modifiedfrom]));
     }
 
     /**
@@ -101,6 +109,11 @@ class post extends \core_search\base_mod {
         $doc->set('userid', $record->userid);
         $doc->set('owneruserid', \core_search\manager::NO_OWNER_ID);
         $doc->set('modified', $record->modified);
+
+        // Store group id if there is one. (0 and -1 both mean not restricted to group.)
+        if ($record->groupid > 0) {
+            $doc->set('groupid', $record->groupid);
+        }
 
         // Check if this document should be considered new.
         if (isset($options['lastindexedtime']) && ($options['lastindexedtime'] < $record->created)) {
@@ -283,5 +296,27 @@ class post extends \core_search\base_mod {
                 array('id' => $discussionid), '*', MUST_EXIST);
         }
         return $this->discussionsdata[$discussionid];
+    }
+
+    /**
+     * Changes the context ordering so that the forums with most recent discussions are indexed
+     * first.
+     *
+     * @return string[] SQL join and ORDER BY
+     */
+    protected function get_contexts_to_reindex_extra_sql() {
+        return [
+            'JOIN {forum_discussions} fd ON fd.course = cm.course AND fd.forum = cm.instance',
+            'MAX(fd.timemodified) DESC'
+        ];
+    }
+
+    /**
+     * Confirms that data entries support group restrictions.
+     *
+     * @return bool True
+     */
+    public function supports_group_restriction() {
+        return true;
     }
 }

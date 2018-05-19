@@ -50,6 +50,22 @@ $functions = array(
         'ajax'          => true,
         'loginrequired' => false,
     ),
+    'core_auth_is_minor' => array(
+        'classname'   => 'core_auth_external',
+        'methodname'  => 'is_minor',
+        'description' => 'Requests a check if a user is a digital minor.',
+        'type'        => 'read',
+        'ajax'          => true,
+        'loginrequired' => false,
+    ),
+    'core_auth_is_age_digital_consent_verification_enabled' => array(
+        'classname'   => 'core_auth_external',
+        'methodname'  => 'is_age_digital_consent_verification_enabled',
+        'description' => 'Checks if age digital consent verification is enabled.',
+        'type'        => 'read',
+        'ajax'          => true,
+        'loginrequired' => false,
+    ),
     'core_badges_get_user_badges' => array(
         'classname'     => 'core_badges_external',
         'methodname'    => 'get_user_badges',
@@ -62,6 +78,26 @@ $functions = array(
         'classname' => 'core_calendar_external',
         'methodname' => 'get_calendar_monthly_view',
         'description' => 'Fetch the monthly view data for a calendar',
+        'classpath' => 'calendar/externallib.php',
+        'type' => 'read',
+        'capabilities' => '',
+        'ajax' => true,
+        'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+    ),
+    'core_calendar_get_calendar_day_view' => array(
+        'classname' => 'core_calendar_external',
+        'methodname' => 'get_calendar_day_view',
+        'description' => 'Fetch the day view data for a calendar',
+        'classpath' => 'calendar/externallib.php',
+        'type' => 'read',
+        'capabilities' => '',
+        'ajax' => true,
+        'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+    ),
+    'core_calendar_get_calendar_upcoming_view' => array(
+        'classname' => 'core_calendar_external',
+        'methodname' => 'get_calendar_upcoming_view',
+        'description' => 'Fetch the upcoming view data for a calendar',
         'classpath' => 'calendar/externallib.php',
         'type' => 'read',
         'capabilities' => '',
@@ -255,6 +291,14 @@ $functions = array(
         'description' => 'Update completion status for the current user in an activity, only for activities with manual tracking.',
         'type' => 'write',
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+    ),
+    'core_completion_override_activity_completion_status' => array(
+        'classname'     => 'core_completion_external',
+        'methodname'    => 'override_activity_completion_status',
+        'description'   => 'Update completion status for a user in an activity by overriding it.',
+        'type'          => 'write',
+        'capabilities'  => 'moodle/course:overridecompletion',
+        'ajax'          => true,
     ),
     'core_course_create_categories' => array(
         'classname' => 'core_course_external',
@@ -515,6 +559,14 @@ $functions = array(
         'methodname' => 'edit_user_enrolment',
         'classpath' => 'enrol/externallib.php',
         'description' => 'External function that updates a given user enrolment',
+        'type' => 'write',
+        'ajax' => true,
+    ),
+    'core_enrol_unenrol_user_enrolment' => array(
+        'classname' => 'core_enrol_external',
+        'methodname' => 'unenrol_user_enrolment',
+        'classpath' => 'enrol/externallib.php',
+        'description' => 'External function that unenrols a given user enrolment',
         'type' => 'write',
         'ajax' => true,
     ),
@@ -938,6 +990,15 @@ $functions = array(
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
         'ajax' => true,
     ),
+    'core_message_mark_notification_read' => array(
+        'classname' => 'core_message_external',
+        'methodname' => 'mark_notification_read',
+        'classpath' => 'message/externallib.php',
+        'description' => 'Mark a single notification as read, trigger notification_viewed event.',
+        'type' => 'write',
+        'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+        'ajax' => true,
+    ),
     'core_message_message_processor_config_form' => array(
         'classname' => 'core_message_external',
         'methodname' => 'message_processor_config_form',
@@ -1006,6 +1067,7 @@ $functions = array(
         'classpath' => 'notes/externallib.php',
         'description' => 'Create notes',
         'type' => 'write',
+        'ajax' => true,
         'capabilities' => 'moodle/notes:manage',
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
     ),
@@ -1077,6 +1139,20 @@ $functions = array(
         'capabilities'  => 'moodle/question:flag',
         'services'      => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
     ),
+    'core_question_submit_tags_form' => array(
+        'classname'     => 'core_question_external',
+        'methodname'    => 'submit_tags_form',
+        'description'   => 'Update the question tags.',
+        'type'          => 'write',
+        'ajax' => true,
+    ),
+    'core_question_get_random_question_summaries' => array(
+        'classname' => 'core_question_external',
+        'methodname' => 'get_random_question_summaries',
+        'description' => 'Get the random question set for a criteria',
+        'type' => 'read',
+        'ajax' => true,
+    ),
     'core_rating_get_item_ratings' => array(
         'classname' => 'core_rating_external',
         'methodname' => 'get_item_ratings',
@@ -1108,6 +1184,13 @@ $functions = array(
         'description' => 'Manual role unassignments.',
         'type' => 'write',
         'capabilities' => 'moodle/role:assign'
+    ),
+    'core_search_get_relevant_users' => array(
+        'classname' => '\core_search\external',
+        'methodname' => 'get_relevant_users',
+        'description' => 'Gets relevant users for a search request.',
+        'type' => 'read',
+        'ajax' => true
     ),
     'core_tag_get_tagindex' => array(
         'classname' => 'core_tag_external',
@@ -2047,6 +2130,15 @@ $functions = array(
         'capabilities'  => '',
         'services'      => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
     ),
+
+    // Filters functions.
+    'core_filters_get_available_in_context' => array(
+        'classname'   => 'core_filters\external',
+        'methodname'  => 'get_available_in_context',
+        'description' => 'Returns the filters available in the given contexts.',
+        'type'        => 'read',
+        'services'    => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+    )
 );
 
 $services = array(
