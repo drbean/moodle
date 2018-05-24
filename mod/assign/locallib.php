@@ -3160,7 +3160,7 @@ class assign {
 
         $text = $plugin->get_editor_text($editor, $submissionid);
         if ($shortentext) {
-            $text = shorten_text($text, 140);
+            $text = shorten_text($text, 500);
         }
         $format = $plugin->get_editor_format($editor, $submissionid);
 
