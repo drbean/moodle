@@ -247,14 +247,14 @@ class question_category_object {
      */
     public function display_user_interface() {
 
-        /// Interface for editing existing categories
-        $this->output_edit_lists();
-
-
         echo '<br />';
         /// Interface for adding a new category:
         $this->output_new_table();
         echo '<br />';
+
+        /// Interface for editing existing categories
+        $this->output_edit_lists();
+
 
     }
 
