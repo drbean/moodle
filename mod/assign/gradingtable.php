@@ -284,7 +284,8 @@ class assign_grading_table extends table_sql implements renderable {
                                  s.status = :submitted AND
                                  (s.timemodified >= g.timemodified OR g.timemodified IS NULL OR g.grade IS NULL';
 
-                if ($this->assignment->get_grade_item()->gradetype == GRADE_TYPE_SCALE) {
+                // Assignment grade is set to the negative grade scale id when scales are used.
+                if ($this->assignment->get_instance()->grade < 0) {
                     // Scale grades are set to -1 when not graded.
                     $where .= ' OR g.grade = -1';
                 }
@@ -1128,11 +1129,10 @@ class assign_grading_table extends table_sql implements renderable {
 
         if ($row->allowsubmissionsfromdate) {
             $userdate = userdate($row->allowsubmissionsfromdate);
-            $o = $this->output->container($userdate, 'allowsubmissionsfromdate');
+            $o = ($this->is_downloading()) ? $userdate : $this->output->container($userdate, 'allowsubmissionsfromdate');
         }
 
         return $o;
-
     }
 
     /**
@@ -1146,11 +1146,10 @@ class assign_grading_table extends table_sql implements renderable {
 
         if ($row->duedate) {
             $userdate = userdate($row->duedate);
-            $o = $this->output->container($userdate, 'duedate');
+            $o = ($this->is_downloading()) ? $userdate : $this->output->container($userdate, 'duedate');
         }
 
         return $o;
-
     }
 
     /**
@@ -1164,11 +1163,10 @@ class assign_grading_table extends table_sql implements renderable {
 
         if ($row->cutoffdate) {
             $userdate = userdate($row->cutoffdate);
-            $o = $this->output->container($userdate, 'cutoffdate');
+            $o = ($this->is_downloading()) ? $userdate : $this->output->container($userdate, 'cutoffdate');
         }
 
         return $o;
-
     }
 
     /**
