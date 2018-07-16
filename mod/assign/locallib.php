@@ -4536,10 +4536,10 @@ class assign {
                                                       $this->show_intro(),
                                                       $this->get_course_module()->id,
                                                       $title, '', $postfix));
-        if ($userid == $USER->id) {
-            // We only show this if it their submission.
-            $o .= $this->plagiarism_print_disclosure();
-        }
+
+        // Show plagiarism disclosure for any user submitter.
+        $o .= $this->plagiarism_print_disclosure();
+
         $data = new stdClass();
         $data->userid = $userid;
         if (!$mform) {
@@ -5330,12 +5330,14 @@ class assign {
     public function get_assign_grading_summary_renderable($activitygroup = null) {
 
         $instance = $this->get_instance();
+        $cm = $this->get_course_module();
 
         $draft = ASSIGN_SUBMISSION_STATUS_DRAFT;
         $submitted = ASSIGN_SUBMISSION_STATUS_SUBMITTED;
+        $isvisible = $cm->visible;
 
         if ($activitygroup === null) {
-            $activitygroup = groups_get_activity_group($this->get_course_module());
+            $activitygroup = groups_get_activity_group($cm);
         }
 
         if ($instance->teamsubmission) {
@@ -5353,7 +5355,8 @@ class assign {
                                                   $this->count_submissions_need_grading($activitygroup),
                                                   $instance->teamsubmission,
                                                   $warnofungroupedusers,
-                                                  $this->can_grade());
+                                                  $this->can_grade(),
+                                                  $isvisible);
         } else {
             // The active group has already been updated in groups_print_activity_menu().
             $countparticipants = $this->count_participants($activitygroup);
@@ -5368,8 +5371,8 @@ class assign {
                                                   $this->count_submissions_need_grading($activitygroup),
                                                   $instance->teamsubmission,
                                                   false,
-                                                  $this->can_grade());
-
+                                                  $this->can_grade(),
+                                                  $isvisible);
         }
 
         return $summary;
