@@ -7,7 +7,7 @@ $CFG = new stdClass();
 $CFG->dbtype    = 'pgsql';
 $CFG->dblibrary = 'native';
 $CFG->dbhost    = '127.0.0.1';
-$CFG->dbname    = 'mood051';
+$CFG->dbname    = 'mood071';
 $CFG->dbuser    = 'apache';
 $CFG->dbpass    = 'momoyuhi';
 $CFG->prefix    = 'mdl_';
@@ -18,7 +18,7 @@ $CFG->dboptions = array (
 );
 
 $CFG->wwwroot   = 'https://sac.nuu.edu.tw/cgi-bin/moodle';
-$CFG->dataroot  = '/var/lib/moodle';
+$CFG->dataroot  = '/var/lib/moodle_dataroot';
 $CFG->admin     = 'admin';
 
 $CFG->directorypermissions = 02777;
