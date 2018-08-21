@@ -454,13 +454,6 @@ define('MOD_ARCHETYPE_ASSIGNMENT', 2);
 define('MOD_ARCHETYPE_SYSTEM', 3);
 
 /**
- * Return this from modname_get_types callback to use default display in activity chooser.
- * Deprecated, will be removed in 3.5, TODO MDL-53697.
- * @deprecated since Moodle 3.1
- */
-define('MOD_SUBTYPE_NO_CHILDREN', 'modsubtypenochildren');
-
-/**
  * Security token used for allowing access
  * from external application such as web services.
  * Scripts do not use any session, performance is relatively
@@ -1627,18 +1620,61 @@ function get_users_from_config($value, $capability, $includeadmins = true) {
 /**
  * Invalidates browser caches and cached data in temp.
  *
- * IMPORTANT - If you are adding anything here to do with the cache directory you should also have a look at
- * {@link phpunit_util::reset_dataroot()}
- *
  * @return void
  */
 function purge_all_caches() {
-    global $CFG, $DB;
+    purge_caches();
+}
 
-    reset_text_filters_cache();
-    js_reset_all_caches();
-    theme_reset_all_caches();
-    get_string_manager()->reset_caches();
+/**
+ * Selectively invalidate different types of cache.
+ *
+ * Purges the cache areas specified.  By default, this will purge all caches but can selectively purge specific
+ * areas alone or in combination.
+ *
+ * @param bool[] $options Specific parts of the cache to purge. Valid options are:
+ *        'muc'    Purge MUC caches?
+ *        'theme'  Purge theme cache?
+ *        'lang'   Purge language string cache?
+ *        'js'     Purge javascript cache?
+ *        'filter' Purge text filter cache?
+ *        'other'  Purge all other caches?
+ */
+function purge_caches($options = []) {
+    $defaults = array_fill_keys(['muc', 'theme', 'lang', 'js', 'filter', 'other'], false);
+    if (empty(array_filter($options))) {
+        $options = array_fill_keys(array_keys($defaults), true); // Set all options to true.
+    } else {
+        $options = array_merge($defaults, array_intersect_key($options, $defaults)); // Override defaults with specified options.
+    }
+    if ($options['muc']) {
+        cache_helper::purge_all();
+    }
+    if ($options['theme']) {
+        theme_reset_all_caches();
+    }
+    if ($options['lang']) {
+        get_string_manager()->reset_caches();
+    }
+    if ($options['js']) {
+        js_reset_all_caches();
+    }
+    if ($options['filter']) {
+        reset_text_filters_cache();
+    }
+    if ($options['other']) {
+        purge_other_caches();
+    }
+}
+
+/**
+ * Purge all non-MUC caches not otherwise purged in purge_caches.
+ *
+ * IMPORTANT - If you are adding anything here to do with the cache directory you should also have a look at
+ * {@link phpunit_util::reset_dataroot()}
+ */
+function purge_other_caches() {
+    global $DB, $CFG;
     core_text::reset_caches();
     if (class_exists('core_plugin_manager')) {
         core_plugin_manager::reset_caches();
@@ -1652,7 +1688,6 @@ function purge_all_caches() {
     }
 
     $DB->reset_caches();
-    cache_helper::purge_all();
 
     // Purge all other caches: rss, simplepie, etc.
     clearstatcache();
@@ -3077,9 +3112,10 @@ function validate_user_key($keyvalue, $script, $instance) {
  * @uses PARAM_ALPHANUM
  * @param string $script unique script identifier
  * @param int $instance optional instance id
+ * @param string $keyvalue The key. If not supplied, this will be fetched from the current session.
  * @return int Instance ID
  */
-function require_user_key_login($script, $instance=null) {
+function require_user_key_login($script, $instance = null, $keyvalue = null) {
     global $DB;
 
     if (!NO_MOODLE_COOKIES) {
@@ -3089,7 +3125,9 @@ function require_user_key_login($script, $instance=null) {
     // Extra safety.
     \core\session\manager::write_close();
 
-    $keyvalue = required_param('key', PARAM_ALPHANUM);
+    if (null === $keyvalue) {
+        $keyvalue = required_param('key', PARAM_ALPHANUM);
+    }
 
     $key = validate_user_key($keyvalue, $script, $instance);
 
@@ -3601,25 +3639,38 @@ function get_extra_user_fields($context, $already = array()) {
         return array();
     }
 
-    // Split showuseridentity on comma.
-    if (empty($CFG->showuseridentity)) {
-        // Explode gives wrong result with empty string.
-        $extra = array();
-    } else {
-        $extra =  explode(',', $CFG->showuseridentity);
-    }
-    $renumber = false;
+    // Split showuseridentity on comma (filter needed in case the showuseridentity is empty).
+    $extra = array_filter(explode(',', $CFG->showuseridentity));
+
     foreach ($extra as $key => $field) {
         if (in_array($field, $already)) {
             unset($extra[$key]);
-            $renumber = true;
         }
     }
-    if ($renumber) {
-        // For consistency, if entries are removed from array, renumber it
-        // so they are numbered as you would expect.
-        $extra = array_merge($extra);
+
+    // If the identity fields are also among hidden fields, make sure the user can see them.
+    $hiddenfields = array_filter(explode(',', $CFG->hiddenuserfields));
+    $hiddenidentifiers = array_intersect($extra, $hiddenfields);
+
+    if ($hiddenidentifiers) {
+        if ($context->get_course_context(false)) {
+            // We are somewhere inside a course.
+            $canviewhiddenuserfields = has_capability('moodle/course:viewhiddenuserfields', $context);
+
+        } else {
+            // We are not inside a course.
+            $canviewhiddenuserfields = has_capability('moodle/user:viewhiddendetails', $context);
+        }
+
+        if (!$canviewhiddenuserfields) {
+            // Remove hidden identifiers from the list.
+            $extra = array_diff($extra, $hiddenidentifiers);
+        }
     }
+
+    // Re-index the entries.
+    $extra = array_values($extra);
+
     return $extra;
 }
 
@@ -4961,7 +5012,6 @@ function remove_course_contents($courseid, $showfeedback = true, array $options 
 
             include_once("$moddir/lib.php");                 // Shows php warning only if plugin defective.
             $moddelete = $modname .'_delete_instance';       // Delete everything connected to an instance.
-            $moddeletecourse = $modname .'_delete_course';   // Delete other stray stuff (uncommon).
 
             if ($instances) {
                 foreach ($instances as $cm) {
@@ -4986,12 +5036,6 @@ function remove_course_contents($courseid, $showfeedback = true, array $options 
                         $DB->delete_records('course_modules', array('id' => $cm->id));
                     }
                 }
-            }
-            if (function_exists($moddeletecourse)) {
-                // Execute optional course cleanup callback. Deprecated since Moodle 3.2. TODO MDL-53297 remove in 3.6.
-                debugging("Callback delete_course is deprecated. Function $moddeletecourse should be converted " .
-                    'to observer of event \core\event\course_content_deleted', DEBUG_DEVELOPER);
-                $moddeletecourse($course, $showfeedback);
             }
             if ($instances and $showfeedback) {
                 echo $OUTPUT->notification($strdeleted.get_string('pluginname', $modname), 'notifysuccess');
@@ -5030,22 +5074,6 @@ function remove_course_contents($courseid, $showfeedback = true, array $options 
 
     if ($showfeedback) {
         echo $OUTPUT->notification($strdeleted.get_string('type_mod_plural', 'plugin'), 'notifysuccess');
-    }
-
-    // Cleanup the rest of plugins. Deprecated since Moodle 3.2. TODO MDL-53297 remove in 3.6.
-    $cleanuplugintypes = array('report', 'coursereport', 'format');
-    $callbacks = get_plugins_with_function('delete_course', 'lib.php');
-    foreach ($cleanuplugintypes as $type) {
-        if (!empty($callbacks[$type])) {
-            foreach ($callbacks[$type] as $pluginfunction) {
-                debugging("Callback delete_course is deprecated. Function $pluginfunction should be converted " .
-                    'to observer of event \core\event\course_content_deleted', DEBUG_DEVELOPER);
-                $pluginfunction($course->id, $showfeedback);
-            }
-            if ($showfeedback) {
-                echo $OUTPUT->notification($strdeleted.get_string('type_'.$type.'_plural', 'plugin'), 'notifysuccess');
-            }
-        }
     }
 
     // Delete questions and question categories.
@@ -6151,7 +6179,7 @@ function setnew_password_and_mail($user, $fasthash = false) {
     $a->sitename    = format_string($site->fullname);
     $a->username    = $user->username;
     $a->newpassword = $newpassword;
-    $a->link        = $CFG->wwwroot .'/login/';
+    $a->link        = $CFG->wwwroot .'/login/?lang='.$lang;
     $a->signoff     = generate_email_signoff();
 
     $message = (string)new lang_string('newusernewpasswordtext', '', $a, $lang);
@@ -6942,6 +6970,7 @@ function get_string_manager($forcereload=false) {
                  $translist = array();
             } else {
                 $translist = explode(',', $CFG->langlist);
+                $translist = array_map('trim', $translist);
             }
 
             if (!empty($CFG->config_php_settings['customstringmanager'])) {
