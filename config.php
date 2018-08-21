@@ -18,7 +18,7 @@ $CFG->dboptions = array (
 );
 
 $CFG->wwwroot   = 'https://sac.nuu.edu.tw/cgi-bin/moodle';
-$CFG->dataroot  = '/var/lib/moodle_dataroot';
+$CFG->dataroot  = '/var/lib/moodle';
 $CFG->admin     = 'admin';
 
 $CFG->directorypermissions = 02777;
