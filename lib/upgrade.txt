@@ -63,6 +63,18 @@ information provided here is intended especially for developers.
 * Following behat steps have been removed from core:
     - I set the field "<field_string>" to multiline
     - I follow "<link_string>"" in the open menu
+* The following behat steps have been deprecated, please do not use these step definitions any more:
+    - behat_navigation.php: i_navigate_to_node_in()
+    - theme/boost/tests/behat/behat_theme_boost_behat_navigation.php: i_navigate_to_node_in()
+  Use one of the following steps instead:
+    - I navigate to "PATH > ITEM" in current page administration
+    - I navigate to "PATH > ITEM" in site administration
+    - I navigate to course participants
+    - I navigate to "TAB1 > TAB2" in the course gradebook
+
+  If some items are not available without Navigation block at all, one can use combination of:
+    - I add the "Navigation" block if not present
+    - I click on "LINK" "link" in the "Navigation" "block"
 * Removed the lib/password_compat/lib/password.php file.
 * The eventslib.php file has been deleted and its functions have been moved to deprecatedlib.php. The affected functions are:
   - events_get_cached()
@@ -89,6 +101,24 @@ information provided here is intended especially for developers.
   - file_merge_draft_areas()
   - file_replace_file_area_in_text()
   - extract_draft_file_urls_from_text()
+* Class coursecat is now alias to autoloaded class core_course_category, course_in_list is an alias to
+  core_course_list_element, class coursecat_sortable_records is deprecated without replacement.
+* \core_user_external::create_users() and \core_user_external::update_users() can now accept more user profile fields so user
+  creation/update via web service can now be very similar to the edit profile page's functionality. The new fields that have been
+  added are:
+  - maildisplay
+  - interests
+  - url
+  - icq
+  - skype
+  - aim
+  - yahoo
+  - msn
+  - institution
+  - department
+  - phone1
+  - phone2
+  - address
 
 === 3.5 ===
 
