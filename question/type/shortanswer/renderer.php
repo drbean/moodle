@@ -42,11 +42,10 @@ class qtype_shortanswer_renderer extends qtype_renderer {
 
         $inputname = $qa->get_qt_field_name('answer');
         $inputattributes = array(
-            'type' => 'text',
             'name' => $inputname,
-            'value' => $currentanswer,
             'id' => $inputname,
-            'size' => 80,
+	    'rows' => 3,
+	    'cols' => 80,
             'class' => 'form-control d-inline',
         );
 
@@ -72,7 +71,7 @@ class qtype_shortanswer_renderer extends qtype_renderer {
             $placeholder = $matches[0];
             $inputattributes['size'] = round(strlen($placeholder) * 1.1);
         }
-        $input = html_writer::empty_tag('input', $inputattributes) . $feedbackimg;
+        $input = html_writer::tag('textarea', $currentanswer, $inputattributes) . $feedbackimg;
 
         if ($placeholder) {
             $inputinplace = html_writer::tag('label', get_string('answer'),
