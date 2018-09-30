@@ -357,7 +357,7 @@ class assign_submission_onlinetext extends assign_submission_plugin {
             // The actual submission text.
             $onlinetext = trim($onlinetextsubmission->onlinetext);
             // The shortened version of the submission text.
-            $shorttext = shorten_text($onlinetext, 500);
+            $shorttext = shorten_text($onlinetext, 140);
 
             $plagiarismlinks = '';
 
