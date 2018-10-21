@@ -38,7 +38,7 @@ $perpage      = optional_param('perpage', DEFAULT_PAGE_SIZE, PARAM_INT); // How 
 $contextid    = optional_param('contextid', 0, PARAM_INT); // One of this or.
 $courseid     = optional_param('id', 0, PARAM_INT); // This are required.
 $newcourse    = optional_param('newcourse', false, PARAM_BOOL);
-$selectall    = optional_param('selectall', false, PARAM_BOOL); // When rendering checkboxes against users mark them all checked.
+$selectall    = optional_param('selectall', true, PARAM_BOOL); // When rendering checkboxes against users mark them all checked.
 $roleid       = optional_param('roleid', 0, PARAM_INT);
 $groupparam   = optional_param('group', 0, PARAM_INT);
 
