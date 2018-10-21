@@ -58,7 +58,7 @@ class question_import_form extends moodleform {
             if (get_string_manager()->string_exists('pluginname_help', 'qformat_' . $shortname)) {
                 $separator .= $OUTPUT->help_icon('pluginname', 'qformat_' . $shortname);
             }
-            $separator .= '<br>';
+            $separator .= '&nbsp';
             $separators[] = $separator;
         }
 
