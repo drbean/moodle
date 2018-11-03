@@ -96,11 +96,11 @@ class question_import_form extends moodleform {
         // The file to import
         $mform->addElement('header', 'importfileupload', get_string('importquestions', 'question'));
 
-        $mform->addElement('filepicker', 'newfile', get_string('import'));
-        $mform->addRule('newfile', null, 'required', null, 'client');
-
         // Submit button.
         $mform->addElement('submit', 'submitbutton', get_string('import'));
+
+        $mform->addElement('filepicker', 'newfile', get_string('import'));
+        $mform->addRule('newfile', null, 'required', null, 'client');
 
         // Set a template for the format select elements
         $renderer = $mform->defaultRenderer();
