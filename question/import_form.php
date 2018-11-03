@@ -63,6 +63,7 @@ class question_import_form extends moodleform {
         }
 
         $radioarray[] = $mform->createElement('static', 'makelasthelpiconshowup', '');
+	$mform->setDefault('format', "xml");
         $mform->addGroup($radioarray, "formatchoices", '', $separators, false);
         $mform->addRule("formatchoices", null, 'required', null, 'client');
 
