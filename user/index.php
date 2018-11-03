@@ -247,20 +247,6 @@ if ($bulkoperations) {
     echo '<input type="hidden" name="returnto" value="'.s($PAGE->url->out(false)).'" />';
 }
 
-echo $participanttablehtml;
-
-$perpageurl = clone($baseurl);
-$perpageurl->remove_params('perpage');
-if ($perpage == SHOW_ALL_PAGE_SIZE && $participanttable->totalrows > DEFAULT_PAGE_SIZE) {
-    $perpageurl->param('perpage', DEFAULT_PAGE_SIZE);
-    echo $OUTPUT->container(html_writer::link($perpageurl, get_string('showperpage', '', DEFAULT_PAGE_SIZE)), array(), 'showall');
-
-} else if ($participanttable->get_page_size() < $participanttable->totalrows) {
-    $perpageurl->param('perpage', SHOW_ALL_PAGE_SIZE);
-    echo $OUTPUT->container(html_writer::link($perpageurl, get_string('showall', '', $participanttable->totalrows)),
-        array(), 'showall');
-}
-
 if ($bulkoperations) {
     echo '<br /><div class="buttons">';
 
@@ -338,6 +324,20 @@ if ($bulkoperations) {
     $options->stateHelpIcon = $OUTPUT->help_icon('publishstate', 'notes');
     $PAGE->requires->js_call_amd('core_user/participants', 'init', [$options]);
 }
+echo $participanttablehtml;
+
+$perpageurl = clone($baseurl);
+$perpageurl->remove_params('perpage');
+if ($perpage == SHOW_ALL_PAGE_SIZE && $participanttable->totalrows > DEFAULT_PAGE_SIZE) {
+    $perpageurl->param('perpage', DEFAULT_PAGE_SIZE);
+    echo $OUTPUT->container(html_writer::link($perpageurl, get_string('showperpage', '', DEFAULT_PAGE_SIZE)), array(), 'showall');
+
+} else if ($participanttable->get_page_size() < $participanttable->totalrows) {
+    $perpageurl->param('perpage', SHOW_ALL_PAGE_SIZE);
+    echo $OUTPUT->container(html_writer::link($perpageurl, get_string('showall', '', $participanttable->totalrows)),
+        array(), 'showall');
+}
+
 
 echo '</div>';  // Userlist.
 
