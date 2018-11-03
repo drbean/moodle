@@ -79,7 +79,7 @@ class question_import_form extends moodleform {
         $categorygroup[] = $mform->createElement('checkbox', 'contextfromfile', '', get_string('getcontextfromfile', 'question'));
         $mform->addGroup($categorygroup, 'categorygroup', '', '', false);
         $mform->disabledIf('categorygroup', 'catfromfile', 'notchecked');
-        $mform->setDefault('catfromfile', 1);
+        $mform->setDefault('catfromfile', false);
         $mform->setDefault('contextfromfile', 1);
 
         $matchgrades = array();
