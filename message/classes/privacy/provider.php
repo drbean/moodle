@@ -18,6 +18,7 @@
  * Privacy Subsystem implementation for core_message.
  *
  * @package    core_message
+ * @category   privacy
  * @copyright  2018 Mark Nelson <markn@moodle.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
@@ -25,8 +26,10 @@ namespace core_message\privacy;
 
 use core_privacy\local\metadata\collection;
 use core_privacy\local\request\approved_contextlist;
+use core_privacy\local\request\approved_userlist;
 use core_privacy\local\request\contextlist;
 use core_privacy\local\request\transform;
+use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 
 defined('MOODLE_INTERNAL') || die();
@@ -40,7 +43,8 @@ defined('MOODLE_INTERNAL') || die();
 class provider implements
     \core_privacy\local\metadata\provider,
     \core_privacy\local\request\subsystem\provider,
-    \core_privacy\local\request\user_preference_provider {
+    \core_privacy\local\request\user_preference_provider,
+    \core_privacy\local\request\core_userlist_provider {
 
     /**
      * Return the fields which contain personal data.
@@ -90,9 +94,29 @@ class provider implements
             [
                 'userid' => 'privacy:metadata:message_contacts:userid',
                 'contactid' => 'privacy:metadata:message_contacts:contactid',
-                'blocked' => 'privacy:metadata:message_contacts:blocked',
+                'timecreated' => 'privacy:metadata:message_contacts:timecreated',
             ],
             'privacy:metadata:message_contacts'
+        );
+
+        $items->add_database_table(
+            'message_contact_requests',
+            [
+                'userid' => 'privacy:metadata:message_contact_requests:userid',
+                'requesteduserid' => 'privacy:metadata:message_contact_requests:requesteduserid',
+                'timecreated' => 'privacy:metadata:message_contact_requests:timecreated',
+            ],
+            'privacy:metadata:message_contact_requests'
+        );
+
+        $items->add_database_table(
+            'message_users_blocked',
+            [
+                'userid' => 'privacy:metadata:message_users_blocked:userid',
+                'blockeduserid' => 'privacy:metadata:message_users_blocked:blockeduserid',
+                'timecreated' => 'privacy:metadata:message_users_blocked:timecreated',
+            ],
+            'privacy:metadata:message_users_blocked'
         );
 
         $items->add_database_table(
@@ -134,7 +158,11 @@ class provider implements
     public static function export_user_preferences(int $userid) {
         $preferences = get_user_preferences(null, null, $userid);
         foreach ($preferences as $name => $value) {
-            if ((substr($name, 0, 16) == 'message_provider') || ($name == 'message_blocknoncontacts')) {
+            if (
+                (substr($name, 0, 16) == 'message_provider') ||
+                ($name == 'message_blocknoncontacts') ||
+                ($name == 'message_entertosend')
+            ) {
                 writer::export_user_preference(
                     'core_message',
                     $name,
@@ -155,11 +183,70 @@ class provider implements
      * @return contextlist the list of contexts containing user info for the user.
      */
     public static function get_contexts_for_userid(int $userid) : contextlist {
-        // Messages are in the system context.
+        global $DB;
+
         $contextlist = new contextlist();
-        $contextlist->add_system_context();
+
+        // Messages are in the user context.
+        // For the sake of performance, there is no need to call add_from_sql for each of the below cases.
+        // It is enough to add the user's context as soon as we come to the conclusion that the user has some data.
+        // Also, the order of checking is sorted by the probability of occurrence (just by guess).
+        // There is no need to check the message_user_actions table, as there needs to be a message in order to be a message action.
+        // So, checking messages table would suffice.
+
+        $hasdata = false;
+        $hasdata = $hasdata || $DB->record_exists_select('notifications', 'useridfrom = ? OR useridto = ?', [$userid, $userid]);
+        $hasdata = $hasdata || $DB->record_exists('message_conversation_members', ['userid' => $userid]);
+        $hasdata = $hasdata || $DB->record_exists('messages', ['useridfrom' => $userid]);
+        $hasdata = $hasdata || $DB->record_exists_select('message_contacts', 'userid = ? OR contactid = ?', [$userid, $userid]);
+        $hasdata = $hasdata || $DB->record_exists_select('message_users_blocked', 'userid = ? OR blockeduserid = ?',
+                [$userid, $userid]);
+        $hasdata = $hasdata || $DB->record_exists_select('message_contact_requests', 'userid = ? OR requesteduserid = ?',
+                [$userid, $userid]);
+
+        if ($hasdata) {
+            $contextlist->add_user_context($userid);
+        }
 
         return $contextlist;
+    }
+
+    /**
+     * Get the list of users who have data within a context.
+     *
+     * @param   userlist    $userlist   The userlist containing the list of users who have data in this context/plugin combination.
+     */
+    public static function get_users_in_context(userlist $userlist) {
+        global $DB;
+
+        $context = $userlist->get_context();
+
+        if (!$context instanceof \context_user) {
+            return;
+        }
+
+        $userid = $context->instanceid;
+
+        // Messages are in the user context.
+        // For the sake of performance, there is no need to call add_from_sql for each of the below cases.
+        // It is enough to add the user's context as soon as we come to the conclusion that the user has some data.
+        // Also, the order of checking is sorted by the probability of occurrence (just by guess).
+        // There is no need to check the message_user_actions table, as there needs to be a message in order to be a message action.
+        // So, checking messages table would suffice.
+
+        $hasdata = false;
+        $hasdata = $hasdata || $DB->record_exists_select('notifications', 'useridfrom = ? OR useridto = ?', [$userid, $userid]);
+        $hasdata = $hasdata || $DB->record_exists('message_conversation_members', ['userid' => $userid]);
+        $hasdata = $hasdata || $DB->record_exists('messages', ['useridfrom' => $userid]);
+        $hasdata = $hasdata || $DB->record_exists_select('message_contacts', 'userid = ? OR contactid = ?', [$userid, $userid]);
+        $hasdata = $hasdata || $DB->record_exists_select('message_users_blocked', 'userid = ? OR blockeduserid = ?',
+                        [$userid, $userid]);
+        $hasdata = $hasdata || $DB->record_exists_select('message_contact_requests', 'userid = ? OR requesteduserid = ?',
+                        [$userid, $userid]);
+
+        if ($hasdata) {
+            $userlist->add_user($userid);
+        }
     }
 
     /**
@@ -172,19 +259,25 @@ class provider implements
             return;
         }
 
-        // Remove non-system contexts. If it ends up empty then early return.
-        $contexts = array_filter($contextlist->get_contexts(), function($context) {
-            return $context->contextlevel == CONTEXT_SYSTEM;
+        $userid = $contextlist->get_user()->id;
+
+        // Remove non-user and invalid contexts. If it ends up empty then early return.
+        $contexts = array_filter($contextlist->get_contexts(), function($context) use($userid) {
+            return $context->contextlevel == CONTEXT_USER && $context->instanceid == $userid;
         });
 
         if (empty($contexts)) {
             return;
         }
 
-        $userid = $contextlist->get_user()->id;
-
         // Export the contacts.
         self::export_user_data_contacts($userid);
+
+        // Export the contact requests.
+        self::export_user_data_contact_requests($userid);
+
+        // Export the blocked users.
+        self::export_user_data_blocked_users($userid);
 
         // Export the notifications.
         self::export_user_data_notifications($userid);
@@ -199,17 +292,9 @@ class provider implements
      * @param \context $context the context to delete in.
      */
     public static function delete_data_for_all_users_in_context(\context $context) {
-        global $DB;
-
-        if (!$context instanceof \context_system) {
-            return;
+        if ($context instanceof \context_user) {
+            static::delete_user_data($context->instanceid);
         }
-
-        $DB->delete_records('messages');
-        $DB->delete_records('message_user_actions');
-        $DB->delete_records('message_conversation_members');
-        $DB->delete_records('message_contacts');
-        $DB->delete_records('notifications');
     }
 
     /**
@@ -218,27 +303,62 @@ class provider implements
      * @param approved_contextlist $contextlist a list of contexts approved for deletion.
      */
     public static function delete_data_for_user(approved_contextlist $contextlist) {
-        global $DB;
-
         if (empty($contextlist->count())) {
             return;
         }
 
-        // Remove non-system contexts. If it ends up empty then early return.
-        $contexts = array_filter($contextlist->get_contexts(), function($context) {
-            return $context->contextlevel == CONTEXT_SYSTEM;
+        $userid = $contextlist->get_user()->id;
+
+        // Remove non-user and invalid contexts. If it ends up empty then early return.
+        $contexts = array_filter($contextlist->get_contexts(), function($context) use($userid) {
+            return $context->contextlevel == CONTEXT_USER && $context->instanceid == $userid;
         });
 
         if (empty($contexts)) {
             return;
         }
 
-        $userid = $contextlist->get_user()->id;
+        static::delete_user_data($userid);
+    }
+
+    /**
+     * Delete multiple users within a single context.
+     *
+     * @param   approved_userlist       $userlist The approved context and user information to delete information for.
+     */
+    public static function delete_data_for_users(approved_userlist $userlist) {
+        $context = $userlist->get_context();
+
+        if (!$context instanceof \context_user) {
+            return;
+        }
+
+        // Remove invalid users. If it ends up empty then early return.
+        $userids = array_filter($userlist->get_userids(), function($userid) use($context) {
+            return $context->instanceid == $userid;
+        });
+
+        if (empty($userids)) {
+            return;
+        }
+
+        static::delete_user_data($context->instanceid);
+    }
+
+    /**
+     * Delete all user data for the specified user.
+     *
+     * @param int $userid The user id
+     */
+    protected static function delete_user_data(int $userid) {
+        global $DB;
 
         $DB->delete_records('messages', ['useridfrom' => $userid]);
         $DB->delete_records('message_user_actions', ['userid' => $userid]);
         $DB->delete_records('message_conversation_members', ['userid' => $userid]);
         $DB->delete_records_select('message_contacts', 'userid = ? OR contactid = ?', [$userid, $userid]);
+        $DB->delete_records_select('message_contact_requests', 'userid = ? OR requesteduserid = ?', [$userid, $userid]);
+        $DB->delete_records_select('message_users_blocked', 'userid = ? OR blockeduserid = ?', [$userid, $userid]);
         $DB->delete_records_select('notifications', 'useridfrom = ? OR useridto = ?', [$userid, $userid]);
     }
 
@@ -250,18 +370,70 @@ class provider implements
     protected static function export_user_data_contacts(int $userid) {
         global $DB;
 
-        $context = \context_system::instance();
+        $context = \context_user::instance($userid);
 
         // Get the user's contacts.
-        if ($contacts = $DB->get_records('message_contacts', ['userid' => $userid], 'id ASC')) {
+        if ($contacts = $DB->get_records_select('message_contacts', 'userid = ? OR contactid = ?', [$userid, $userid], 'id ASC')) {
             $contactdata = [];
             foreach ($contacts as $contact) {
                 $contactdata[] = (object) [
-                    'contact' => transform::user($contact->contactid),
-                    'blocked' => transform::yesno($contact->blocked)
+                    'contact' => transform::user($contact->contactid)
                 ];
             }
             writer::with_context($context)->export_data([get_string('contacts', 'core_message')], (object) $contactdata);
+        }
+    }
+
+    /**
+     * Export the messaging contact requests data.
+     *
+     * @param int $userid
+     */
+    protected static function export_user_data_contact_requests(int $userid) {
+        global $DB;
+
+        $context = \context_user::instance($userid);
+
+        if ($contactrequests = $DB->get_records_select('message_contact_requests', 'userid = ? OR requesteduserid = ?',
+                [$userid, $userid], 'id ASC')) {
+            $contactrequestsdata = [];
+            foreach ($contactrequests as $contactrequest) {
+                if ($userid == $contactrequest->requesteduserid) {
+                    $maderequest = false;
+                    $contactid = $contactrequest->userid;
+                } else {
+                    $maderequest = true;
+                    $contactid = $contactrequest->requesteduserid;
+                }
+
+                $contactrequestsdata[] = (object) [
+                    'contactrequest' => transform::user($contactid),
+                    'maderequest' => transform::yesno($maderequest)
+                ];
+            }
+            writer::with_context($context)->export_data([get_string('contactrequests', 'core_message')],
+                (object) $contactrequestsdata);
+        }
+    }
+
+    /**
+     * Export the messaging blocked users data.
+     *
+     * @param int $userid
+     */
+    protected static function export_user_data_blocked_users(int $userid) {
+        global $DB;
+
+        $context = \context_user::instance($userid);
+
+        if ($blockedusers = $DB->get_records('message_users_blocked', ['userid' => $userid], 'id ASC')) {
+            $blockedusersdata = [];
+            foreach ($blockedusers as $blockeduser) {
+                $blockedusersdata[] = (object) [
+                    'blockeduser' => transform::user($blockeduser->blockeduserid)
+                ];
+            }
+            writer::with_context($context)->export_data([get_string('blockedusers', 'core_message')], (object) $blockedusersdata);
         }
     }
 
@@ -273,7 +445,7 @@ class provider implements
     protected static function export_user_data_messages(int $userid) {
         global $DB;
 
-        $context = \context_system::instance();
+        $context = \context_user::instance($userid);
 
         $sql = "SELECT DISTINCT mcm.conversationid as id
                   FROM {message_conversation_members} mcm
@@ -345,7 +517,7 @@ class provider implements
     protected static function export_user_data_notifications(int $userid) {
         global $DB;
 
-        $context = \context_system::instance();
+        $context = \context_user::instance($userid);
 
         $notificationdata = [];
         $select = "useridfrom = ? OR useridto = ?";
