@@ -35,61 +35,10 @@
 }}
 
 <div class="h-100 hidden bg-white" aria-hidden="true" data-region="view-settings">
-{{#settings}}
-    <div data-region="settings" class="p-3">
-        <h3 class="h6 font-weight-bold">{{#str}}privacy, message{{/str}}</h3>
-        <p>{{#str}}privacy_desc, message{{/str}}</p>
-        <div
-            data-region="preference-control"
-            data-preference="blocknoncontacts"
-            class="mb-3"
-        >
-            {{#privacy}}
-                <div class="custom-control custom-radio mb-2">
-                    <input
-                        type="radio"
-                        name="message_blocknoncontacts"
-                        class="custom-control-input"
-                        id="block-noncontacts-{{uniqid}}-{{value}}"
-                        value="{{value}}"
-                        {{#checked}}checked{{/checked}}
-                    >
-                    <label class="custom-control-label ml-2" for="block-noncontacts-{{uniqid}}-{{value}}">
-                        {{text}}
-                    </label>
-                </div>
-            {{/privacy}}
-        </div>
-        <h3 class="mb-2 mt-4 h6 font-weight-bold">{{#str}}categoryemail, admin{{/str}}</h3>
-        <div
-            data-region="preference-control"
-            data-preference="emailnotifications"
-        >
-            <span class="switch">
-                <input type="checkbox"
-                    id="email-alerts-{{uniqid}}"
-                    {{#emailenabled}}checked{{/emailenabled}}
-                >
-                <label for="email-alerts-{{uniqid}}">
-                    {{#str}} emailalert, hub {{/str}}
-                </label>
-            </span>
-        </div>
-        <h3 class="mb-2 mt-4 h6 font-weight-bold">{{#str}} general, core {{/str}}</h3>
-        <div
-            data-region="preference-control"
-            data-preference="entertosend"
-        >
-            <span class="switch">
-                <input type="checkbox"
-                    id="enter-to-send-{{uniqid}}"
-                    {{#entertosend}}checked{{/entertosend}}
-                >
-                <label for="enter-to-send-{{uniqid}}">
-                    {{#str}} useentertosend, core_message {{/str}}
-                </label>
-            </span>
-        </div>
+    <div class="hidden" data-region="content-container">
+        {{> core_message/message_drawer_view_settings_body_content }}
     </div>
-{{/settings}}
+    <div data-region="placeholder-container">
+        {{> core_message/message_drawer_view_settings_body_placeholder }}
+    </div>
 </div>

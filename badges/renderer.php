@@ -113,13 +113,13 @@ class core_badges_renderer extends plugin_renderer_base {
                     'type' => 'submit',
                     'name' => 'award',
                     'value' => $this->output->larrow() . ' ' . get_string('award', 'badges'),
-                    'class' => 'actionbutton')
+                    'class' => 'actionbutton btn btn-secondary')
                 );
         $actioncell->text .= html_writer::empty_tag('input', array(
                     'type' => 'submit',
                     'name' => 'revoke',
                     'value' => get_string('revoke', 'badges') . ' ' . $this->output->rarrow(),
-                    'class' => 'actionbutton')
+                    'class' => 'actionbutton btn btn-secondary')
                 );
         $actioncell->text .= html_writer::end_tag('div', array());
         $actioncell->attributes['class'] = 'actions';
@@ -348,15 +348,25 @@ class core_badges_renderer extends plugin_renderer_base {
         $output .= $this->output->heading(get_string('badgedetails', 'badges'), 3);
         $dl = array();
         $dl[get_string('name')] = $badge->name;
-        $dl[get_string('version', 'badges')] = $badge->version;
+        if (!empty($badge->version)) {
+            $dl[get_string('version', 'badges')] = $badge->version;
+        }
         $dl[get_string('language')] = $languages[$badge->language];
         $dl[get_string('description', 'badges')] = $badge->description;
-        $dl[get_string('imageauthorname', 'badges')] = $badge->imageauthorname;
-        $dl[get_string('imageauthoremail', 'badges')] =
-            html_writer::tag('a', $badge->imageauthoremail, array('href' => 'mailto:' . $badge->imageauthoremail));
-        $dl[get_string('imageauthorurl', 'badges')] =
-            html_writer::link($badge->imageauthorurl, $badge->imageauthorurl, array('target' => '_blank'));
-        $dl[get_string('imagecaption', 'badges')] = $badge->imagecaption;
+        if (!empty($badge->imageauthorname)) {
+            $dl[get_string('imageauthorname', 'badges')] = $badge->imageauthorname;
+        }
+        if (!empty($badge->imageauthoremail)) {
+            $dl[get_string('imageauthoremail', 'badges')] =
+                    html_writer::tag('a', $badge->imageauthoremail, array('href' => 'mailto:' . $badge->imageauthoremail));
+        }
+        if (!empty($badge->imageauthorurl)) {
+            $dl[get_string('imageauthorurl', 'badges')] =
+                    html_writer::link($badge->imageauthorurl, $badge->imageauthorurl, array('target' => '_blank'));
+        }
+        if (!empty($badge->imagecaption)) {
+            $dl[get_string('imagecaption', 'badges')] = $badge->imagecaption;
+        }
 
         if ($badge->type == BADGE_TYPE_COURSE && isset($badge->courseid)) {
             $coursename = $DB->get_field('course', 'fullname', array('id' => $badge->courseid));
@@ -722,8 +732,10 @@ class core_badges_renderer extends plugin_renderer_base {
         }
 
         if (has_capability('moodle/badges:configuredetails', $context)) {
-            $related = $DB->count_records_sql("SELECT COUNT(br.badgeid)
-                      FROM {badge_related} br WHERE br.badgeid = :badgeid", array('badgeid' => $badgeid));
+            $sql = "SELECT COUNT(br.badgeid)
+                      FROM {badge_related} br
+                     WHERE (br.badgeid = :badgeid OR br.relatedbadgeid = :badgeid2)";
+            $related = $DB->count_records_sql($sql, ['badgeid' => $badgeid, 'badgeid2' => $badgeid]);
             $row[] = new tabobject('brelated',
                 new moodle_url('/badges/related.php', array('id' => $badgeid)),
                 get_string('brelated', 'badges', $related)

@@ -525,7 +525,8 @@ function translate_message_default_setting($plugindefault, $processorname) {
 
 /**
  * Get messages sent or/and received by the specified users.
- * Please note that this function return deleted messages too.
+ * Please note that this function return deleted messages too. Besides, only individual conversation messages
+ * are returned to maintain backwards compatibility.
  *
  * @param  int      $useridto       the user id who received the message
  * @param  int      $useridfrom     the user id who sent the message. -10 or -20 for no-reply or support user
@@ -581,8 +582,9 @@ function message_get_messages($useridto, $useridfrom = 0, $notifications = -1, $
                                 $messagejoinsql
                              WHERE mr.useridfrom = ?
                                AND mr.useridfrom != mcm.userid
-                               AND u.deleted = 0 ";
-        $messageparams = array_merge($messagejoinparams, [$useridfrom]);
+                               AND u.deleted = 0
+                               AND mc.type = ? ";
+        $messageparams = array_merge($messagejoinparams, [$useridfrom, \core_message\api::MESSAGE_CONVERSATION_TYPE_INDIVIDUAL]);
 
         // Create the notifications query and params.
         $notificationsql .= "INNER JOIN {user} u
@@ -598,11 +600,23 @@ function message_get_messages($useridto, $useridfrom = 0, $notifications = -1, $
                                $messagejoinsql
                             WHERE mcm.userid = ?
                               AND mr.useridfrom != mcm.userid
-                              AND u.deleted = 0 ";
-        $messageparams = array_merge($messagejoinparams, [$useridto]);
-        if (!empty($useridfrom)) {
+                              AND u.deleted = 0
+                              AND mc.type = ? ";
+        $messageparams = array_merge($messagejoinparams, [$useridto, \core_message\api::MESSAGE_CONVERSATION_TYPE_INDIVIDUAL]);
+
+        // If we're dealing with messages only and both useridto and useridfrom are set,
+        // try to get a conversation between the users. Break early if we can't find one.
+        if (!empty($useridfrom) && $notifications == 0) {
             $messagesql .= " AND mr.useridfrom = ? ";
             $messageparams[] = $useridfrom;
+
+            // There should be an individual conversation between the users. If not, we can return early.
+            $conversationid = \core_message\api::get_conversation_between_users([$useridto, $useridfrom]);
+            if (empty($conversationid)) {
+                return [];
+            }
+            $messagesql .= " AND mc.id = ? ";
+            $messageparams[] = $conversationid;
         }
 
         // Create the notifications query and params.
@@ -791,7 +805,7 @@ function core_message_render_navbar_output(\renderer_base $renderer) {
     // Add the messages popover.
     if (!empty($CFG->messaging)) {
         $unreadcount = \core_message\api::count_unread_conversations($USER);
-        $requestcount = \core_message\api::count_received_contact_requests($USER);
+        $requestcount = \core_message\api::get_received_contact_requests_count($USER->id);
         $context = [
             'userid' => $USER->id,
             'unreadcount' => $unreadcount + $requestcount
@@ -820,83 +834,37 @@ function core_message_standard_after_main_region_html() {
     }
 
     $renderer = $PAGE->get_renderer('core');
-    $individualconversationcount = \core_message\api::count_conversations(
-        $USER,
-        \core_message\api::MESSAGE_CONVERSATION_TYPE_INDIVIDUAL,
-        true
-    );
-    $groupconversationcount = \core_message\api::count_conversations(
-        $USER,
-        \core_message\api::MESSAGE_CONVERSATION_TYPE_GROUP,
-        true
-    );
-    $systemcontext = \context_system::instance();
-    $usercontext = \context_user::instance($USER->id);
-    $ufservice = \core_favourites\service_factory::get_service_for_user_context($usercontext);
-    $favouriteconversationcount = $ufservice->count_favourites_by_type('core_message', 'message_conversations', $systemcontext);
-    $requestcount = \core_message\api::count_received_contact_requests($USER);
+    $requestcount = \core_message\api::get_received_contact_requests_count($USER->id);
     $contactscount = \core_message\api::count_contacts($USER->id);
 
-    // Get the privacy settings options for being messaged.
-    $privacysetting = \core_message\api::get_user_privacy_messaging_preference($USER->id);
     $choices = [];
     $choices[] = [
         'value' => \core_message\api::MESSAGE_PRIVACY_ONLYCONTACTS,
-        'text' => get_string('contactableprivacy_onlycontacts', 'message'),
-        'checked' => ($privacysetting == \core_message\api::MESSAGE_PRIVACY_ONLYCONTACTS)
+        'text' => get_string('contactableprivacy_onlycontacts', 'message')
     ];
     $choices[] = [
         'value' => \core_message\api::MESSAGE_PRIVACY_COURSEMEMBER,
-        'text' => get_string('contactableprivacy_coursemember', 'message'),
-        'checked' => ($privacysetting == \core_message\api::MESSAGE_PRIVACY_COURSEMEMBER)
+        'text' => get_string('contactableprivacy_coursemember', 'message')
     ];
     if (!empty($CFG->messagingallusers)) {
         // Add the MESSAGE_PRIVACY_SITE option when site-wide messaging between users is enabled.
         $choices[] = [
             'value' => \core_message\api::MESSAGE_PRIVACY_SITE,
-            'text' => get_string('contactableprivacy_site', 'message'),
-            'checked' => ($privacysetting == \core_message\api::MESSAGE_PRIVACY_SITE)
+            'text' => get_string('contactableprivacy_site', 'message')
         ];
     }
-    // Email settings.
-    $emailloggedin = get_user_preferences('message_provider_moodle_instantmessage_loggedin', 'none', $USER);
-    $emailloggedoff = get_user_preferences('message_provider_moodle_instantmessage_loggedoff', 'none', $USER);
-    $emailenabled = $emailloggedin == 'email' || $emailloggedoff == 'email';
 
     // Enter to send.
     $entertosend = get_user_preferences('message_entertosend', false, $USER);
+
+    // Get the unread counts for the current user.
+    $unreadcounts = \core_message\api::get_unread_conversation_counts($USER->id);
 
     return $renderer->render_from_template('core_message/message_drawer', [
         'contactrequestcount' => $requestcount,
         'loggedinuser' => [
             'id' => $USER->id,
             'midnight' => usergetmidnight(time())
-        ],
-        'overview' => [
-            'messages' => [
-                'expanded' => empty($favouriteconversationcount) && empty($groupconversationcount),
-                'count' => [
-                    'unread' => 0, // TODO: fix me.
-                    'total' => $individualconversationcount
-                ],
-                'placeholders' => array_fill(0, $individualconversationcount, true)
-            ],
-            'groupmessages' => [
-                'expanded' => empty($favouriteconversationcount) && !empty($groupconversationcount),
-                'count' => [
-                    'unread' => 0, // TODO: fix me.
-                    'total' => $groupconversationcount
-                ],
-                'placeholders' => array_fill(0, $groupconversationcount, true)
-            ],
-            'favourites' => [
-                'expanded' => !empty($favouriteconversationcount),
-                'count' => [
-                    'unread' => 0, // TODO: fix me.
-                    'total' => $favouriteconversationcount
-                ],
-                'placeholders' => array_fill(0, $favouriteconversationcount, true)
-            ],
         ],
         'contacts' => [
             'sectioncontacts' => [
@@ -908,7 +876,6 @@ function core_message_standard_after_main_region_html() {
         ],
         'settings' => [
             'privacy' => $choices,
-            'emailenabled' => $emailenabled,
             'entertosend' => $entertosend
         ]
     ]);
