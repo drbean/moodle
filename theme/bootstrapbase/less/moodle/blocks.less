@@ -287,6 +287,9 @@
         border: 1px solid @tableBorder;
         .border-radius(@baseBorderRadius);
     }
+    .multiline {
+        white-space: normal;
+    }
     .summary img {
         max-width: 100%;
     }
@@ -298,6 +301,9 @@
     }
     a.coursename {
         color: @textColor;
+    }
+    .h5 {
+        font-size: round(@baseFontSize * 1.15); // ~16px
     }
 }
 
@@ -323,6 +329,15 @@
     a:hover {
         text-decoration: none;
         color: unset;
+    }
+}
+
+.block_myoverview {
+    .content {
+        min-height: 19.35rem;
+    }
+    .paged-content-page-container {
+        min-height: 13rem;
     }
 }
 

@@ -939,6 +939,15 @@ $functions = array(
         'ajax' => true,
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
     ),
+    'core_message_get_received_contact_requests_count' => array(
+        'classname' => 'core_message_external',
+        'methodname' => 'get_received_contact_requests_count',
+        'classpath' => 'message/externallib.php',
+        'description' => 'Gets the number of received contact requests',
+        'type' => 'read',
+        'ajax' => true,
+        'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+    ),
     'core_message_delete_contacts' => array(
         'classname' => 'core_message_external',
         'methodname' => 'delete_contacts',
@@ -1075,8 +1084,18 @@ $functions = array(
         'classname' => 'core_message_external',
         'methodname' => 'get_contacts',
         'classpath' => 'message/externallib.php',
+        'description' => '** DEPRECATED ** Please do not call this function any more.
+                          Retrieve the contact list',
+        'type' => 'read',
+        'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+    ),
+    'core_message_get_user_contacts' => array(
+        'classname' => 'core_message_external',
+        'methodname' => 'get_user_contacts',
+        'classpath' => 'message/externallib.php',
         'description' => 'Retrieve the contact list',
         'type' => 'read',
+        'ajax' => true,
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
     ),
     'core_message_get_conversations' => array(
@@ -1111,6 +1130,24 @@ $functions = array(
         'methodname' => 'get_messages',
         'classpath' => 'message/externallib.php',
         'description' => 'Retrieve a list of messages sent and received by a user (conversations, notifications or both)',
+        'type' => 'read',
+        'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+        'ajax' => true,
+    ),
+    'core_message_get_conversation_counts' => array(
+        'classname' => 'core_message_external',
+        'methodname' => 'get_conversation_counts',
+        'classpath' => 'message/externallib.php',
+        'description' => 'Retrieve a list of conversation counts, indexed by type.',
+        'type' => 'read',
+        'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+        'ajax' => true,
+    ),
+    'core_message_get_unread_conversation_counts' => array(
+        'classname' => 'core_message_external',
+        'methodname' => 'get_unread_conversation_counts',
+        'classpath' => 'message/externallib.php',
+        'description' => 'Retrieve a list of unread conversation counts, indexed by type.',
         'type' => 'read',
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
         'ajax' => true,
@@ -1278,6 +1315,7 @@ $functions = array(
         'type' => 'read',
         'capabilities' => 'moodle/user:editownmessageprofile',
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+        'ajax' => true
     ),
     'core_message_set_favourite_conversations' => array(
         'classname' => 'core_message_external',

@@ -753,6 +753,60 @@ class core_message_external extends external_api {
     }
 
     /**
+     * Returns the number of contact requests the user has received parameters description.
+     *
+     * @return external_function_parameters
+     */
+    public static function get_received_contact_requests_count_parameters() {
+        return new external_function_parameters(
+            array(
+                'userid' => new external_value(PARAM_INT, 'The id of the user we want to return the number of ' .
+                    'received contact requests for', VALUE_REQUIRED),
+            )
+        );
+    }
+
+    /**
+     * Returns the number of contact requests the user has received.
+     *
+     * @param int $userid The ID of the user we want to return the number of received contact requests for
+     * @return external_value
+     */
+    public static function get_received_contact_requests_count(int $userid) {
+        global $CFG, $USER;
+
+        // Check if messaging is enabled.
+        if (empty($CFG->messaging)) {
+            throw new moodle_exception('disabled', 'message');
+        }
+
+        // Validate context.
+        $context = context_system::instance();
+        self::validate_context($context);
+
+        $params = [
+            'userid' => $userid,
+        ];
+        $params = self::validate_parameters(self::get_received_contact_requests_count_parameters(), $params);
+
+        $capability = 'moodle/site:manageallmessaging';
+        if (($USER->id != $params['userid']) && !has_capability($capability, $context)) {
+            throw new required_capability_exception($context, $capability, 'nopermissions', '');
+        }
+
+        return \core_message\api::get_received_contact_requests_count($params['userid']);
+    }
+
+    /**
+     * Returns the number of contact requests the user has received return description.
+     *
+     * @return external_value
+     */
+    public static function get_received_contact_requests_count_returns() {
+        return new external_value(PARAM_INT, 'The number of received contact requests');
+    }
+
+    /**
      * Returns get conversation members parameters description.
      *
      * @return external_function_parameters
@@ -827,7 +881,7 @@ class core_message_external extends external_api {
      */
     public static function get_conversation_members_returns() {
         return new external_multiple_structure(
-            self::get_conversation_member_structure(true)
+            self::get_conversation_member_structure()
         );
     }
 
@@ -1049,6 +1103,7 @@ class core_message_external extends external_api {
                 'isblocked' => new external_value(PARAM_BOOL, 'If the user has been blocked'),
                 'unreadcount' => new external_value(PARAM_INT, 'The number of unread messages in this conversation',
                     VALUE_DEFAULT, null),
+                'conversationid' => new external_value(PARAM_INT, 'The id of the conversation', VALUE_DEFAULT, null),
             )
         );
     }
@@ -1073,7 +1128,7 @@ class core_message_external extends external_api {
                 'unreadcount' => new external_value(PARAM_INT, 'The number of unread messages in this conversation',
                     VALUE_DEFAULT, null),
                 'members' => new external_multiple_structure(
-                    self::get_conversation_member_structure(true)
+                    self::get_conversation_member_structure()
                 ),
                 'messages' => new external_multiple_structure(
                     self::get_conversation_message_structure()
@@ -1085,13 +1140,10 @@ class core_message_external extends external_api {
     /**
      * Return the structure of a conversation member.
      *
-     * @param bool $includecontactrequests Are we including contact requests?
-     * @param bool $includeconversations Are we including conversations?
      * @return external_single_structure
      * @since Moodle 3.6
      */
-    private static function get_conversation_member_structure(bool $includecontactrequests = false,
-                                                              bool $includeconversations = false) {
+    private static function get_conversation_member_structure() {
         $result = [
             'id' => new external_value(PARAM_INT, 'The user id'),
             'fullname' => new external_value(PARAM_NOTAGS, 'The user\'s name'),
@@ -1109,10 +1161,10 @@ class core_message_external extends external_api {
         $result['contactrequests'] = new external_multiple_structure(
             new external_single_structure(
                 [
-                    'id' => new external_value(PARAM_INT, 'The id of the message'),
-                    'userid' => new external_value(PARAM_INT, 'The id of the user who sent the message'),
-                    'requesteduserid' => new external_value(PARAM_RAW, 'The text of the message'),
-                    'timecreated' => new external_value(PARAM_INT, 'The timecreated timestamp for the message'),
+                    'id' => new external_value(PARAM_INT, 'The id of the contact request'),
+                    'userid' => new external_value(PARAM_INT, 'The id of the user who created the contact request'),
+                    'requesteduserid' => new external_value(PARAM_INT, 'The id of the user confirming the request'),
+                    'timecreated' => new external_value(PARAM_INT, 'The timecreated timestamp for the contact request'),
                 ]
             ), 'The contact requests', VALUE_OPTIONAL
         );
@@ -1447,10 +1499,10 @@ class core_message_external extends external_api {
         return new external_single_structure(
             array(
                 'contacts' => new external_multiple_structure(
-                    self::get_conversation_member_structure(false, true)
+                    self::get_conversation_member_structure()
                 ),
                 'noncontacts' => new external_multiple_structure(
-                    self::get_conversation_member_structure(false, true)
+                    self::get_conversation_member_structure()
                 )
             )
         );
@@ -1707,7 +1759,7 @@ class core_message_external extends external_api {
         } else {
             // We have to throw an exception here because the external functions annoyingly
             // don't accept null to be returned for a single structure.
-            throw new \moodle_exception('Conversation does not exist');
+            throw new \moodle_exception('errorconversationdoesnotexist', 'message');
         }
     }
 
@@ -1812,7 +1864,7 @@ class core_message_external extends external_api {
         } else {
             // We have to throw an exception here because the external functions annoyingly
             // don't accept null to be returned for a single structure.
-            throw new \moodle_exception('Conversation does not exist');
+            throw new \moodle_exception('errorconversationdoesnotexist', 'message');
         }
     }
 
@@ -2226,6 +2278,66 @@ class core_message_external extends external_api {
     }
 
     /**
+     * The user contacts return parameters.
+     *
+     * @return external_function_parameters
+     */
+    public static function get_user_contacts_parameters() {
+        return new external_function_parameters(
+            array(
+                'userid' => new external_value(PARAM_INT, 'The id of the user who we retrieving the contacts for'),
+                'limitfrom' => new external_value(PARAM_INT, 'Limit from', VALUE_DEFAULT, 0),
+                'limitnum' => new external_value(PARAM_INT, 'Limit number', VALUE_DEFAULT, 0)
+            )
+        );
+    }
+
+    /**
+     * Get user contacts.
+     *
+     * @param int $userid The id of the user who we are viewing conversations for
+     * @param int $limitfrom
+     * @param int $limitnum
+     * @return array
+     * @throws moodle_exception
+     */
+    public static function get_user_contacts(int $userid, int $limitfrom = 0, int $limitnum = 0) {
+        global $CFG, $USER;
+
+        // Check if messaging is enabled.
+        if (empty($CFG->messaging)) {
+            throw new moodle_exception('disabled', 'message');
+        }
+
+        $systemcontext = context_system::instance();
+
+        $params = array(
+            'userid' => $userid,
+            'limitfrom' => $limitfrom,
+            'limitnum' => $limitnum
+        );
+        $params = self::validate_parameters(self::get_user_contacts_parameters(), $params);
+        self::validate_context($systemcontext);
+
+        if (($USER->id != $params['userid']) && !has_capability('moodle/site:readallmessages', $systemcontext)) {
+            throw new moodle_exception('You do not have permission to perform this action.');
+        }
+
+        return \core_message\api::get_user_contacts($params['userid'], $params['limitfrom'], $params['limitnum']);
+    }
+
+    /**
+     * The user contacts return structure.
+     *
+     * @return external_multiple_structure
+     */
+    public static function get_user_contacts_returns() {
+        return new external_multiple_structure(
+            self::get_conversation_member_structure()
+        );
+    }
+
+    /**
      * The get most recent message return parameters.
      *
      * @deprecated since 3.6
@@ -2390,6 +2502,7 @@ class core_message_external extends external_api {
     /**
      * Get contacts parameters description.
      *
+     * @deprecated since 3.6
      * @return external_function_parameters
      * @since Moodle 2.5
      */
@@ -2400,6 +2513,7 @@ class core_message_external extends external_api {
     /**
      * Get contacts.
      *
+     * @deprecated since 3.6
      * @return external_description
      * @since Moodle 2.5
      */
@@ -2481,6 +2595,7 @@ class core_message_external extends external_api {
     /**
      * Get contacts return description.
      *
+     * @deprecated since 3.6
      * @return external_description
      * @since Moodle 2.5
      */
@@ -2525,6 +2640,15 @@ class core_message_external extends external_api {
                 )
             )
         );
+    }
+
+    /**
+     * Marking the method as deprecated.
+     *
+     * @return bool
+     */
+    public static function get_contacts_is_deprecated() {
+        return true;
     }
 
     /**
@@ -3917,6 +4041,8 @@ class core_message_external extends external_api {
                                                     'displayname' => new external_value(PARAM_TEXT, 'Display name'),
                                                     'name' => new external_value(PARAM_PLUGIN, 'Processor name'),
                                                     'locked' => new external_value(PARAM_BOOL, 'Is locked by admin?'),
+                                                    'lockedmessage' => new external_value(PARAM_TEXT,
+                                                        'Text to display if locked', VALUE_OPTIONAL),
                                                     'userconfigured' => new external_value(PARAM_INT, 'Is configured?'),
                                                     'loggedin' => new external_single_structure(
                                                         array(
@@ -4066,6 +4192,7 @@ class core_message_external extends external_api {
             'warnings' => array(),
             'preferences' => $notificationlistoutput->export_for_template($renderer),
             'blocknoncontacts' => \core_message\api::get_user_privacy_messaging_preference($user->id),
+            'entertosend' => get_user_preferences('message_entertosend', false, $user)
         );
         return $result;
     }
@@ -4081,6 +4208,7 @@ class core_message_external extends external_api {
             array(
                 'preferences' => self::get_preferences_structure(),
                 'blocknoncontacts' => new external_value(PARAM_INT, 'Privacy messaging setting to define who can message you'),
+                'entertosend' => new external_value(PARAM_BOOL, 'User preference for using enter to send messages'),
                 'warnings' => new external_warnings(),
             )
         );
@@ -4274,7 +4402,157 @@ class core_message_external extends external_api {
      */
     public static function get_member_info_returns() {
         return new external_multiple_structure(
-            self::get_conversation_member_structure(true)
+            self::get_conversation_member_structure()
+        );
+    }
+
+    /**
+     * Returns description of method parameters for get_conversation_counts() method.
+     *
+     * @return external_function_parameters
+     */
+    public static function get_conversation_counts_parameters() {
+        return new external_function_parameters(
+            [
+                'userid' => new external_value(PARAM_INT, 'id of the user, 0 for current user', VALUE_DEFAULT, 0)
+            ]
+        );
+    }
+
+    /**
+     * Returns an array of conversation counts for the various types of conversations, including favourites.
+     *
+     * Return format:
+     * [
+     *     'favourites' => 0,
+     *     'types' => [
+     *          \core_message\api::MESSAGE_CONVERSATION_TYPE_INDIVIDUAL => 0,
+     *          \core_message\api::MESSAGE_CONVERSATION_TYPE_GROUP => 0
+     *      ]
+     * ]
+     *
+     * @param int $userid the id of the user whose counts we are fetching.
+     * @return array the array of conversation counts, indexed by type.
+     * @throws moodle_exception if the current user cannot perform this action.
+     */
+    public static function get_conversation_counts(int $userid) {
+        global $CFG, $USER;
+
+        // All the business logic checks that really shouldn't be in here.
+        if (empty($CFG->messaging)) {
+            throw new moodle_exception('disabled', 'message');
+        }
+
+        if (empty($userid)) {
+            $userid = $USER->id;
+        }
+
+        $params = ['userid' => $userid];
+        $params = self::validate_parameters(self::get_conversation_counts_parameters(), $params);
+
+        $systemcontext = context_system::instance();
+        self::validate_context($systemcontext);
+
+        if (($USER->id != $params['userid']) && !has_capability('moodle/site:readallmessages', $systemcontext)) {
+            throw new moodle_exception('You do not have permission to perform this action.');
+        }
+
+        return \core_message\api::get_conversation_counts($params['userid']);
+    }
+
+    /**
+     * Get conversation counts return description.
+     *
+     * @return external_description
+     */
+    public static function get_conversation_counts_returns() {
+        return new external_single_structure(
+            [
+                'favourites' => new external_value(PARAM_INT, 'Total number of favourite conversations'),
+                'types' => new external_single_structure(
+                    [
+                        \core_message\api::MESSAGE_CONVERSATION_TYPE_INDIVIDUAL => new external_value(PARAM_INT,
+                            'Total number of individual conversations'),
+                        \core_message\api::MESSAGE_CONVERSATION_TYPE_GROUP => new external_value(PARAM_INT,
+                            'Total number of group conversations'),
+                    ]
+                ),
+            ]
+        );
+    }
+
+    /**
+     * Returns description of method parameters for get_unread_conversation_counts() method.
+     *
+     * @return external_function_parameters
+     */
+    public static function get_unread_conversation_counts_parameters() {
+        return new external_function_parameters(
+            [
+                'userid' => new external_value(PARAM_INT, 'id of the user, 0 for current user', VALUE_DEFAULT, 0)
+            ]
+        );
+    }
+
+    /**
+     * Returns an array of unread conversation counts for the various types of conversations, including favourites.
+     *
+     * Return format:
+     * [
+     *     'favourites' => 0,
+     *     'types' => [
+     *          \core_message\api::MESSAGE_CONVERSATION_TYPE_INDIVIDUAL => 0,
+     *          \core_message\api::MESSAGE_CONVERSATION_TYPE_GROUP => 0
+     *      ]
+     * ]
+     *
+     * @param int $userid the id of the user whose counts we are fetching.
+     * @return array the array of unread conversation counts, indexed by type.
+     * @throws moodle_exception if the current user cannot perform this action.
+     */
+    public static function get_unread_conversation_counts(int $userid) {
+        global $CFG, $USER;
+
+        // All the business logic checks that really shouldn't be in here.
+        if (empty($CFG->messaging)) {
+            throw new moodle_exception('disabled', 'message');
+        }
+
+        if (empty($userid)) {
+            $userid = $USER->id;
+        }
+
+        $params = ['userid' => $userid];
+        $params = self::validate_parameters(self::get_unread_conversation_counts_parameters(), $params);
+
+        $systemcontext = context_system::instance();
+        self::validate_context($systemcontext);
+
+        if (($USER->id != $params['userid']) && !has_capability('moodle/site:readallmessages', $systemcontext)) {
+            throw new moodle_exception('You do not have permission to perform this action.');
+        }
+
+        return \core_message\api::get_unread_conversation_counts($params['userid']);
+    }
+
+    /**
+     * Get unread conversation counts return description.
+     *
+     * @return external_description
+     */
+    public static function get_unread_conversation_counts_returns() {
+        return new external_single_structure(
+            [
+                'favourites' => new external_value(PARAM_INT, 'Total number of unread favourite conversations'),
+                'types' => new external_single_structure(
+                    [
+                        \core_message\api::MESSAGE_CONVERSATION_TYPE_INDIVIDUAL => new external_value(PARAM_INT,
+                            'Total number of unread individual conversations'),
+                        \core_message\api::MESSAGE_CONVERSATION_TYPE_GROUP => new external_value(PARAM_INT,
+                            'Total number of unread group conversations'),
+                    ]
+                ),
+            ]
         );
     }
 }

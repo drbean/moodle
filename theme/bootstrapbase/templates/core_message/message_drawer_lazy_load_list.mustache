@@ -15,10 +15,9 @@
     along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 }}
 {{!
-    @template core_message/message_drawer_view_contacts_section
+    @template core_message/message_drawer_lazy_load_list
 
-    This template will render a generic "section" on the contacts page of
-    the message drawer.
+    This template will render a lazy loaded list for the message drawer.
 
     Classes required for JS:
     * none
@@ -30,27 +29,35 @@
     * userid The logged in user id
     * urls The URLs for the popover
 
+    This is an overridden template
+    adding "div.onpix" to ensure content has a 1 px height for Bootstrap 2 JS to work.
+
     Example context (json):
     {}
 
 }}
-
 <div
-    data-region="{{$region}}{{/region}}"
+    class="{{$rootclasses}}{{/rootclasses}}"
+    style="overflow-y: auto"
+    aria-live="polite"
+    data-region="lazy-load-list"
     data-user-id="{{loggedinuser.id}}"
+    {{$rootattributes}}{{/rootattributes}}
 >
-    <div
-        id="{{$region}}{{/region}}-target"
-        aria-labelledby="{{$region}}{{/region}}"
-    >
-        <div class="hidden text-center p-2" data-region="empty-message-container">
+    <div class="onepix">
+    </div>
+    <div class="hidden text-center p-2" data-region="empty-message-container">
+        <p class="text-muted mt-2">
             {{$emptymessage}}{{/emptymessage}}
-        </div>
-        <div class="hidden list-group" data-region="contacts-content-container">
-            {{$content}}{{/content}}
-        </div>
-        <div class="list-group" data-region="placeholder-container">
-            {{$placeholder}}{{/placeholder}}
-        </div>
+        </p>
+    </div>
+    <div class="hidden list-group" data-region="content-container">
+        {{$content}}{{/content}}
+    </div>
+    <div class="list-group" data-region="placeholder-container">
+        {{$placeholder}}{{/placeholder}}
+    </div>
+    <div class="w-100 text-center p-3 hidden" data-region="loading-icon-container" >
+        {{> core/loading }}
     </div>
 </div>

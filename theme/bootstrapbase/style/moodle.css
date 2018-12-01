@@ -4823,6 +4823,14 @@ h3.sectionname .inplaceeditable.inplaceeditingon .editinstructions {
     background-color: #eee;
   }
 }
+.text-decoration-none {
+  text-decoration: none !important;
+  /* stylelint-disable-line declaration-no-important */
+}
+.position-right {
+  right: 0 !important;
+  /* stylelint-disable-line declaration-no-important */
+}
 /* admin.less */
 .formtable tbody th {
   font-weight: normal;
@@ -9176,6 +9184,14 @@ a.ygtvspacer:hover {
   text-decoration: none;
   color: inherit;
 }
+.message-drawer .btn-link:hover,
+.message-drawer .btn-link:focus {
+  background-color: #e8e8e8;
+  text-decoration: none;
+}
+.message-drawer .accordion-group .collapse.in {
+  overflow-y: auto;
+}
 .message-drawer .message p {
   margin: 0;
 }
@@ -9190,17 +9206,17 @@ a.ygtvspacer:hover {
   font-size: 14px;
   font-weight: normal;
 }
-.message-drawer .overview-section-toggle .collapsed-icon-container {
-  display: none;
-}
-.message-drawer .overview-section-toggle .expanded-icon-container {
+.message-drawer .accordion-group .collapsed-icon-container {
   display: inline-block;
 }
-.message-drawer .overview-section-toggle.collapsed .collapsed-icon-container {
-  display: inline-block;
-}
-.message-drawer .overview-section-toggle.collapsed .expanded-icon-container {
+.message-drawer .accordion-group .expanded-icon-container {
   display: none;
+}
+.message-drawer .accordion-group.expanded .collapsed-icon-container {
+  display: none;
+}
+.message-drawer .accordion-group.expanded .expanded-icon-container {
+  display: inline-block;
 }
 .message-drawer .view-overview-body .section {
   display: block;
@@ -9209,8 +9225,31 @@ a.ygtvspacer:hover {
   display: flex;
   flex-direction: column;
 }
+.message-drawer .onepix {
+  height: 1px;
+  width: 1px;
+  position: absolute;
+}
 .message-drawer .view-conversation .content-message-container img {
   max-width: 100%;
+}
+.message-drawer .list-group .list-group-item {
+  border-top: 1px solid #e3e3e3;
+  border-bottom: 1px solid #e3e3e3;
+  margin-bottom: -1px;
+}
+.message-drawer .list-group .list-group-item:first-child {
+  border-top: 0;
+}
+.message-drawer .list-group .list-group-item:last-child {
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+.message-drawer .last-message {
+  min-height: 20px;
+}
+.message-drawer .lazy-load-list {
+  overflow-y: auto;
 }
 @media (max-width: 480px) {
   .messaging-area-container .messaging-area .messages-area.editing .messages-header {
@@ -16035,10 +16074,13 @@ img.hide {
   display: inherit;
 }
 .icon-bar,
+.icon-no-margin,
 img.icon-post,
 img.icon-info,
 img.icon-warn,
-img.icon-pre {
+img.icon-pre,
+[class^="icon-size-"],
+[class*=" icon-size-"] {
   background-image: none;
 }
 .loginbox.twocolumns .signuppanel,
@@ -16334,6 +16376,9 @@ body {
   -moz-border-radius: 4px;
   border-radius: 4px;
 }
+.block .block-cards .multiline {
+  white-space: normal;
+}
 .block .block-cards .summary img {
   max-width: 100%;
 }
@@ -16345,6 +16390,9 @@ body {
 }
 .block .block-cards a.coursename {
   color: #333;
+}
+.block .block-cards .h5 {
+  font-size: 16px;
 }
 .dashboard-card-deck.one-row {
   flex-flow: nowrap;
@@ -16366,6 +16414,12 @@ body {
 .block_recentlyaccesseditems a:hover {
   text-decoration: none;
   color: unset;
+}
+.block_myoverview .content {
+  min-height: 19.35rem;
+}
+.block_myoverview .paged-content-page-container {
+  min-height: 13rem;
 }
 .dashboard-card-deck {
   box-sizing: border-box;
@@ -19164,24 +19218,24 @@ button.yui3-button.closebutton:hover {
 /**
  * Grader report.
  */
-.path-grade-report .gradeparent table {
+.path-grade-report-grader .gradeparent table {
   -webkit-border-radius: 4px;
   -moz-border-radius: 4px;
   border-radius: 4px;
 }
-.path-grade-report .gradeparent tr .cell {
+.path-grade-report-grader .gradeparent tr .cell {
   background-color: #fff;
 }
-.path-grade-report .gradeparent table,
-.path-grade-report .gradeparent .cell {
+.path-grade-report-grader .gradeparent table,
+.path-grade-report-grader .gradeparent .cell {
   border-color: #ddd;
 }
-.path-grade-report .gradeparent tr:nth-of-type(even) .cell,
-.path-grade-report .gradeparent .floater .cell,
-.path-grade-report .gradeparent .avg {
+.path-grade-report-grader .gradeparent tr:nth-of-type(even) .cell,
+.path-grade-report-grader .gradeparent .floater .cell,
+.path-grade-report-grader .gradeparent .avg {
   background-color: #f9f9f9;
 }
-.path-grade-report .gradeparent table .clickable {
+.path-grade-report-grader .gradeparent table .clickable {
   cursor: pointer;
 }
 /**
@@ -22254,6 +22308,9 @@ ul.indented-list {
 .position-relative {
   position: relative !important;
 }
+.align-self-start {
+  align-self: flex-start !important;
+}
 .align-self-center {
   align-self: center !important;
 }
@@ -22321,6 +22378,9 @@ ul.indented-list {
 .icon-size-4 img {
   height: 24px !important;
   width: 24px !important;
+}
+.text-muted {
+  color: #999;
 }
 .dir-rtl .dir-rtl-hide {
   display: none;

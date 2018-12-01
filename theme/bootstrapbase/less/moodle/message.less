@@ -1268,7 +1268,16 @@
         text-decoration: none;
         color: inherit;
     }
-
+    .btn-link {
+        &:hover,
+        &:focus {
+            background-color: darken(@wellBackground, 5%);
+            text-decoration: none;
+        }
+    }
+    .accordion-group .collapse.in {
+        overflow-y: auto;
+    }
     .message {
         p {
             margin: 0;
@@ -1289,20 +1298,20 @@
         font-weight: normal;
     }
 
-    .overview-section-toggle {
+    .accordion-group {
         .collapsed-icon-container {
-            display: none;
-        }
-        .expanded-icon-container {
             display: inline-block;
         }
+        .expanded-icon-container {
+            display: none;
+        }
 
-        &.collapsed {
+        &.expanded {
             .collapsed-icon-container {
-                display: inline-block;
+                display: none;
             }
             .expanded-icon-container {
-                display: none;
+                display: inline-block;
             }
         }
     }
@@ -1317,6 +1326,11 @@
             }
         }
     }
+    .onepix {
+        height: 1px;
+        width: 1px;
+        position: absolute;
+    }
 
     .view-conversation {
         .content-message-container {
@@ -1324,6 +1338,27 @@
                 max-width: 100%;
             }
         }
+    }
+    .list-group {
+        .list-group-item {
+            border-top: 1px solid #e3e3e3;
+            border-bottom: 1px solid #e3e3e3;
+            margin-bottom: -1px;
+            &:first-child {
+                border-top: 0;
+            }
+            &:last-child {
+                border-bottom: 0;
+                margin-bottom: 0;
+            }
+        }
+    }
+    .last-message {
+        min-height: 20px;
+    }
+
+    .lazy-load-list {
+        overflow-y: auto;
     }
 }
 

@@ -2794,5 +2794,65 @@ function xmldb_main_upgrade($oldversion) {
         upgrade_main_savepoint(true, 2018111301.00);
     }
 
+    if ($oldversion < 2018111900.00) {
+        // Update favourited courses, so they are saved in the particular course context instead of the system.
+        $favouritedcourses = $DB->get_records('favourite', ['component' => 'core_course', 'itemtype' => 'courses']);
+
+        foreach ($favouritedcourses as $fc) {
+            $coursecontext = \context_course::instance($fc->itemid);
+            $fc->contextid = $coursecontext->id;
+            $DB->update_record('favourite', $fc);
+        }
+
+        upgrade_main_savepoint(true, 2018111900.00);
+    }
+
+    if ($oldversion < 2018111900.01) {
+        // Define table oauth2_access_token to be created.
+        $table = new xmldb_table('oauth2_access_token');
+
+        // Adding fields to table oauth2_access_token.
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('usermodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('issuerid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('token', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null);
+        $table->add_field('expires', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('scope', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null);
+
+        // Adding keys to table oauth2_access_token.
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('issueridkey', XMLDB_KEY_FOREIGN_UNIQUE, ['issuerid'], 'oauth2_issuer', ['id']);
+
+        // Conditionally launch create table for oauth2_access_token.
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2018111900.01);
+    }
+
+    if ($oldversion < 2018112000.00) {
+        // Update favourited conversations, so they are saved in the proper context instead of the system.
+        $sql = "SELECT f.*, mc.contextid as conversationctx
+                  FROM {favourite} f
+                  JOIN {message_conversations} mc
+                    ON mc.id = f.itemid";
+        $favouritedconversations = $DB->get_records_sql($sql);
+        foreach ($favouritedconversations as $fc) {
+            if (empty($fc->conversationctx)) {
+                $conversationidctx = \context_user::instance($fc->userid)->id;
+            } else {
+                $conversationidctx = $fc->conversationctx;
+            }
+
+            $DB->set_field('favourite', 'contextid', $conversationidctx, ['id' => $fc->id]);
+        }
+
+        upgrade_main_savepoint(true, 2018112000.00);
+    }
+
     return true;
 }
