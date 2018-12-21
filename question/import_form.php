@@ -59,6 +59,7 @@ class question_import_form extends moodleform {
                 $separator .= $OUTPUT->help_icon('pluginname', 'qformat_' . $shortname);
             }
             $separator .= '&nbsp';
+            $separator .= '<div class="w-100"></div>';
             $separators[] = $separator;
         }
 
