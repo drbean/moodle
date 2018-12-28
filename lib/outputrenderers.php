@@ -894,6 +894,7 @@ class core_renderer extends renderer_base {
             // Add module URL (as key) and name (as value) to the activity list array.
             $activitylist[$linkurl->out(false)] = $modname;
         }
+        $activitylist = array_reverse($activitylist);
 
         $nummods = count($mods);
 
