@@ -74,6 +74,7 @@ echo $OUTPUT->doctype() ?>
             <div class="row-fluid">
                 <section id="region-main" class="<?php echo $regionmain; ?>">
                     <?php
+                    echo $OUTPUT->activity_navigation();
                     echo $OUTPUT->course_content_header();
                     echo $OUTPUT->main_content();
                     echo $OUTPUT->activity_navigation();
