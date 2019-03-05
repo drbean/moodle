@@ -814,6 +814,7 @@ class assign {
         }
 
         // Delete the instance.
+        // We must delete the module record after we delete the grade item.
         $DB->delete_records('assign', array('id'=>$this->get_instance()->id));
 
         return $result;
@@ -5291,7 +5292,7 @@ class assign {
 
             // Show the grader's identity if 'Hide Grader' is disabled or has the 'Show Hidden Grader' capability.
             $showgradername = (
-                    has_capability('mod/assign:showhiddengrader', $this->context, $user) or
+                    has_capability('mod/assign:showhiddengrader', $this->context) or
                     !$this->is_hidden_grader()
             );
 
@@ -8991,10 +8992,15 @@ class assign {
 
         // Trigger the course module viewed event.
         $assigninstance = $this->get_instance();
-        $event = \mod_assign\event\course_module_viewed::create(array(
-                'objectid' => $assigninstance->id,
-                'context' => $this->get_context()
-        ));
+        $params = [
+            'objectid' => $assigninstance->id,
+            'context' => $this->get_context()
+        ];
+        if ($this->is_blind_marking()) {
+            $params['anonymous'] = 1;
+        }
+
+        $event = \mod_assign\event\course_module_viewed::create($params);
 
         $event->add_record_snapshot('assign', $assigninstance);
         $event->trigger();

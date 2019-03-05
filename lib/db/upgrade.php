@@ -2719,5 +2719,22 @@ function xmldb_main_upgrade($oldversion) {
         upgrade_main_savepoint(true, 2019011801.03);
     }
 
+    if ($oldversion < 2019021500.01) {
+        $insights = $DB->get_record('message_providers', ['component' => 'moodle', 'name' => 'insights']);
+        if (!empty($insights)) {
+            $insights->capability = null;
+            $DB->update_record('message_providers', $insights);
+        }
+        upgrade_main_savepoint(true, 2019021500.01);
+    }
+
+    if ($oldversion < 2019021500.02) {
+        // Default 'off' for existing sites as this is the behaviour they had earlier.
+        set_config('messagingdefaultpressenter', false);
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2019021500.02);
+    }
+
     return true;
 }
