@@ -43,6 +43,14 @@ class mod_assign_quick_grading_form extends moodleform {
         $mform = $this->_form;
         $instance = $this->_customdata;
 
+        // Skip notifications option.
+        $mform->addElement('selectyesno', 'sendstudentnotifications', get_string('sendstudentnotifications', 'assign'));
+        $mform->setDefault('sendstudentnotifications', $instance['sendstudentnotifications']);
+
+        // Buttons.
+        $savemessage = get_string('saveallquickgradingchanges', 'assign');
+        $mform->addElement('submit', 'savequickgrades', $savemessage);
+
         // Visible elements.
         $mform->addElement('html', $instance['gradingtable']);
 
@@ -53,14 +61,6 @@ class mod_assign_quick_grading_form extends moodleform {
         $mform->setType('action', PARAM_ALPHA);
         $mform->addElement('hidden', 'lastpage', $instance['page']);
         $mform->setType('lastpage', PARAM_INT);
-
-        // Skip notifications option.
-        $mform->addElement('selectyesno', 'sendstudentnotifications', get_string('sendstudentnotifications', 'assign'));
-        $mform->setDefault('sendstudentnotifications', $instance['sendstudentnotifications']);
-
-        // Buttons.
-        $savemessage = get_string('saveallquickgradingchanges', 'assign');
-        $mform->addElement('submit', 'savequickgrades', $savemessage);
     }
 }
 
