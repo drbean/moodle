@@ -56,9 +56,6 @@ class mod_assign_grading_options_form extends moodleform {
                 }
             }
         }
-
-        // Buttons.
-        $this->add_action_buttons(false, get_string('updatetable', 'assign'));
         $mform->addElement('select', 'perpage', get_string('assignmentsperpage', 'assign'), $options, $dirtyclass);
         $options = array('' => get_string('filternone', 'assign'),
                          ASSIGN_FILTER_NOT_SUBMITTED => get_string('filternotsubmitted', 'assign'),
@@ -106,6 +103,9 @@ class mod_assign_grading_options_form extends moodleform {
         $mform->setType('userid', PARAM_INT);
         $mform->addElement('hidden', 'action', 'saveoptions');
         $mform->setType('action', PARAM_ALPHA);
+
+        // Buttons.
+        $this->add_action_buttons(false, get_string('updatetable', 'assign'));
     }
 }
 
