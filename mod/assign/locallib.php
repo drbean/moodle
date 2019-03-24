@@ -4308,6 +4308,11 @@ class assign {
             $o .= $this->get_renderer()->notification(get_string('blindmarkingenabledwarning', 'assign'), 'notifymessage');
         }
 
+        $assignform = new assign_form('gradingoptionsform',
+                                      $gradingoptionsform,
+                                      'M.mod_assign.init_grading_options');
+        $o .= $this->get_renderer()->render($assignform);
+
         // Load and print the table of submissions.
         if ($showquickgrading && $quickgrading) {
             $gradingtable = new assign_grading_table($this, $perpage, $filter, 0, true);
@@ -4339,10 +4344,6 @@ class assign {
             $assignform = new assign_form('gradingbatchoperationsform', $gradingbatchoperationsform);
             $o .= $this->get_renderer()->render($assignform);
         }
-        $assignform = new assign_form('gradingoptionsform',
-                                      $gradingoptionsform,
-                                      'M.mod_assign.init_grading_options');
-        $o .= $this->get_renderer()->render($assignform);
         return $o;
     }
 
