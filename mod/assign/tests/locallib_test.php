@@ -1678,16 +1678,9 @@ class mod_assign_locallib_testcase extends advanced_testcase {
         assign::cron();
 
         $events = $sink->get_events();
-        // Notification has been marked as read, so now first event should be a 'notification_viewed' one. For student.
         $event = reset($events);
-        $this->assertInstanceOf('\core\event\notification_viewed', $event);
-        $this->assertEquals($student->id, $event->userid);
-
-        // And next event should be the 'notification_sent' one. For teacher.
-        $event = $events[1];
         $this->assertInstanceOf('\core\event\notification_sent', $event);
         $this->assertEquals($assign->get_course()->id, $event->other['courseid']);
-        $this->assertEquals($teacher->id, $event->userid);
         $sink->close();
     }
 
@@ -3647,7 +3640,7 @@ Anchor link 2:<a title=\"bananas\" href=\"../logo-240x60.gif\">Link text</a>
         $result = $assign->testable_process_save_quick_grades($data);
         $this->assertContains(get_string('quickgradingchangessaved', 'assign'), $result);
         $grade = $assign->get_user_grade($student->id, false);
-        $this->assertEquals('60.0', $grade->grade);
+        $this->assertEquals(60.0, $grade->grade);
 
         // Attempt to grade with a past attempts grade info.
         $assign->testable_process_add_attempt($student->id);
@@ -3671,7 +3664,7 @@ Anchor link 2:<a title=\"bananas\" href=\"../logo-240x60.gif\">Link text</a>
         $result = $assign->testable_process_save_quick_grades($data);
         $this->assertContains(get_string('quickgradingchangessaved', 'assign'), $result);
         $grade = $assign->get_user_grade($student->id, false);
-        $this->assertEquals('40.0', $grade->grade);
+        $this->assertEquals(40.0, $grade->grade);
 
         // Catch grade update conflicts.
         // Save old data for later.
@@ -3685,13 +3678,13 @@ Anchor link 2:<a title=\"bananas\" href=\"../logo-240x60.gif\">Link text</a>
         $result = $assign->testable_process_save_quick_grades($data);
         $this->assertContains(get_string('quickgradingchangessaved', 'assign'), $result);
         $grade = $assign->get_user_grade($student->id, false);
-        $this->assertEquals('30.0', $grade->grade);
+        $this->assertEquals(30.0, $grade->grade);
 
         // Now update using 'old' data. Should fail.
         $result = $assign->testable_process_save_quick_grades($pastdata);
         $this->assertContains(get_string('errorrecordmodified', 'assign'), $result);
         $grade = $assign->get_user_grade($student->id, false);
-        $this->assertEquals('30.0', $grade->grade);
+        $this->assertEquals(30.0, $grade->grade);
     }
 
     /**

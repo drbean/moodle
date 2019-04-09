@@ -271,6 +271,7 @@ class mod_forum_lib_testcase extends advanced_testcase {
 
         $this->resetAfterTest();
 
+        $cache = cache::make('mod_forum', 'forum_is_tracked');
         $useron = $this->getDataGenerator()->create_user(array('trackforums' => 1));
         $useroff = $this->getDataGenerator()->create_user(array('trackforums' => 0));
         $course = $this->getDataGenerator()->create_course();
@@ -310,6 +311,7 @@ class mod_forum_lib_testcase extends advanced_testcase {
         $result = forum_tp_is_tracked($forumoptional, $useroff);
         $this->assertEquals(false, $result);
 
+        $cache->purge();
         // Don't allow force.
         $CFG->forum_allowforcedreadtracking = 0;
 
@@ -343,6 +345,7 @@ class mod_forum_lib_testcase extends advanced_testcase {
         forum_tp_stop_tracking($forumforce->id, $useroff->id);
         forum_tp_stop_tracking($forumoptional->id, $useroff->id);
 
+        $cache->purge();
         // Allow force.
         $CFG->forum_allowforcedreadtracking = 1;
 
@@ -362,6 +365,7 @@ class mod_forum_lib_testcase extends advanced_testcase {
         $result = forum_tp_is_tracked($forumoptional, $useroff);
         $this->assertEquals(false, $result);
 
+        $cache->purge();
         // Don't allow force.
         $CFG->forum_allowforcedreadtracking = 0;
 
@@ -1708,6 +1712,81 @@ class mod_forum_lib_testcase extends advanced_testcase {
             $this->assertEquals($discussionid, $row->discussion);
         }
     }
+
+    /**
+     * Test the reply count when used with private replies.
+     */
+    public function test_forum_count_discussion_replies_private() {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $forum = $this->getDataGenerator()->create_module('forum', array('course' => $course->id));
+        $context = context_module::instance($forum->cmid);
+        $cm = get_coursemodule_from_instance('forum', $forum->id);
+
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id);
+
+        $teacher = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($teacher->id, $course->id);
+
+        $privilegeduser = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($privilegeduser->id, $course->id, 'editingteacher');
+
+        $otheruser = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($otheruser->id, $course->id);
+
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_forum');
+
+        // Create a discussion with some replies.
+        $record = new stdClass();
+        $record->course = $forum->course;
+        $record->forum = $forum->id;
+        $record->userid = $student->id;
+        $discussion = $generator->create_discussion($record);
+        $replycount = 5;
+        $replyto = $DB->get_record('forum_posts', array('discussion' => $discussion->id));
+
+        // Create a couple of standard replies.
+        $post = new stdClass();
+        $post->userid = $student->id;
+        $post->discussion = $discussion->id;
+        $post->parent = $replyto->id;
+
+        for ($i = 0; $i < $replycount; $i++) {
+            $post = $generator->create_post($post);
+        }
+
+        // Create a private reply post from the teacher back to the student.
+        $reply = new stdClass();
+        $reply->userid = $teacher->id;
+        $reply->discussion = $discussion->id;
+        $reply->parent = $replyto->id;
+        $reply->privatereplyto = $replyto->userid;
+        $generator->create_post($reply);
+
+        // The user is the author of the private reply.
+        $this->setUser($teacher->id);
+        $counts = forum_count_discussion_replies($forum->id);
+        $this->assertEquals($replycount + 1, $counts[$discussion->id]->replies);
+
+        // The user is the intended recipient.
+        $this->setUser($student->id);
+        $counts = forum_count_discussion_replies($forum->id);
+        $this->assertEquals($replycount + 1, $counts[$discussion->id]->replies);
+
+        // The user is not the author or recipient, but does have the readprivatereplies capability.
+        $this->setUser($privilegeduser->id);
+        $counts = forum_count_discussion_replies($forum->id, "", -1, -1, 0, true);
+        $this->assertEquals($replycount + 1, $counts[$discussion->id]->replies);
+
+        // The user is not allowed to view this post.
+        $this->setUser($otheruser->id);
+        $counts = forum_count_discussion_replies($forum->id);
+        $this->assertEquals($replycount, $counts[$discussion->id]->replies);
+    }
+
     public function test_discussion_pinned_sort() {
         list($forum, $discussionids) = $this->create_multiple_discussions_with_replies(10, 5);
         $cm = get_coursemodule_from_instance('forum', $forum->id);
@@ -3005,6 +3084,22 @@ class mod_forum_lib_testcase extends advanced_testcase {
      * @param   bool        $expect
      */
     public function test_forum_discussion_is_locked($forum, $discussion, $expect) {
+        $this->resetAfterTest();
+
+        $datagenerator = $this->getDataGenerator();
+        $plugingenerator = $datagenerator->get_plugin_generator('mod_forum');
+
+        $course = $datagenerator->create_course();
+        $user = $datagenerator->create_user();
+        $forum = $datagenerator->create_module('forum', (object) array_merge([
+            'course' => $course->id
+        ], $forum));
+        $discussion = $plugingenerator->create_discussion((object) array_merge([
+            'course' => $course->id,
+            'userid' => $user->id,
+            'forum' => $forum->id,
+        ], $discussion));
+
         $this->assertEquals($expect, forum_discussion_is_locked($forum, $discussion));
     }
 
@@ -3015,39 +3110,29 @@ class mod_forum_lib_testcase extends advanced_testcase {
      */
     public function forum_discussion_is_locked_provider() {
         return [
-            'Unlocked: lockdiscussionafter is unset' => [
-                (object) [],
-                (object) [],
-                false
-            ],
             'Unlocked: lockdiscussionafter is false' => [
-                (object) ['lockdiscussionafter' => false],
-                (object) [],
-                false
-            ],
-            'Unlocked: lockdiscussionafter is null' => [
-                (object) ['lockdiscussionafter' => null],
-                (object) [],
+                ['lockdiscussionafter' => false],
+                [],
                 false
             ],
             'Unlocked: lockdiscussionafter is set; forum is of type single; post is recent' => [
-                (object) ['lockdiscussionafter' => DAYSECS, 'type' => 'single'],
-                (object) ['timemodified' => time()],
+                ['lockdiscussionafter' => DAYSECS, 'type' => 'single'],
+                ['timemodified' => time()],
                 false
             ],
             'Unlocked: lockdiscussionafter is set; forum is of type single; post is old' => [
-                (object) ['lockdiscussionafter' => MINSECS, 'type' => 'single'],
-                (object) ['timemodified' => time() - DAYSECS],
+                ['lockdiscussionafter' => MINSECS, 'type' => 'single'],
+                ['timemodified' => time() - DAYSECS],
                 false
             ],
             'Unlocked: lockdiscussionafter is set; forum is of type eachuser; post is recent' => [
-                (object) ['lockdiscussionafter' => DAYSECS, 'type' => 'eachuser'],
-                (object) ['timemodified' => time()],
+                ['lockdiscussionafter' => DAYSECS, 'type' => 'eachuser'],
+                ['timemodified' => time()],
                 false
             ],
             'Locked: lockdiscussionafter is set; forum is of type eachuser; post is old' => [
-                (object) ['lockdiscussionafter' => MINSECS, 'type' => 'eachuser'],
-                (object) ['timemodified' => time() - DAYSECS],
+                ['lockdiscussionafter' => MINSECS, 'type' => 'eachuser'],
+                ['timemodified' => time() - DAYSECS],
                 true
             ],
         ];
@@ -3508,5 +3593,50 @@ class mod_forum_lib_testcase extends advanced_testcase {
         $this->assertEquals(mod_forum_get_completion_active_rule_descriptions($cm2), []);
         $this->assertEquals(mod_forum_get_completion_active_rule_descriptions($moddefaults), $activeruledescriptions);
         $this->assertEquals(mod_forum_get_completion_active_rule_descriptions(new stdClass()), []);
+    }
+
+    /**
+     * Test the forum_post_is_visible_privately function used in private replies.
+     */
+    public function test_forum_post_is_visible_privately() {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $forum = $this->getDataGenerator()->create_module('forum', array('course' => $course->id));
+        $context = context_module::instance($forum->cmid);
+        $cm = get_coursemodule_from_instance('forum', $forum->id);
+
+        $author = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($author->id, $course->id);
+
+        $recipient = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($recipient->id, $course->id);
+
+        $privilegeduser = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($privilegeduser->id, $course->id, 'editingteacher');
+
+        $otheruser = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($otheruser->id, $course->id);
+
+        // Fake a post - this does not need to be persisted to the DB.
+        $post = new \stdClass();
+        $post->userid = $author->id;
+        $post->privatereplyto = $recipient->id;
+
+        // The user is the author.
+        $this->setUser($author->id);
+        $this->assertTrue(forum_post_is_visible_privately($post, $cm));
+
+        // The user is the intended recipient.
+        $this->setUser($recipient->id);
+        $this->assertTrue(forum_post_is_visible_privately($post, $cm));
+
+        // The user is not the author or recipient, but does have the readprivatereplies capability.
+        $this->setUser($privilegeduser->id);
+        $this->assertTrue(forum_post_is_visible_privately($post, $cm));
+
+        // The user is not allowed to view this post.
+        $this->setUser($otheruser->id);
+        $this->assertFalse(forum_post_is_visible_privately($post, $cm));
     }
 }
