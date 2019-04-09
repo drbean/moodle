@@ -1654,9 +1654,10 @@ class core_plugin_manager {
             'repository' => array('alfresco'),
             'tinymce' => array('dragmath'),
             'tool' => array('bloglevelupgrade', 'qeupgradehelper', 'timezoneimport', 'assignmentupgrade'),
-            'theme' => array('afterburner', 'anomaly', 'arialist', 'base', 'binarius', 'boxxie', 'brick', 'canvas',
-                'formal_white', 'formfactor', 'fusion', 'leatherbound', 'magazine', 'mymobile', 'nimble', 'nonzero',
-                'overlay', 'serenity', 'sky_high', 'splash', 'standard', 'standardold'),
+            'theme' => array('bootstrapbase', 'clean', 'more', 'afterburner', 'anomaly', 'arialist', 'base',
+                'binarius', 'boxxie', 'brick', 'canvas', 'formal_white', 'formfactor', 'fusion', 'leatherbound',
+                'magazine', 'mymobile', 'nimble', 'nonzero', 'overlay', 'serenity', 'sky_high', 'splash',
+                'standard', 'standardold'),
             'webservice' => array('amf'),
         );
 
@@ -1738,6 +1739,10 @@ class core_plugin_manager {
 
             'calendartype' => array(
                 'gregorian'
+            ),
+
+            'customfield' => array(
+                'checkbox', 'date', 'select', 'text', 'textarea'
             ),
 
             'coursereport' => array(
@@ -1901,7 +1906,7 @@ class core_plugin_manager {
             ),
 
             'theme' => array(
-                'boost', 'bootstrapbase', 'clean', 'more'
+                'boost', 'classic'
             ),
 
             'tool' => array(

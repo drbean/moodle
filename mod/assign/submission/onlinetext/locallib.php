@@ -59,6 +59,22 @@ class assign_submission_onlinetext extends assign_submission_plugin {
     }
 
     /**
+     * Remove a submission.
+     *
+     * @param stdClass $submission The submission
+     * @return boolean
+     */
+    public function remove(stdClass $submission) {
+        global $DB;
+
+        $submissionid = $submission ? $submission->id : 0;
+        if ($submissionid) {
+            $DB->delete_records('assignsubmission_onlinetext', array('submission' => $submissionid));
+        }
+        return true;
+    }
+
+    /**
      * Get the settings for onlinetext submission plugin
      *
      * @param MoodleQuickForm $mform The form to add elements to
@@ -234,6 +250,9 @@ class assign_submission_onlinetext extends assign_submission_plugin {
         );
         if (!empty($submission->userid) && ($submission->userid != $USER->id)) {
             $params['relateduserid'] = $submission->userid;
+        }
+        if ($this->assignment->is_blind_marking()) {
+            $params['anonymous'] = 1;
         }
         $event = \assignsubmission_onlinetext\event\assessable_uploaded::create($params);
         $event->trigger();

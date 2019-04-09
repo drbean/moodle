@@ -344,13 +344,13 @@ class core_course_renderer extends plugin_renderer_base {
     }
 
     /**
-     * Renders html to display a course search form
+     * Renders html to display a course search form.
      *
      * @param string $value default value to populate the search field
      * @param string $format display format - 'plain' (default), 'short' or 'navbar'
      * @return string
      */
-    function course_search_form($value = '', $format = 'plain') {
+    public function course_search_form($value = '', $format = 'plain') {
         static $count = 0;
         $formid = 'coursesearch';
         if ((++$count) > 1) {
@@ -372,23 +372,19 @@ class core_course_renderer extends plugin_renderer_base {
                 $inputsize = 30;
         }
 
-        $strsearchcourses= get_string("searchcourses");
-        $searchurl = new moodle_url('/course/search.php');
-
-        $output = html_writer::start_tag('form', array('id' => $formid, 'action' => $searchurl, 'method' => 'get'));
-        $output .= html_writer::start_tag('fieldset', array('class' => 'coursesearchbox invisiblefieldset'));
-        $output .= html_writer::tag('label', $strsearchcourses.': ', array('for' => $inputid));
-        $output .= html_writer::empty_tag('input', array('type' => 'text', 'id' => $inputid,
-            'size' => $inputsize, 'name' => 'search', 'value' => s($value)));
-        $output .= html_writer::empty_tag('input', array('type' => 'submit',
-            'value' => get_string('go')));
-        $output .= html_writer::end_tag('fieldset');
+        $data = (object) [
+                'searchurl' => (new moodle_url('/course/search.php'))->out(false),
+                'id' => $formid,
+                'inputid' => $inputid,
+                'inputsize' => $inputsize,
+                'value' => $value
+        ];
         if ($format != 'navbar') {
-            $output .= $this->output->help_icon("coursesearch", "core");
+            $helpicon = new \help_icon('coursesearch', 'core');
+            $data->helpicon = $helpicon->export_for_template($this);
         }
-        $output .= html_writer::end_tag('form');
 
-        return $output;
+        return $this->render_from_template('core_course/course_search_form', $data);
     }
 
     /**
@@ -468,7 +464,7 @@ class core_course_renderer extends plugin_renderer_base {
                 $imgalt = get_string('completion-alt-' . $completionicon, 'completion', $formattedname);
             }
 
-            if ($this->page->user_is_editing()) {
+            if ($this->page->user_is_editing() || !has_capability('moodle/course:togglecompletion', $mod->context)) {
                 // When editing, the icon is just an image.
                 $completionpixicon = new pix_icon('i/completion-'.$completionicon, $imgalt, '',
                         array('title' => $imgalt, 'class' => 'iconsmall'));
@@ -503,7 +499,7 @@ class core_course_renderer extends plugin_renderer_base {
                     'type' => 'hidden', 'name' => 'completionstate', 'value' => $newstate));
                 $output .= html_writer::tag('button',
                     $this->output->pix_icon('i/completion-' . $completionicon, $imgalt),
-                        array('class' => 'btn btn-link', 'title' => $imgalt));
+                        array('class' => 'btn btn-link', 'aria-live' => 'assertive'));
                 $output .= html_writer::end_tag('div');
                 $output .= html_writer::end_tag('form');
             } else {
@@ -648,7 +644,7 @@ class core_course_renderer extends plugin_renderer_base {
 
         // Display link itself.
         $activitylink = html_writer::empty_tag('img', array('src' => $mod->get_icon_url(),
-                'class' => 'iconlarge activityicon', 'alt' => ' ', 'role' => 'presentation')) .
+                'class' => 'iconlarge activityicon', 'alt' => '', 'role' => 'presentation', 'aria-hidden' => 'true')) .
                 html_writer::tag('span', $instancename . $altname, array('class' => 'instancename'));
         if ($mod->uservisible) {
             $output .= html_writer::link($url, $activitylink, array('class' => $linkclasses, 'onclick' => $onclick));
@@ -1116,7 +1112,8 @@ class core_course_renderer extends plugin_renderer_base {
         // If we display course in collapsed form but the course has summary or course contacts, display the link to the info page.
         $content .= html_writer::start_tag('div', array('class' => 'moreinfo'));
         if ($chelper->get_show_courses() < self::COURSECAT_SHOW_COURSES_EXPANDED) {
-            if ($course->has_summary() || $course->has_course_contacts() || $course->has_course_overviewfiles()) {
+            if ($course->has_summary() || $course->has_course_contacts() || $course->has_course_overviewfiles()
+                    || $course->has_custom_fields()) {
                 $url = new moodle_url('/course/info.php', array('id' => $course->id));
                 $image = $this->output->pix_icon('i/info', $this->strings->summary);
                 $content .= html_writer::link($url, $image, array('title' => $this->strings->summary));
@@ -1219,6 +1216,13 @@ class core_course_renderer extends plugin_renderer_base {
                                 $cat->get_formatted_name(), array('class' => $cat->visible ? '' : 'dimmed'));
                 $content .= html_writer::end_tag('div'); // .coursecat
             }
+        }
+
+        // Display custom fields.
+        if ($course->has_custom_fields()) {
+            $handler = core_course\customfield\course_handler::create();
+            $customfields = $handler->display_custom_fields_data($course->get_custom_fields());
+            $content .= \html_writer::tag('div', $customfields, ['class' => 'customfields-container']);
         }
 
         return $content;
@@ -2330,10 +2334,10 @@ class core_course_renderer extends plugin_renderer_base {
     /**
      * Output news for the frontpage (extract from site-wide news forum)
      *
-     * @param stdClass $newsforum record from db table 'forum' that represents the site news forum
+     * @param stdClass $forum record from db table 'forum' that represents the site news forum
      * @return string
      */
-    protected function frontpage_news($newsforum) {
+    protected function frontpage_news($forum) {
         global $CFG, $SITE, $SESSION, $USER;
         require_once($CFG->dirroot .'/mod/forum/lib.php');
 
@@ -2342,23 +2346,27 @@ class core_course_renderer extends plugin_renderer_base {
         if (isloggedin()) {
             $SESSION->fromdiscussion = $CFG->wwwroot;
             $subtext = '';
-            if (\mod_forum\subscriptions::is_subscribed($USER->id, $newsforum)) {
-                if (!\mod_forum\subscriptions::is_forcesubscribed($newsforum)) {
+            if (\mod_forum\subscriptions::is_subscribed($USER->id, $forum)) {
+                if (!\mod_forum\subscriptions::is_forcesubscribed($forum)) {
                     $subtext = get_string('unsubscribe', 'forum');
                 }
             } else {
                 $subtext = get_string('subscribe', 'forum');
             }
-            $suburl = new moodle_url('/mod/forum/subscribe.php', array('id' => $newsforum->id, 'sesskey' => sesskey()));
+            $suburl = new moodle_url('/mod/forum/subscribe.php', array('id' => $forum->id, 'sesskey' => sesskey()));
             $output .= html_writer::tag('div', html_writer::link($suburl, $subtext), array('class' => 'subscribelink'));
         }
 
-        ob_start();
-        forum_print_latest_discussions($SITE, $newsforum, $SITE->newsitems, 'plain', 'p.modified DESC');
-        $output .= ob_get_contents();
-        ob_end_clean();
+        $coursemodule = get_coursemodule_from_instance('forum', $forum->id);
+        $context = context_module::instance($coursemodule->id);
 
-        return $output;
+        $entityfactory = mod_forum\local\container::get_entity_factory();
+        $forumentity = $entityfactory->get_forum_from_stdclass($forum, $context, $coursemodule, $SITE);
+
+        $rendererfactory = mod_forum\local\container::get_renderer_factory();
+        $discussionsrenderer = $rendererfactory->get_frontpage_news_discussion_list_renderer($forumentity);
+        $cm = \cm_info::create($coursemodule);
+        return $output . $discussionsrenderer->render($USER, $cm, null, null, 0, $SITE->newsitems);
     }
 
     /**
@@ -2425,9 +2433,8 @@ class core_course_renderer extends plugin_renderer_base {
                     if (!empty($mycourseshtml)) {
                         $output .= $this->frontpage_part('skipmycourses', 'frontpage-course-list',
                             get_string('mycourses'), $mycourseshtml);
-                        break;
                     }
-                    // No "break" here. If there are no enrolled courses - continue to 'Available courses'.
+                    break;
 
                 case FRONTPAGEALLCOURSELIST:
                     $availablecourseshtml = $this->frontpage_available_courses();
@@ -2498,6 +2505,7 @@ class coursecat_helper {
         // and core_course_category::search_courses().
         $this->coursesdisplayoptions['summary'] = $showcourses >= core_course_renderer::COURSECAT_SHOW_COURSES_AUTO;
         $this->coursesdisplayoptions['coursecontacts'] = $showcourses >= core_course_renderer::COURSECAT_SHOW_COURSES_EXPANDED;
+        $this->coursesdisplayoptions['customfields'] = $showcourses >= core_course_renderer::COURSECAT_SHOW_COURSES_COLLAPSED;
         return $this;
     }
 
@@ -2544,6 +2552,7 @@ class coursecat_helper {
      *      this may be a huge list!
      *    - summary - preloads fields 'summary' and 'summaryformat'
      *    - coursecontacts - preloads course contacts
+     *    - customfields - preloads custom fields data
      *    - isenrolled - preloads indication whether this user is enrolled in the course
      *    - sort - list of fields to sort. Example
      *             array('idnumber' => 1, 'shortname' => 1, 'id' => -1)

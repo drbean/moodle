@@ -99,6 +99,7 @@ class icon_system_fontawesome extends icon_system_font {
             'core:e/document_properties' => 'fa-info',
             'core:e/emoticons' => 'fa-smile-o',
             'core:e/find_replace' => 'fa-search-plus',
+            'core:e/file-text' => 'fa-file-text',
             'core:e/forward' => 'fa-arrow-right',
             'core:e/fullpage' => 'fa-arrows-alt',
             'core:e/fullscreen' => 'fa-arrows-alt',
@@ -210,6 +211,7 @@ class icon_system_fontawesome extends icon_system_font {
             'core:i/categoryevent' => 'fa-cubes',
             'core:i/course' => 'fa-graduation-cap',
             'core:i/courseevent' => 'fa-university',
+            'core:i/customfield' => 'fa-hand-o-right',
             'core:i/db' => 'fa-database',
             'core:i/delete' => 'fa-trash',
             'core:i/down' => 'fa-arrow-down',
@@ -258,6 +260,7 @@ class icon_system_fontawesome extends icon_system_font {
             'core:i/moodle_host' => 'fa-graduation-cap',
             'core:i/moremenu' => 'fa-ellipsis-h',
             'core:i/move_2d' => 'fa-arrows',
+            'core:i/muted' => 'fa-microphone-slash',
             'core:i/navigationitem' => 'fa-fw',
             'core:i/ne_red_mark' => 'fa-remove',
             'core:i/new' => 'fa-bolt',
@@ -333,10 +336,10 @@ class icon_system_fontawesome extends icon_system_font {
             'core:t/calc' => 'fa-calculator',
             'core:t/check' => 'fa-check',
             'core:t/cohort' => 'fa-users',
-            'core:t/collapsed_empty_rtl' => 'fa-plus-square-o',
-            'core:t/collapsed_empty' => 'fa-plus-square-o',
-            'core:t/collapsed_rtl' => 'fa-plus-square',
-            'core:t/collapsed' => 'fa-plus-square',
+            'core:t/collapsed_empty_rtl' => 'fa-caret-square-o-left',
+            'core:t/collapsed_empty' => 'fa-caret-square-o-right',
+            'core:t/collapsed_rtl' => 'fa-caret-left',
+            'core:t/collapsed' => 'fa-caret-right',
             'core:t/collapsedcaret' => 'fa-caret-right',
             'core:t/contextmenu' => 'fa-cog',
             'core:t/copy' => 'fa-copy',
@@ -379,11 +382,13 @@ class icon_system_fontawesome extends icon_system_font {
             'core:t/preview' => 'fa-search-plus',
             'core:t/print' => 'fa-print',
             'core:t/removecontact' => 'fa-user-times',
+            'core:t/reload' => 'fa-refresh',
             'core:t/reset' => 'fa-repeat',
             'core:t/restore' => 'fa-arrow-circle-up',
             'core:t/right' => 'fa-arrow-right',
             'core:t/sendmessage' => 'fa-paper-plane',
             'core:t/show' => 'fa-eye-slash',
+            'core:t/sort_by' => 'fa-sort-amount-asc',
             'core:t/sort_asc' => 'fa-sort-asc',
             'core:t/sort_desc' => 'fa-sort-desc',
             'core:t/sort' => 'fa-sort',
@@ -443,6 +448,9 @@ class icon_system_fontawesome extends icon_system_font {
 
         if (!$subpix->is_mapped()) {
             $data['unmappedIcon'] = $icon->export_for_template($output);
+        }
+        if (isset($icon->attributes['aria-hidden'])) {
+            $data['aria-hidden'] = $icon->attributes['aria-hidden'];
         }
         return $output->render_from_template('core/pix_icon_fontawesome', $data);
     }

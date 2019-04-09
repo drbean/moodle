@@ -157,6 +157,103 @@ class mod_forum_external extends external_api {
     }
 
     /**
+     * Get the forum posts in the specified discussion.
+     *
+     * @param   int $discussionid
+     * @param   string $sortby
+     * @param   string $sortdirection
+     * @return  array
+     */
+    public static function get_discussion_posts(int $discussionid, ?string $sortby, ?string $sortdirection) {
+        global $USER;
+        // Validate the parameter.
+        $params = self::validate_parameters(self::get_discussion_posts_parameters(), [
+                'discussionid' => $discussionid,
+                'sortby' => $sortby,
+                'sortdirection' => $sortdirection,
+            ]);
+        $warnings = [];
+
+        $vaultfactory = mod_forum\local\container::get_vault_factory();
+
+        $discussionvault = $vaultfactory->get_discussion_vault();
+        $discussion = $discussionvault->get_from_id($params['discussionid']);
+
+        $forumvault = $vaultfactory->get_forum_vault();
+        $forum = $forumvault->get_from_id($discussion->get_forum_id());
+
+        $sortby = $params['sortby'];
+        $sortdirection = $params['sortdirection'];
+        $sortallowedvalues = ['id', 'created', 'modified'];
+        $directionallowedvalues = ['ASC', 'DESC'];
+
+        if (!in_array(strtolower($sortby), $sortallowedvalues)) {
+            throw new invalid_parameter_exception('Invalid value for sortby parameter (value: ' . $sortby . '),' .
+                'allowed values are: ' . implode(', ', $sortallowedvalues));
+        }
+
+        $sortdirection = strtoupper($sortdirection);
+        if (!in_array($sortdirection, $directionallowedvalues)) {
+            throw new invalid_parameter_exception('Invalid value for sortdirection parameter (value: ' . $sortdirection . '),' .
+                'allowed values are: ' . implode(',', $directionallowedvalues));
+        }
+
+        $managerfactory = mod_forum\local\container::get_manager_factory();
+        $capabilitymanager = $managerfactory->get_capability_manager($forum);
+
+        $postvault = $vaultfactory->get_post_vault();
+        $posts = $postvault->get_from_discussion_id(
+                $USER,
+                $discussion->get_id(),
+                $capabilitymanager->can_view_any_private_reply($USER),
+                "{$sortby} {$sortdirection}"
+            );
+
+        $builderfactory = mod_forum\local\container::get_builder_factory();
+        $postbuilder = $builderfactory->get_exported_posts_builder();
+
+        $legacydatamapper = mod_forum\local\container::get_legacy_data_mapper_factory();
+
+        return [
+            'posts' => $postbuilder->build($USER, [$forum], [$discussion], $posts),
+            'ratinginfo' => \core_rating\external\util::get_rating_info(
+                $legacydatamapper->get_forum_data_mapper()->to_legacy_object($forum),
+                $forum->get_context(),
+                'mod_forum',
+                'post',
+                $legacydatamapper->get_post_data_mapper()->to_legacy_objects($posts)
+            ),
+            'warnings' => $warnings,
+        ];
+    }
+
+    /**
+     * Describe the post parameters.
+     *
+     * @return external_function_parameters
+     */
+    public static function get_discussion_posts_parameters() {
+        return new external_function_parameters ([
+            'discussionid' => new external_value(PARAM_INT, 'The ID of the discussion from which to fetch posts.', VALUE_REQUIRED),
+            'sortby' => new external_value(PARAM_ALPHA, 'Sort by this element: id, created or modified', VALUE_DEFAULT, 'created'),
+            'sortdirection' => new external_value(PARAM_ALPHA, 'Sort direction: ASC or DESC', VALUE_DEFAULT, 'DESC')
+        ]);
+    }
+
+    /**
+     * Describe the post return format.
+     *
+     * @return external_single_structure
+     */
+    public static function get_discussion_posts_returns() {
+        return new external_single_structure([
+            'posts' => new external_multiple_structure(\mod_forum\local\exporters\post::get_read_structure()),
+            'ratinginfo' => \core_rating\external\util::external_ratings_structure(),
+            'warnings' => new external_warnings()
+        ]);
+    }
+
+    /**
      * Describes the parameters for get_forum_discussion_posts.
      *
      * @return external_function_parameters
@@ -182,6 +279,7 @@ class mod_forum_external extends external_api {
      *
      * @return array the forum post details
      * @since Moodle 2.7
+     * @todo MDL-65252 This will be removed in Moodle 4.1
      */
     public static function get_forum_discussion_posts($discussionid, $sortby = "created", $sortdirection = "DESC") {
         global $CFG, $DB, $USER, $PAGE;
@@ -266,6 +364,8 @@ class mod_forum_external extends external_api {
             } else {
                 $post->postread = true;
             }
+
+            $post->isprivatereply = !empty($post->privatereplyto);
 
             $post->canreply = $canreply;
             if (!empty($post->children)) {
@@ -364,6 +464,7 @@ class mod_forum_external extends external_api {
                                 'userfullname' => new external_value(PARAM_TEXT, 'Post author full name'),
                                 'userpictureurl' => new external_value(PARAM_URL, 'Post author picture.', VALUE_OPTIONAL),
                                 'deleted' => new external_value(PARAM_BOOL, 'This post has been removed.'),
+                                'isprivatereply' => new external_value(PARAM_BOOL, 'The post is a private reply'),
                             ), 'post'
                         )
                     ),
@@ -371,6 +472,15 @@ class mod_forum_external extends external_api {
                 'warnings' => new external_warnings()
             )
         );
+    }
+
+    /**
+     * Mark the get_forum_discussion_posts web service as deprecated.
+     *
+     * @return  bool
+     */
+    public static function get_forum_discussion_posts_is_deprecated() {
+        return true;
     }
 
     /**
@@ -468,7 +578,8 @@ class mod_forum_external extends external_api {
                 }
             }
             // The forum function returns the replies for all the discussions in a given forum.
-            $replies = forum_count_discussion_replies($forumid, $sort, -1, $page, $perpage);
+            $canseeprivatereplies = has_capability('mod/forum:readprivatereplies', $modcontext);
+            $replies = forum_count_discussion_replies($forumid, $sort, -1, $page, $perpage, $canseeprivatereplies);
 
             foreach ($alldiscussions as $discussion) {
 
@@ -771,6 +882,7 @@ class mod_forum_external extends external_api {
                             'name' => new external_value(PARAM_ALPHANUM,
                                         'The allowed keys (value format) are:
                                         discussionsubscribe (bool); subscribe to the discussion?, default to true
+                                        private (bool); make this reply private to the author of the parent post, default to false.
                                         inlineattachmentsid              (int); the draft file area id for inline attachments
                                         attachmentsid       (int); the draft file area id for attachments
                             '),
@@ -806,6 +918,7 @@ class mod_forum_external extends external_api {
                 'options' => $options
             )
         );
+
         $warnings = array();
 
         if (!$parent = forum_get_post_full($params['postid'])) {
@@ -826,6 +939,7 @@ class mod_forum_external extends external_api {
         // Validate options.
         $options = array(
             'discussionsubscribe' => true,
+            'private'             => false,
             'inlineattachmentsid' => 0,
             'attachmentsid' => null
         );
@@ -833,6 +947,9 @@ class mod_forum_external extends external_api {
             $name = trim($option['name']);
             switch ($name) {
                 case 'discussionsubscribe':
+                    $value = clean_param($option['value'], PARAM_BOOL);
+                    break;
+                case 'private':
                     $value = clean_param($option['value'], PARAM_BOOL);
                     break;
                 case 'inlineattachmentsid':
@@ -868,6 +985,7 @@ class mod_forum_external extends external_api {
         $post->messagetrust = trusttext_trusted($context);
         $post->itemid = $options['inlineattachmentsid'];
         $post->attachments = $options['attachmentsid'];
+        $post->isprivatereply = $options['private'];
         $post->deleted = 0;
         $fakemform = $post->attachments;
         if ($postid = forum_add_new_post($post, $fakemform)) {
@@ -1189,4 +1307,156 @@ class mod_forum_external extends external_api {
         );
     }
 
+    /**
+     * Describes the parameters for get_forum_access_information.
+     *
+     * @return external_external_function_parameters
+     * @since Moodle 3.7
+     */
+    public static function get_forum_access_information_parameters() {
+        return new external_function_parameters (
+            array(
+                'forumid' => new external_value(PARAM_INT, 'Forum instance id.')
+            )
+        );
+    }
+
+    /**
+     * Return access information for a given forum.
+     *
+     * @param int $forumid forum instance id
+     * @return array of warnings and the access information
+     * @since Moodle 3.7
+     * @throws  moodle_exception
+     */
+    public static function get_forum_access_information($forumid) {
+        global $DB;
+
+        $params = self::validate_parameters(self::get_forum_access_information_parameters(), array('forumid' => $forumid));
+
+        // Request and permission validation.
+        $forum = $DB->get_record('forum', array('id' => $params['forumid']), '*', MUST_EXIST);
+        $cm = get_coursemodule_from_instance('forum', $forum->id);
+
+        $context = context_module::instance($cm->id);
+        self::validate_context($context);
+
+        $result = array();
+        // Return all the available capabilities.
+        $capabilities = load_capability_def('mod_forum');
+        foreach ($capabilities as $capname => $capdata) {
+            // Get fields like cansubmit so it is consistent with the access_information function implemented in other modules.
+            $field = 'can' . str_replace('mod/forum:', '', $capname);
+            $result[$field] = has_capability($capname, $context);
+        }
+
+        $result['warnings'] = array();
+        return $result;
+    }
+
+    /**
+     * Describes the get_forum_access_information return value.
+     *
+     * @return external_single_structure
+     * @since Moodle 3.7
+     */
+    public static function get_forum_access_information_returns() {
+
+        $structure = array(
+            'warnings' => new external_warnings()
+        );
+
+        $capabilities = load_capability_def('mod_forum');
+        foreach ($capabilities as $capname => $capdata) {
+            // Get fields like cansubmit so it is consistent with the access_information function implemented in other modules.
+            $field = 'can' . str_replace('mod/forum:', '', $capname);
+            $structure[$field] = new external_value(PARAM_BOOL, 'Whether the user has the capability ' . $capname . ' allowed.',
+                VALUE_OPTIONAL);
+        }
+
+        return new external_single_structure($structure);
+    }
+
+    /**
+     * Set the subscription state.
+     *
+     * @param   int     $forumid
+     * @param   int     $discussionid
+     * @param   bool    $targetstate
+     * @return  \stdClass
+     */
+    public static function set_subscription_state($forumid, $discussionid, $targetstate) {
+        global $PAGE, $USER;
+
+        $params = self::validate_parameters(self::set_subscription_state_parameters(), [
+            'forumid' => $forumid,
+            'discussionid' => $discussionid,
+            'targetstate' => $targetstate
+        ]);
+
+        $vaultfactory = mod_forum\local\container::get_vault_factory();
+        $forumvault = $vaultfactory->get_forum_vault();
+        $forum = $forumvault->get_from_id($params['forumid']);
+        $coursemodule = $forum->get_course_module_record();
+        $context = $forum->get_context();
+
+        self::validate_context($context);
+
+        $discussionvault = $vaultfactory->get_discussion_vault();
+        $discussion = $discussionvault->get_from_id($params['discussionid']);
+        $legacydatamapperfactory = mod_forum\local\container::get_legacy_data_mapper_factory();
+
+        $forumrecord = $legacydatamapperfactory->get_forum_data_mapper()->to_legacy_object($forum);
+        $discussionrecord = $legacydatamapperfactory->get_discussion_data_mapper()->to_legacy_object($discussion);
+
+        if (!\mod_forum\subscriptions::is_subscribable($forumrecord)) {
+            // Nothing to do. We won't actually output any content here though.
+            throw new \moodle_exception('cannotsubscribe', 'mod_forum');
+        }
+
+        $issubscribed = \mod_forum\subscriptions::is_subscribed(
+            $USER->id,
+            $forumrecord,
+            $discussion->get_id(),
+            $coursemodule
+        );
+
+        // If the current state doesn't equal the desired state then update the current
+        // state to the desired state.
+        if ($issubscribed != (bool) $params['targetstate']) {
+            if ($params['targetstate']) {
+                \mod_forum\subscriptions::subscribe_user_to_discussion($USER->id, $discussionrecord, $context);
+            } else {
+                \mod_forum\subscriptions::unsubscribe_user_from_discussion($USER->id, $discussionrecord, $context);
+            }
+        }
+
+        $exporterfactory = mod_forum\local\container::get_exporter_factory();
+        $exporter = $exporterfactory->get_discussion_exporter($USER, $forum, $discussion);
+        return $exporter->export($PAGE->get_renderer('mod_forum'));
+    }
+
+    /**
+     * Returns description of method parameters.
+     *
+     * @return external_function_parameters
+     */
+    public static function set_subscription_state_parameters() {
+        return new external_function_parameters(
+            [
+                'forumid' => new external_value(PARAM_INT, 'Forum that the discussion is in'),
+                'discussionid' => new external_value(PARAM_INT, 'The discussion to subscribe or unsubscribe'),
+                'targetstate' => new external_value(PARAM_BOOL, 'The target state')
+            ]
+        );
+    }
+
+    /**
+     * Returns description of method result value.
+     *
+     * @return external_description
+     */
+    public static function set_subscription_state_returns() {
+        return \mod_forum\local\exporters\discussion::get_read_structure();
+    }
 }

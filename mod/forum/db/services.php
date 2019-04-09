@@ -37,6 +37,16 @@ $functions = array(
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE)
     ),
 
+    'mod_forum_get_discussion_posts' => array(
+        'classname' => 'mod_forum_external',
+        'methodname' => 'get_discussion_posts',
+        'classpath' => 'mod/forum/externallib.php',
+        'description' => 'Returns a list of forum posts for a discussion.',
+        'type' => 'read',
+        'capabilities' => 'mod/forum:viewdiscussion, mod/forum:viewqandawithoutposting',
+        'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE)
+    ),
+
     'mod_forum_get_forum_discussion_posts' => array(
         'classname' => 'mod_forum_external',
         'methodname' => 'get_forum_discussion_posts',
@@ -104,5 +114,23 @@ $functions = array(
         'description' => 'Check if the current user can add discussions in the given forum (and optionally for the given group).',
         'type' => 'read',
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE)
+    ),
+
+    'mod_forum_get_forum_access_information' => array(
+        'classname'     => 'mod_forum_external',
+        'methodname'    => 'get_forum_access_information',
+        'description'   => 'Return capabilities information for a given forum.',
+        'type'          => 'read',
+        'services'      => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+    ),
+
+    'mod_forum_set_subscription_state' => array(
+        'classname' => 'mod_forum_external',
+        'methodname' => 'set_subscription_state',
+        'classpath' => 'mod/forum/externallib.php',
+        'description' => 'Set the subscription state',
+        'type' => 'write',
+        'ajax' => true,
+        'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
     ),
 );

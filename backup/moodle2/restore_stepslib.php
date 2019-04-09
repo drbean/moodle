@@ -485,6 +485,9 @@ class restore_gradebook_structure_step extends restore_structure_step {
         // Freeze gradebook calculations if needed.
         $this->gradebook_calculation_freeze();
 
+        // Ensure the module cache is current when recalculating grades.
+        rebuild_course_cache($this->get_courseid(), true);
+
         // Restore marks items as needing update. Update everything now.
         grade_regrade_final_grades($this->get_courseid());
     }
@@ -1785,6 +1788,7 @@ class restore_course_structure_step extends restore_structure_step {
         $course = new restore_path_element('course', '/course');
         $category = new restore_path_element('category', '/course/category');
         $tag = new restore_path_element('tag', '/course/tags/tag');
+        $customfield = new restore_path_element('customfield', '/course/customfields/customfield');
         $allowed_module = new restore_path_element('allowed_module', '/course/allowed_modules/module');
 
         // Apply for 'format' plugins optional paths at course level
@@ -1808,7 +1812,7 @@ class restore_course_structure_step extends restore_structure_step {
         // Apply for admin tool plugins optional paths at course level.
         $this->add_plugin_structure('tool', $course);
 
-        return array($course, $category, $tag, $allowed_module);
+        return array($course, $category, $tag, $customfield, $allowed_module);
     }
 
     /**
@@ -1930,6 +1934,16 @@ class restore_course_structure_step extends restore_structure_step {
 
         core_tag_tag::add_item_tag('core', 'course', $this->get_courseid(),
                 context_course::instance($this->get_courseid()), $data->rawname);
+    }
+
+    /**
+     * Process custom fields
+     *
+     * @param array $data
+     */
+    public function process_customfield($data) {
+        $handler = core_course\customfield\course_handler::create();
+        $handler->restore_instance_data_from_backup($this->task, $data);
     }
 
     public function process_allowed_module($data) {

@@ -64,7 +64,7 @@ function(
         COURSES_CARDS: 'block_myoverview/view-cards',
         COURSES_LIST: 'block_myoverview/view-list',
         COURSES_SUMMARY: 'block_myoverview/view-summary',
-        NOCOURSES: 'block_myoverview/no-courses'
+        NOCOURSES: 'core_course/no-courses'
     };
 
     var NUMCOURSES_PERPAGE = [12, 24, 48];
@@ -217,7 +217,7 @@ function(
 
         setCourseFavouriteState(courseId, true).then(function(success) {
             if (success) {
-                PubSub.publish(CourseEvents.favourited);
+                PubSub.publish(CourseEvents.favourited, courseId);
                 removeAction.removeClass('hidden');
                 addAction.addClass('hidden');
                 showFavouriteIcon(root, courseId);
@@ -240,7 +240,7 @@ function(
 
         setCourseFavouriteState(courseId, false).then(function(success) {
             if (success) {
-                PubSub.publish(CourseEvents.unfavorited);
+                PubSub.publish(CourseEvents.unfavorited, courseId);
                 removeAction.addClass('hidden');
                 addAction.removeClass('hidden');
                 hideFavouriteIcon(root, courseId);
@@ -499,7 +499,7 @@ function(
                         }
 
                         // Set the last page to either the current or next page
-                        if (loadedPages[currentPage].courses.length < pageData.limit) {
+                        if (loadedPages[currentPage].courses.length < pageData.limit || !remainingCourses.length) {
                             lastPage = currentPage;
                             actions.allItemsLoaded(currentPage);
                         } else if (loadedPages[currentPage + 1] != undefined

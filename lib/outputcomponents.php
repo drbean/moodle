@@ -525,12 +525,19 @@ class help_icon implements renderable, templatable {
         $data->icon = (new pix_icon('help', $alt, 'core', ['class' => 'iconhelp']))->export_for_template($output);
         $data->linktext = $this->linktext;
         $data->title = get_string('helpprefix2', '', trim($title, ". \t"));
-        $data->url = (new moodle_url('/help.php', [
+
+        $options = [
             'component' => $this->component,
             'identifier' => $this->identifier,
             'lang' => current_language()
-        ]))->out(false);
+        ];
 
+        // Debugging feature lets you display string identifier and component.
+        if (isset($CFG->debugstringids) && $CFG->debugstringids && optional_param('strings', 0, PARAM_INT)) {
+            $options['strings'] = 1;
+        }
+
+        $data->url = (new moodle_url('/help.php', $options))->out(false);
         $data->ltr = !right_to_left();
         return $data;
     }
@@ -693,6 +700,11 @@ class pix_icon implements renderable, templatable {
             // Remove the title attribute if empty, we probably want to use the parent node's title
             // and some browsers might overwrite it with an empty title.
             unset($this->attributes['title']);
+        }
+
+        // Hide icons from screen readers that have no alt.
+        if (empty($this->attributes['alt'])) {
+            $this->attributes['aria-hidden'] = 'true';
         }
     }
 
@@ -1008,7 +1020,7 @@ class single_select implements renderable, templatable {
     var $formid = null;
 
     /**
-     * @var array List of attached actions
+     * @var help_icon The help icon for this element.
      */
     var $helpicon = null;
 
@@ -1099,7 +1111,19 @@ class single_select implements renderable, templatable {
         $data->title = $this->tooltip;
         $data->formid = !empty($this->formid) ? $this->formid : html_writer::random_id('single_select_f');
         $data->id = !empty($attributes['id']) ? $attributes['id'] : html_writer::random_id('single_select');
+
+        // Select element attributes.
+        // Unset attributes that are already predefined in the template.
         unset($attributes['id']);
+        unset($attributes['class']);
+        unset($attributes['name']);
+        unset($attributes['title']);
+        unset($attributes['disabled']);
+
+        // Map the attributes.
+        $data->attributes = array_map(function($key) use ($attributes) {
+            return ['name' => $key, 'value' => $attributes[$key]];
+        }, array_keys($attributes));
 
         // Form parameters.
         $params = $this->url->params();
@@ -1173,8 +1197,11 @@ class single_select implements renderable, templatable {
 
         // Label attributes.
         $data->labelattributes = [];
+        // Unset label attributes that are already in the template.
+        unset($this->labelattributes['for']);
+        // Map the label attributes.
         foreach ($this->labelattributes as $key => $value) {
-            $data->labelattributes = ['name' => $key, 'value' => $value];
+            $data->labelattributes[] = ['name' => $key, 'value' => $value];
         }
 
         // Help icon.
@@ -1248,7 +1275,7 @@ class url_select implements renderable, templatable {
     var $formid = null;
 
     /**
-     * @var array List of attached actions
+     * @var help_icon The help icon for this element.
      */
     var $helpicon = null;
 
@@ -1411,6 +1438,7 @@ class url_select implements renderable, templatable {
         unset($attributes['id']);
         unset($attributes['name']);
         unset($attributes['title']);
+        unset($attributes['disabled']);
 
         $data->showbutton = $this->showbutton;
 
@@ -1430,6 +1458,9 @@ class url_select implements renderable, templatable {
 
         // Label attributes.
         $data->labelattributes = [];
+        // Unset label attributes that are already in the template.
+        unset($this->labelattributes['for']);
+        // Map the label attributes.
         foreach ($this->labelattributes as $key => $value) {
             $data->labelattributes[] = ['name' => $key, 'value' => $value];
         }
@@ -1439,8 +1470,8 @@ class url_select implements renderable, templatable {
 
         // Finally all the remaining attributes.
         $data->attributes = [];
-        foreach ($this->attributes as $key => $value) {
-            $data->attributes = ['name' => $key, 'value' => $value];
+        foreach ($attributes as $key => $value) {
+            $data->attributes[] = ['name' => $key, 'value' => $value];
         }
 
         return $data;

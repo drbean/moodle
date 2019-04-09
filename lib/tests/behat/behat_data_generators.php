@@ -92,6 +92,16 @@ class behat_data_generators extends behat_base {
             'required' => array('user', 'course', 'role'),
             'switchids' => array('user' => 'userid', 'course' => 'courseid', 'role' => 'roleid')
         ),
+        'custom field categories' => array(
+            'datagenerator' => 'custom_field_category',
+            'required' => array('name', 'component', 'area', 'itemid'),
+            'switchids' => array()
+        ),
+        'custom fields' => array(
+            'datagenerator' => 'custom_field',
+            'required' => array('name', 'category', 'type', 'shortname'),
+            'switchids' => array()
+        ),
         'permission overrides' => array(
             'datagenerator' => 'permission_override',
             'required' => array('capability', 'permission', 'role', 'contextlevel', 'reference'),
@@ -182,6 +192,11 @@ class behat_data_generators extends behat_base {
                 'course' => 'courseid',
                 'category' => 'categoryid',
             )
+        ),
+        'message contacts' => array(
+            'datagenerator' => 'message_contacts',
+            'required' => array('user', 'contact'),
+            'switchids' => array('user' => 'userid', 'contact' => 'contactid')
         ),
     );
 
@@ -837,4 +852,28 @@ class behat_data_generators extends behat_base {
         return $context;
     }
 
+    /**
+     * Adds user to contacts
+     *
+     * @param array $data
+     * @return void
+     */
+    protected function process_message_contacts($data) {
+        \core_message\api::add_contact($data['userid'], $data['contactid']);
+    }
+
+    /**
+     * Gets the contact id from it's username.
+     * @throws Exception
+     * @param string $username
+     * @return int
+     */
+    protected function get_contact_id($username) {
+        global $DB;
+
+        if (!$id = $DB->get_field('user', 'id', array('username' => $username))) {
+            throw new Exception('The specified user with username "' . $username . '" does not exist');
+        }
+        return $id;
+    }
 }

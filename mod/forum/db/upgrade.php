@@ -47,24 +47,6 @@ function xmldb_forum_upgrade($oldversion) {
 
     $dbman = $DB->get_manager(); // Loads ddl manager and xmldb classes.
 
-    if ($oldversion < 2016091200) {
-
-        // Define field lockdiscussionafter to be added to forum.
-        $table = new xmldb_table('forum');
-        $field = new xmldb_field('lockdiscussionafter', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'displaywordcount');
-
-        // Conditionally launch add field lockdiscussionafter.
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-
-        // Forum savepoint reached.
-        upgrade_mod_savepoint(true, 2016091200, 'forum');
-    }
-
-    // Automatically generated Moodle v3.2.0 release upgrade line.
-    // Put any upgrade step following this.
-
     // Automatically generated Moodle v3.3.0 release upgrade line.
     // Put any upgrade step following this.
 
@@ -121,6 +103,20 @@ function xmldb_forum_upgrade($oldversion) {
 
     // Automatically generated Moodle v3.6.0 release upgrade line.
     // Put any upgrade step following this.
+
+    if ($oldversion < 2019031200) {
+        // Define field privatereplyto to be added to forum_posts.
+        $table = new xmldb_table('forum_posts');
+        $field = new xmldb_field('privatereplyto', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'mailnow');
+
+        // Conditionally launch add field privatereplyto.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Forum savepoint reached.
+        upgrade_mod_savepoint(true, 2019031200, 'forum');
+    }
 
     return true;
 }

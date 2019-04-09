@@ -49,6 +49,11 @@ class api {
     const MESSAGE_ACTION_DELETED = 2;
 
     /**
+     * The action for reading a message.
+     */
+    const CONVERSATION_ACTION_MUTED = 1;
+
+    /**
      * The privacy setting for being messaged by anyone within courses user is member of.
      */
     const MESSAGE_PRIVACY_COURSEMEMBER = 0;
@@ -151,10 +156,9 @@ class api {
     /**
      * Handles searching for user in a particular course in the message area.
      *
-     * TODO: This function should be removed once the new group messaging UI is in place and the old messaging UI is removed.
-     * For now we are not removing/deprecating this function for backwards compatibility with messaging UI.
-     * But we are deprecating data_for_messagearea_search_users_in_course external function.
-     * Followup: MDL-63915
+     * TODO: This function should be removed once the related web service goes through final deprecation.
+     * The related web service is data_for_messagearea_search_users_in_course.
+     * Followup: MDL-63261
      *
      * @param int $userid The user id doing the searching
      * @param int $courseid The id of the course we are searching in
@@ -197,10 +201,9 @@ class api {
     /**
      * Handles searching for user in the message area.
      *
-     * TODO: This function should be removed once the new group messaging UI is in place and the old messaging UI is removed.
-     * For now we are not removing/deprecating this function for backwards compatibility with messaging UI.
-     * But we are deprecating data_for_messagearea_search_users external function.
-     * Followup: MDL-63915
+     * TODO: This function should be removed once the related web service goes through final deprecation.
+     * The related web service is data_for_messagearea_search_users.
+     * Followup: MDL-63261
      *
      * @param int $userid The user id doing the searching
      * @param string $search The string the user is searching
@@ -323,15 +326,11 @@ class api {
               ORDER BY " . $DB->sql_fullname();
         $foundusers = $DB->get_records_sql_menu($sql, $params + $excludeparams, $limitfrom, $limitnum);
 
-        $orderedcontacts = array();
+        $contacts = [];
         if (!empty($foundusers)) {
             $contacts = helper::get_member_info($userid, array_keys($foundusers));
-            // The get_member_info returns an associative array, so is not ordered in the same way.
-            // We need to reorder it again based on query's result.
-            foreach ($foundusers as $key => $value) {
-                $contact = $contacts[$key];
-                $contact->conversations = self::get_conversations_between_users($userid, $key, 0, 1000);
-                $orderedcontacts[] = $contact;
+            foreach ($contacts as $memberuserid => $memberinfo) {
+                $contacts[$memberuserid]->conversations = self::get_conversations_between_users($userid, $memberuserid, 0, 1000);
             }
         }
 
@@ -417,19 +416,15 @@ class api {
             $foundusers = $returnedusers;
         }
 
-        $orderednoncontacts = array();
+        $noncontacts = [];
         if (!empty($foundusers)) {
             $noncontacts = helper::get_member_info($userid, array_keys($foundusers));
-            // The get_member_info returns an associative array, so is not ordered in the same way.
-            // We need to reorder it again based on query's result.
-            foreach ($foundusers as $key => $value) {
-                $contact = $noncontacts[$key];
-                $contact->conversations = self::get_conversations_between_users($userid, $key, 0, 1000);
-                $orderednoncontacts[] = $contact;
+            foreach ($noncontacts as $memberuserid => $memberinfo) {
+                $noncontacts[$memberuserid]->conversations = self::get_conversations_between_users($userid, $memberuserid, 0, 1000);
             }
         }
 
-        return array($orderedcontacts, $orderednoncontacts);
+        return array(array_values($contacts), array_values($noncontacts));
     }
 
     /**
@@ -555,7 +550,7 @@ class api {
 
         $sql = "SELECT m.id as messageid, mc.id as id, mc.name as conversationname, mc.type as conversationtype, m.useridfrom,
                        m.smallmessage, m.fullmessage, m.fullmessageformat, m.fullmessagehtml, m.timecreated, mc.component,
-                       mc.itemtype, mc.itemid
+                       mc.itemtype, mc.itemid, mc.contextid, mca.action as ismuted
                   FROM {message_conversations} mc
             INNER JOIN {message_conversation_members} mcm
                     ON (mcm.conversationid = mc.id AND mcm.userid = :userid3)
@@ -579,12 +574,15 @@ class api {
                     ON lastmessage.conversationid = mc.id
             LEFT JOIN {messages} m
                    ON m.id = lastmessage.messageid
+            LEFT JOIN {message_conversation_actions} mca
+                   ON (mca.conversationid = mc.id AND mca.userid = :userid4 AND mca.action = :convaction)
                 WHERE mc.id IS NOT NULL
                   AND mc.enabled = 1 $typesql $favouritesql
               ORDER BY (CASE WHEN m.timecreated IS NULL THEN 0 ELSE 1 END) DESC, m.timecreated DESC, id DESC";
 
         $params = array_merge($favouriteparams, ['userid' => $userid, 'action' => self::MESSAGE_ACTION_DELETED,
-            'userid2' => $userid, 'userid3' => $userid, 'convtype' => $type]);
+            'userid2' => $userid, 'userid3' => $userid, 'userid4' => $userid, 'convaction' => self::CONVERSATION_ACTION_MUTED,
+            'convtype' => $type]);
         $conversationset = $DB->get_recordset_sql($sql, $params, $limitfrom, $limitnum);
 
         $conversations = [];
@@ -699,6 +697,10 @@ class api {
             // Don't use array_merge, as we lose array keys.
             $memberinfo = $individualmemberinfo + $groupmemberinfo;
 
+            if (empty($memberinfo)) {
+                return [];
+            }
+
             // Update the members array with the member information.
             $deletedmembers = [];
             foreach ($members as $convid => $memberarr) {
@@ -716,6 +718,13 @@ class api {
                             $members[$convid][$key]->requirescontact = null;
                             $members[$convid][$key]->canmessage = null;
                             $members[$convid][$key]->contactrequests = [];
+                        }
+                    } else { // Remove all members and individual conversations where we could not get the member's information.
+                        unset($members[$convid][$key]);
+
+                        // If the conversation is an individual conversation, then we should remove it from the list.
+                        if ($conversations[$convid]->conversationtype == self::MESSAGE_CONVERSATION_TYPE_INDIVIDUAL) {
+                            unset($conversations[$convid]);
                         }
                     }
                 }
@@ -750,6 +759,10 @@ class api {
         $unreadcounts = $DB->get_records_sql($unreadcountssql, [$userid, self::MESSAGE_ACTION_READ, self::MESSAGE_ACTION_DELETED,
             $userid, $userid]);
 
+        // Because we'll be calling format_string on each conversation name and passing contexts, we preload them here.
+        // This warms the cache and saves potentially hitting the DB once for each context fetch below.
+        \context_helper::preload_contexts_by_id(array_column($conversations, 'contextid'));
+
         // Now, create the final return structure.
         $arrconversations = [];
         foreach ($conversations as $conversation) {
@@ -768,7 +781,16 @@ class api {
 
             $conv = new \stdClass();
             $conv->id = $conversation->id;
-            $conv->name = $conversation->conversationname;
+
+            // Name should be formatted and depends on the context the conversation resides in.
+            // If not set, the context is always context_user.
+            if (is_null($conversation->contextid)) {
+                $convcontext = \context_user::instance($userid);
+            } else {
+                $convcontext = \context::instance_by_id($conversation->contextid);
+            }
+            $conv->name = format_string($conversation->conversationname, true, ['context' => $convcontext]);
+
             $conv->subname = $convextrafields[$conv->id]['subname'] ?? null;
             $conv->imageurl = $convextrafields[$conv->id]['imageurl'] ?? null;
             $conv->type = $conversation->conversationtype;
@@ -776,6 +798,7 @@ class api {
             $conv->isfavourite = in_array($conv->id, $favouriteconversationids);
             $conv->isread = isset($unreadcounts[$conv->id]) ? false : true;
             $conv->unreadcount = isset($unreadcounts[$conv->id]) ? $unreadcounts[$conv->id]->unreadcount : null;
+            $conv->ismuted = $conversation->ismuted ? true : false;
             $conv->members = $members[$conv->id];
 
             // Add the most recent message information.
@@ -936,6 +959,12 @@ class api {
 
         $membercount = $DB->count_records('message_conversation_members', ['conversationid' => $conversationid]);
 
+        $ismuted = false;
+        if ($DB->record_exists('message_conversation_actions', ['userid' => $userid,
+                'conversationid' => $conversationid, 'action' => self::CONVERSATION_ACTION_MUTED])) {
+            $ismuted = true;
+        }
+
         return (object) [
             'id' => $conversation->id,
             'name' => $conversation->name,
@@ -946,6 +975,7 @@ class api {
             'isfavourite' => $isfavourite,
             'isread' => empty($unreadcount),
             'unreadcount' => $unreadcount,
+            'ismuted' => $ismuted,
             'members' => $members,
             'messages' => $messages['messages']
         ];
@@ -1013,9 +1043,9 @@ class api {
     /**
      * Returns the contacts to display in the contacts area.
      *
-     * TODO: This function should be removed once the new group messaging UI is in place and the old messaging UI is removed.
-     * For now we are not removing/deprecating this function for backwards compatibility with messaging UI.
-     * Followup: MDL-63915
+     * TODO: This function should be removed once the related web service goes through final deprecation.
+     * The related web service is data_for_messagearea_contacts.
+     * Followup: MDL-63261
      *
      * @param int $userid The user id
      * @param int $limitfrom
@@ -1183,9 +1213,9 @@ class api {
     /**
      * Returns the messages to display in the message area.
      *
-     * TODO: This function should be removed once the new group messaging UI is in place and the old messaging UI is removed.
-     * For now we are not removing/deprecating this function for backwards compatibility with messaging UI.
-     * Followup: MDL-63915
+     * TODO: This function should be removed once the related web service goes through final deprecation.
+     * The related web service is data_for_messagearea_messages.
+     * Followup: MDL-63261
      *
      * @param int $userid the current user
      * @param int $otheruserid the other user
@@ -1264,9 +1294,9 @@ class api {
     /**
      * Returns the most recent message between two users.
      *
-     * TODO: This function should be removed once the new group messaging UI is in place and the old messaging UI is removed.
-     * For now we are not removing/deprecating this function for backwards compatibility with messaging UI.
-     * Followup: MDL-63915
+     * TODO: This function should be removed once the related web service goes through final deprecation.
+     * The related web service is data_for_messagearea_get_most_recent_message.
+     * Followup: MDL-63261
      *
      * @param int $userid the current user
      * @param int $otheruserid the other user
@@ -1309,9 +1339,9 @@ class api {
     /**
      * Returns the profile information for a contact for a user.
      *
-     * TODO: This function should be removed once the new group messaging UI is in place and the old messaging UI is removed.
-     * For now we are not removing/deprecating this function for backwards compatibility with messaging UI.
-     * Followup: MDL-63915
+     * TODO: This function should be removed once the related web service goes through final deprecation.
+     * The related web service is data_for_messagearea_get_profile.
+     * Followup: MDL-63261
      *
      * @param int $userid The user id
      * @param int $otheruserid The id of the user whose profile we want to view.
@@ -2488,6 +2518,31 @@ class api {
 
         $request->id = $DB->insert_record('message_contact_requests', $request);
 
+        // Send a notification.
+        $userfrom = \core_user::get_user($userid);
+        $userfromfullname = fullname($userfrom);
+        $userto = \core_user::get_user($requesteduserid);
+        $url = new \moodle_url('/message/pendingcontactrequests.php');
+
+        $subject = get_string('messagecontactrequestsnotificationsubject', 'core_message', $userfromfullname);
+        $fullmessage = get_string('messagecontactrequestsnotification', 'core_message', $userfromfullname);
+
+        $message = new \core\message\message();
+        $message->courseid = SITEID;
+        $message->component = 'moodle';
+        $message->name = 'messagecontactrequests';
+        $message->notification = 1;
+        $message->userfrom = $userfrom;
+        $message->userto = $userto;
+        $message->subject = $subject;
+        $message->fullmessage = text_to_html($fullmessage);
+        $message->fullmessageformat = FORMAT_HTML;
+        $message->fullmessagehtml = $fullmessage;
+        $message->smallmessage = '';
+        $message->contexturl = $url->out(false);
+
+        message_send($message);
+
         return $request;
     }
 
@@ -3093,5 +3148,84 @@ class api {
         }
 
         return $counts;
+    }
+
+    /**
+     * Handles muting a conversation.
+     *
+     * @param int $userid The id of the user
+     * @param int $conversationid The id of the conversation
+     */
+    public static function mute_conversation(int $userid, int $conversationid) : void {
+        global $DB;
+
+        $mutedconversation = new \stdClass();
+        $mutedconversation->userid = $userid;
+        $mutedconversation->conversationid = $conversationid;
+        $mutedconversation->action = self::CONVERSATION_ACTION_MUTED;
+        $mutedconversation->timecreated = time();
+
+        $DB->insert_record('message_conversation_actions', $mutedconversation);
+    }
+
+    /**
+     * Handles unmuting a conversation.
+     *
+     * @param int $userid The id of the user
+     * @param int $conversationid The id of the conversation
+     */
+    public static function unmute_conversation(int $userid, int $conversationid) : void {
+        global $DB;
+
+        $DB->delete_records('message_conversation_actions',
+            [
+                'userid' => $userid,
+                'conversationid' => $conversationid,
+                'action' => self::CONVERSATION_ACTION_MUTED
+            ]
+        );
+    }
+
+    /**
+     * Checks whether a conversation is muted or not.
+     *
+     * @param int $userid The id of the user
+     * @param int $conversationid The id of the conversation
+     * @return bool Whether or not the conversation is muted or not
+     */
+    public static function is_conversation_muted(int $userid, int $conversationid) : bool {
+        global $DB;
+
+        return $DB->record_exists('message_conversation_actions',
+            [
+                'userid' => $userid,
+                'conversationid' => $conversationid,
+                'action' => self::CONVERSATION_ACTION_MUTED
+            ]
+        );
+    }
+
+    /**
+     * Completely removes all related data in the DB for a given conversation.
+     *
+     * @param int $conversationid The id of the conversation
+     */
+    public static function delete_all_conversation_data(int $conversationid) {
+        global $DB;
+
+        $DB->delete_records('message_conversations', ['id' => $conversationid]);
+        $DB->delete_records('message_conversation_members', ['conversationid' => $conversationid]);
+        $DB->delete_records('message_conversation_actions', ['conversationid' => $conversationid]);
+
+        // Now, go through and delete any messages and related message actions for the conversation.
+        if ($messages = $DB->get_records('messages', ['conversationid' => $conversationid])) {
+            $messageids = array_keys($messages);
+
+            list($insql, $inparams) = $DB->get_in_or_equal($messageids);
+            $DB->delete_records_select('message_user_actions', "messageid $insql", $inparams);
+
+            // Delete the messages now.
+            $DB->delete_records('messages', ['conversationid' => $conversationid]);
+        }
     }
 }

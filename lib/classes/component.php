@@ -86,6 +86,7 @@ class core_component {
         'Phpml' => 'lib/mlbackend/php/phpml/src/Phpml',
         'PHPMailer\\PHPMailer' => 'lib/phpmailer/src',
         'RedeyeVentures\\GeoPattern' => 'lib/geopattern-php/GeoPattern',
+        'MongoDB' => 'cache/stores/mongodb/MongoDB',
     );
 
     /**
@@ -436,6 +437,7 @@ $cache = '.var_export($cache, true).';
             'countries'   => null,
             'course'      => $CFG->dirroot.'/course',
             'currencies'  => null,
+            'customfield' => $CFG->dirroot.'/customfield',
             'dbtransfer'  => null,
             'debug'       => null,
             'editor'      => $CFG->dirroot.'/lib/editor',
@@ -504,6 +506,7 @@ $cache = '.var_export($cache, true).';
             'mod'           => $CFG->dirroot.'/mod',
             'auth'          => $CFG->dirroot.'/auth',
             'calendartype'  => $CFG->dirroot.'/calendar/type',
+            'customfield'   => $CFG->dirroot.'/customfield/field',
             'enrol'         => $CFG->dirroot.'/enrol',
             'message'       => $CFG->dirroot.'/message/output',
             'block'         => $CFG->dirroot.'/blocks',
@@ -1139,6 +1142,17 @@ $cache = '.var_export($cache, true).';
      * @return string sha1 hash
      */
     public static function get_all_versions_hash() {
+        return sha1(serialize(self::get_all_versions()));
+    }
+
+    /**
+     * Returns hash of all versions including core and all plugins.
+     *
+     * This is relatively slow and not fully cached, use with care!
+     *
+     * @return array as (string)plugintype_pluginname => (int)version
+     */
+    public static function get_all_versions() : array {
         global $CFG;
 
         self::init();
@@ -1172,7 +1186,7 @@ $cache = '.var_export($cache, true).';
             }
         }
 
-        return sha1(serialize($versions));
+        return $versions;
     }
 
     /**
