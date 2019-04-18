@@ -15,34 +15,39 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Test analyser.
+ * Time splitting method that generates insights every fortnight and calculates indicators using upcoming dates.
  *
  * @package   core_analytics
- * @copyright 2017 David Monllaó {@link http://www.davidmonllao.com}
+ * @copyright 2019 David Monllao {@link http://www.davidmonllao.com}
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+
+namespace core\analytics\time_splitting;
 
 defined('MOODLE_INTERNAL') || die();
 
 /**
- * Test analyser.
+ * Time splitting method that generates insights every fortnight and calculates indicators using upcoming dates.
  *
  * @package   core_analytics
- * @copyright 2017 David Monllaó {@link http://www.davidmonllao.com}
+ * @copyright 2019 David Monllao {@link http://www.davidmonllao.com}
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class test_analyser extends \core\analytics\analyser\courses {
+class upcoming_fortnight extends \core_analytics\local\time_splitting\upcoming_periodic {
 
     /**
-     * Overwritten to add a delay.
-     *
-     * @param \core_analytics\analysable $analysable
-     * @param mixed $includetarget
-     * @return null
+     * The time splitting method name.
+     * @return \lang_string
      */
-    public function process_analysable($analysable, $includetarget) {
-        // A bit more than 1 second.
-        usleep(1100000);
-        return parent::process_analysable($analysable, $includetarget);
+    public static function get_name() : \lang_string {
+        return new \lang_string('timesplitting:upcomingfortnight');
+    }
+
+    /**
+     * Every two weeks.
+     * @return \DateInterval
+     */
+    public function periodicity() {
+        return new \DateInterval('P2W');
     }
 }

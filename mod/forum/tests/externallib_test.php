@@ -260,6 +260,7 @@ class mod_forum_external_testcase extends externallib_advanced_testcase {
 
         $record->parent = $discussion1reply1->id;
         $record->userid = $user3->id;
+        $record->tags = array('Cats', 'Dogs');
         $discussion1reply2 = self::getDataGenerator()->get_plugin_generator('mod_forum')->create_post($record);
 
         // Enrol the user in the  course.
@@ -311,7 +312,12 @@ class mod_forum_external_testcase extends externallib_advanced_testcase {
             'userpictureurl' => '',
             'deleted' => false,
             'isprivatereply' => false,
+            'tags' => \core_tag\external\util::get_item_tags('mod_forum', 'forum_posts', $discussion1reply2->id),
         );
+        // Cast to expected.
+        $this->assertCount(2, $expectedposts['posts'][0]['tags']);
+        $expectedposts['posts'][0]['tags'][0]['isstandard'] = (bool) $expectedposts['posts'][0]['tags'][0]['isstandard'];
+        $expectedposts['posts'][0]['tags'][1]['isstandard'] = (bool) $expectedposts['posts'][0]['tags'][1]['isstandard'];
 
         $expectedposts['posts'][] = array(
             'id' => $discussion1reply1->id,
@@ -348,6 +354,7 @@ class mod_forum_external_testcase extends externallib_advanced_testcase {
             'userpictureurl' => '',
             'deleted' => false,
             'isprivatereply' => false,
+            'tags' => array(),
         );
 
         // Test a discussion with two additional posts (total 3 posts).
@@ -1458,7 +1465,34 @@ class mod_forum_external_testcase extends externallib_advanced_testcase {
         $this->assertTrue($result['status']);
         $this->assertTrue($result['canpindiscussions']);
         $this->assertTrue($result['cancreateattachment']);
+    }
 
+    /*
+     * A basic test to make sure users cannot post to forum after the cutoff date.
+     */
+    public function test_can_add_discussion_after_cutoff() {
+        $this->resetAfterTest(true);
+
+        // Create courses to add the modules.
+        $course = self::getDataGenerator()->create_course();
+
+        $user = self::getDataGenerator()->create_user();
+
+        // Create a forum with cutoff date set to a past date.
+        $forum = self::getDataGenerator()->create_module('forum', ['course' => $course->id, 'cutoffdate' => time() - 1]);
+
+        // User with no mod/forum:canoverridecutoff capability.
+        self::setUser($user);
+        $this->getDataGenerator()->enrol_user($user->id, $course->id);
+
+        $result = mod_forum_external::can_add_discussion($forum->id);
+        $result = external_api::clean_returnvalue(mod_forum_external::can_add_discussion_returns(), $result);
+        $this->assertFalse($result['status']);
+
+        self::setAdminUser();
+        $result = mod_forum_external::can_add_discussion($forum->id);
+        $result = external_api::clean_returnvalue(mod_forum_external::can_add_discussion_returns(), $result);
+        $this->assertTrue($result['status']);
     }
 
     /**
