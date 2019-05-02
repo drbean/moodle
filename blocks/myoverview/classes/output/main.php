@@ -87,7 +87,7 @@ class main implements renderable, templatable {
         $this->view = $view ? $view : BLOCK_MYOVERVIEW_VIEW_CARD;
         $this->paging = $paging ? $paging : BLOCK_MYOVERVIEW_PAGING_12;
         $config = get_config('block_myoverview');
-        if (!$config->displaycategories) {
+        if (!isset($config->displaycategories)) {
             $this->displaycategories = BLOCK_MYOVERVIEW_DISPLAY_CATEGORIES_OFF;
         } else {
             $this->displaycategories = BLOCK_MYOVERVIEW_DISPLAY_CATEGORIES_ON;
