@@ -324,6 +324,28 @@ class badge {
                 $crit->make_clone($new);
             }
 
+            // Copy endorsement.
+            $endorsement = $this->get_endorsement();
+            if ($endorsement) {
+                unset($endorsement->id);
+                $endorsement->badgeid = $new;
+                $newbadge->save_endorsement($endorsement);
+            }
+
+            // Copy alignments.
+            $alignments = $this->get_alignments();
+            foreach ($alignments as $alignment) {
+                unset($alignment->id);
+                $alignment->badgeid = $new;
+                $newbadge->save_alignment($alignment);
+            }
+
+            // Copy related badges.
+            $related = $this->get_related_badges(true);
+            if (!empty($related)) {
+                $newbadge->add_related_badges(array_keys($related));
+            }
+
             // Trigger event, badge duplicated.
             $eventparams = array('objectid' => $new, 'context' => $PAGE->context);
             $event = \core\event\badge_duplicated::create($eventparams);
@@ -1012,6 +1034,11 @@ function badges_notify_badge_award(badge $badge, $userid, $issued, $filepathhash
     $eventdata->fullmessageformat = FORMAT_HTML;
     $eventdata->fullmessagehtml   = $message;
     $eventdata->smallmessage      = '';
+    $eventdata->customdata        = [
+        'notificationiconurl' => moodle_url::make_pluginfile_url(
+            $badge->get_context()->id, 'badges', 'badgeimage', $badge->id, '/', 'f1')->out(),
+        'hash' => $issued,
+    ];
 
     // Attach badge image if possible.
     if (!empty($CFG->allowattachments) && $badge->attachment && is_string($filepathhash)) {
@@ -1049,6 +1076,11 @@ function badges_notify_badge_award(badge $badge, $userid, $issued, $filepathhash
         $eventdata->fullmessageformat = FORMAT_HTML;
         $eventdata->fullmessagehtml   = $creatormessage;
         $eventdata->smallmessage      = '';
+        $eventdata->customdata        = [
+            'notificationiconurl' => moodle_url::make_pluginfile_url(
+                $badge->get_context()->id, 'badges', 'badgeimage', $badge->id, '/', 'f1')->out(),
+            'hash' => $issued,
+        ];
 
         message_send($eventdata);
         $DB->set_field('badge_issued', 'issuernotified', time(), array('badgeid' => $badge->id, 'userid' => $userid));

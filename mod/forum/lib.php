@@ -1822,8 +1822,9 @@ function forum_get_discussions($cm, $forumsort="", $fullpost=true, $unused=-1, $
         $updatedsincesql = 'AND d.timemodified > ?';
         $params[] = $updatedsince;
     }
+
     $discussionfields = "d.id as discussionid, d.course, d.forum, d.name, d.firstpost, d.groupid, d.assessed," .
-    " d.timemodified, d.usermodified, d.timestart, d.timeend, d.pinned";
+    " d.timemodified, d.usermodified, d.timestart, d.timeend, d.pinned, d.timelocked";
 
     $allnames = get_all_user_name_fields(true, 'u');
     $sql = "SELECT $postdata, $discussionfields,
@@ -6436,6 +6437,7 @@ function mod_forum_get_fontawesome_icon_map() {
         'mod_forum:t/selected' => 'fa-check',
         'mod_forum:t/subscribed' => 'fa-envelope-o',
         'mod_forum:t/unsubscribed' => 'fa-envelope-open-o',
+        'mod_forum:t/star' => 'fa-star',
     ];
 }
 
