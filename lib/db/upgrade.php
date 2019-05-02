@@ -2996,8 +2996,309 @@ function xmldb_main_upgrade($oldversion) {
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }
-
+        // Main savepoint reached.
         upgrade_main_savepoint(true, 2019041300.01);
+    }
+
+    if ($oldversion < 2019041800.01) {
+        // STEP 1. For the existing and migrated self-conversations, set the type to the new MESSAGE_CONVERSATION_TYPE_SELF, update
+        // the convhash and star them.
+        $sql = "SELECT mcm.conversationid, mcm.userid, MAX(mcm.id) as maxid
+                  FROM {message_conversation_members} mcm
+            INNER JOIN {user} u ON mcm.userid = u.id
+                 WHERE u.deleted = 0
+              GROUP BY mcm.conversationid, mcm.userid
+                HAVING COUNT(*) > 1";
+        $selfconversationsrs = $DB->get_recordset_sql($sql);
+        $maxids = [];
+        foreach ($selfconversationsrs as $selfconversation) {
+            $DB->update_record('message_conversations',
+                ['id' => $selfconversation->conversationid,
+                 'type' => \core_message\api::MESSAGE_CONVERSATION_TYPE_SELF,
+                 'convhash' => \core_message\helper::get_conversation_hash([$selfconversation->userid])
+                ]
+            );
+
+            // Star the existing self-conversation.
+            $favouriterecord = new \stdClass();
+            $favouriterecord->component = 'core_message';
+            $favouriterecord->itemtype = 'message_conversations';
+            $favouriterecord->itemid = $selfconversation->conversationid;
+            $userctx = \context_user::instance($selfconversation->userid);
+            $favouriterecord->contextid = $userctx->id;
+            $favouriterecord->userid = $selfconversation->userid;
+            if (!$DB->record_exists('favourite', (array)$favouriterecord)) {
+                $favouriterecord->timecreated = time();
+                $favouriterecord->timemodified = $favouriterecord->timecreated;
+                $DB->insert_record('favourite', $favouriterecord);
+            }
+
+            // Set the self-conversation member with maxid to remove it later.
+            $maxids[] = $selfconversation->maxid;
+        }
+        $selfconversationsrs->close();
+
+        // Remove the repeated member with the higher id for all the existing self-conversations.
+        if (!empty($maxids)) {
+            list($insql, $inparams) = $DB->get_in_or_equal($maxids);
+            $DB->delete_records_select('message_conversation_members', "id $insql", $inparams);
+        }
+
+        // STEP 2. Migrate existing self-conversation relying on old message tables, setting the type to the new
+        // MESSAGE_CONVERSATION_TYPE_SELF and the convhash to the proper one. Star them also.
+
+        // On the messaging legacy tables, self-conversations are only present in the 'message_read' table, so we don't need to
+        // check the content in the 'message' table.
+        $sql = "SELECT mr.*
+                  FROM {message_read} mr
+            INNER JOIN {user} u ON mr.useridfrom = u.id
+                 WHERE mr.useridfrom = mr.useridto AND mr.notification = 0 AND u.deleted = 0";
+        $legacyselfmessagesrs = $DB->get_recordset_sql($sql);
+        foreach ($legacyselfmessagesrs as $message) {
+            // Get the self-conversation or create and star it if doesn't exist.
+            $conditions = [
+                'type' => \core_message\api::MESSAGE_CONVERSATION_TYPE_SELF,
+                'convhash' => \core_message\helper::get_conversation_hash([$message->useridfrom])
+            ];
+            $selfconversation = $DB->get_record('message_conversations', $conditions);
+            if (empty($selfconversation)) {
+                // Create the self-conversation.
+                $selfconversation = new \stdClass();
+                $selfconversation->type = \core_message\api::MESSAGE_CONVERSATION_TYPE_SELF;
+                $selfconversation->convhash = \core_message\helper::get_conversation_hash([$message->useridfrom]);
+                $selfconversation->enabled = 1;
+                $selfconversation->timecreated = time();
+                $selfconversation->timemodified = $selfconversation->timecreated;
+
+                $selfconversation->id = $DB->insert_record('message_conversations', $selfconversation);
+
+                // Add user to this self-conversation.
+                $member = new \stdClass();
+                $member->conversationid = $selfconversation->id;
+                $member->userid = $message->useridfrom;
+                $member->timecreated = time();
+
+                $member->id = $DB->insert_record('message_conversation_members', $member);
+
+                // Star the self-conversation.
+                $favouriterecord = new \stdClass();
+                $favouriterecord->component = 'core_message';
+                $favouriterecord->itemtype = 'message_conversations';
+                $favouriterecord->itemid = $selfconversation->id;
+                $userctx = \context_user::instance($message->useridfrom);
+                $favouriterecord->contextid = $userctx->id;
+                $favouriterecord->userid = $message->useridfrom;
+                if (!$DB->record_exists('favourite', (array)$favouriterecord)) {
+                    $favouriterecord->timecreated = time();
+                    $favouriterecord->timemodified = $favouriterecord->timecreated;
+                    $DB->insert_record('favourite', $favouriterecord);
+                }
+            }
+
+            // Create the object we will be inserting into the database.
+            $tabledata = new \stdClass();
+            $tabledata->useridfrom = $message->useridfrom;
+            $tabledata->conversationid = $selfconversation->id;
+            $tabledata->subject = $message->subject;
+            $tabledata->fullmessage = $message->fullmessage;
+            $tabledata->fullmessageformat = $message->fullmessageformat ?? FORMAT_MOODLE;
+            $tabledata->fullmessagehtml = $message->fullmessagehtml;
+            $tabledata->smallmessage = $message->smallmessage;
+            $tabledata->timecreated = $message->timecreated;
+
+            $messageid = $DB->insert_record('messages', $tabledata);
+
+            // Check if we need to mark this message as deleted (self-conversations add this information on the
+            // timeuserfromdeleted field.
+            if ($message->timeuserfromdeleted) {
+                $mua = new \stdClass();
+                $mua->userid = $message->useridfrom;
+                $mua->messageid = $messageid;
+                $mua->action = \core_message\api::MESSAGE_ACTION_DELETED;
+                $mua->timecreated = $message->timeuserfromdeleted;
+
+                $DB->insert_record('message_user_actions', $mua);
+            }
+
+            // Mark this message as read.
+            $mua = new \stdClass();
+            $mua->userid = $message->useridto;
+            $mua->messageid = $messageid;
+            $mua->action = \core_message\api::MESSAGE_ACTION_READ;
+            $mua->timecreated = $message->timeread;
+
+            $DB->insert_record('message_user_actions', $mua);
+
+            // The self-conversation message has been migrated. Delete the record from the legacy table as soon as possible
+            // to avoid migrate it twice.
+            $DB->delete_records('message_read', ['id' => $message->id]);
+        }
+        $legacyselfmessagesrs->close();
+
+        // STEP 3. For existing users without self-conversations, create and star it.
+
+        // Get all the users without a self-conversation.
+        $sql = "SELECT u.id
+                  FROM {user} u
+                  WHERE u.deleted = 0 AND u.id NOT IN (SELECT mcm.userid
+                                     FROM {message_conversation_members} mcm
+                                     INNER JOIN {message_conversations} mc
+                                             ON mc.id = mcm.conversationid AND mc.type = ?
+                                    )";
+        $useridsrs = $DB->get_recordset_sql($sql, [\core_message\api::MESSAGE_CONVERSATION_TYPE_SELF]);
+        // Create the self-conversation for all these users.
+        foreach ($useridsrs as $user) {
+            $conditions = [
+                'type' => \core_message\api::MESSAGE_CONVERSATION_TYPE_SELF,
+                'convhash' => \core_message\helper::get_conversation_hash([$user->id])
+            ];
+            $selfconversation = $DB->get_record('message_conversations', $conditions);
+            if (empty($selfconversation)) {
+                // Create the self-conversation.
+                $selfconversation = new \stdClass();
+                $selfconversation->type = \core_message\api::MESSAGE_CONVERSATION_TYPE_SELF;
+                $selfconversation->convhash = \core_message\helper::get_conversation_hash([$user->id]);
+                $selfconversation->enabled = 1;
+                $selfconversation->timecreated = time();
+                $selfconversation->timemodified = $selfconversation->timecreated;
+
+                $selfconversation->id = $DB->insert_record('message_conversations', $selfconversation);
+
+                // Add user to this self-conversation.
+                $member = new \stdClass();
+                $member->conversationid = $selfconversation->id;
+                $member->userid = $user->id;
+                $member->timecreated = time();
+
+                $member->id = $DB->insert_record('message_conversation_members', $member);
+
+                // Star the self-conversation.
+                $favouriterecord = new \stdClass();
+                $favouriterecord->component = 'core_message';
+                $favouriterecord->itemtype = 'message_conversations';
+                $favouriterecord->itemid = $selfconversation->id;
+                $userctx = \context_user::instance($user->id);
+                $favouriterecord->contextid = $userctx->id;
+                $favouriterecord->userid = $user->id;
+                $favouriterecord->timecreated = time();
+                $favouriterecord->timemodified = $favouriterecord->timecreated;
+
+                $DB->insert_record('favourite', $favouriterecord);
+            }
+        }
+        $useridsrs->close();
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2019041800.01);
+    }
+
+    if ($oldversion < 2019042200.01) {
+
+        // Define table role_sortorder to be dropped.
+        $table = new xmldb_table('role_sortorder');
+
+        // Conditionally launch drop table for role_sortorder.
+        if ($dbman->table_exists($table)) {
+            $dbman->drop_table($table);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2019042200.01);
+    }
+
+    if ($oldversion < 2019042200.02) {
+
+        // Let's update all (old core) targets to their new (core_course) locations.
+        $targets = [
+            '\core\analytics\target\course_competencies' => '\core_course\analytics\target\course_competencies',
+            '\core\analytics\target\course_completion' => '\core_course\analytics\target\course_completion',
+            '\core\analytics\target\course_dropout' => '\core_course\analytics\target\course_dropout',
+            '\core\analytics\target\course_gradetopass' => '\core_course\analytics\target\course_gradetopass',
+            '\core\analytics\target\no_teaching' => '\core_course\analytics\target\no_teaching',
+        ];
+
+        foreach ($targets as $oldclass => $newclass) {
+            $DB->set_field('analytics_models', 'target', $newclass, ['target' => $oldclass]);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2019042200.02);
+    }
+
+    if ($oldversion < 2019042300.01) {
+        $sql = "UPDATE {capabilities}
+                   SET name = ?,
+                       contextlevel = ?
+                 WHERE name = ?";
+        $DB->execute($sql, ['moodle/category:viewcourselist', CONTEXT_COURSECAT, 'moodle/course:browse']);
+
+        $sql = "UPDATE {role_capabilities}
+                   SET capability = ?
+                 WHERE capability = ?";
+        $DB->execute($sql, ['moodle/category:viewcourselist', 'moodle/course:browse']);
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2019042300.01);
+    }
+
+    if ($oldversion < 2019042300.03) {
+
+        // Add new customdata field to message table.
+        $table = new xmldb_table('message');
+        $field = new xmldb_field('customdata', XMLDB_TYPE_TEXT, null, null, null, null, null, 'eventtype');
+
+        // Conditionally launch add field output.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Add new customdata field to notifications and messages table.
+        $table = new xmldb_table('notifications');
+        $field = new xmldb_field('customdata', XMLDB_TYPE_TEXT, null, null, null, null, null, 'timecreated');
+
+        // Conditionally launch add field output.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $table = new xmldb_table('messages');
+        // Conditionally launch add field output.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2019042300.03);
+    }
+
+    if ($oldversion < 2019042700.01) {
+
+        // Define field firstanalysis to be added to analytics_used_analysables.
+        $table = new xmldb_table('analytics_used_analysables');
+
+        // Declaring it as null initially (although it is NOT NULL).
+        $field = new xmldb_field('firstanalysis', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'analysableid');
+
+        // Conditionally launch add field firstanalysis.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+
+            // Set existing values to the current timeanalysed value.
+            $recordset = $DB->get_recordset('analytics_used_analysables');
+            foreach ($recordset as $record) {
+                $record->firstanalysis = $record->timeanalysed;
+                $DB->update_record('analytics_used_analysables', $record);
+            }
+            $recordset->close();
+
+            // Now make the field 'NOT NULL'.
+            $field = new xmldb_field('firstanalysis', XMLDB_TYPE_INTEGER, '10',
+                null, XMLDB_NOTNULL, null, null, 'analysableid');
+            $dbman->change_field_notnull($table, $field);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2019042700.01);
     }
 
     return true;

@@ -6199,7 +6199,7 @@ class assign {
                                                         $assignmentname,
                                                         $blindmarking,
                                                         $uniqueidforuser) {
-        global $CFG;
+        global $CFG, $PAGE;
 
         $info = new stdClass();
         if ($blindmarking) {
@@ -6249,6 +6249,20 @@ class assign {
         $eventdata->notification    = 1;
         $eventdata->contexturl      = $info->url;
         $eventdata->contexturlname  = $info->assignment;
+        $customdata = [
+            'cmid' => $coursemodule->id,
+            'instance' => $coursemodule->instance,
+            'messagetype' => $messagetype,
+            'blindmarking' => $blindmarking,
+            'uniqueidforuser' => $uniqueidforuser,
+        ];
+        // Check if the userfrom is real and visible.
+        if (!empty($userfrom->id) && core_user::is_real_user($userfrom->id)) {
+            $userpicture = new user_picture($userfrom);
+            $userpicture->includetoken = $userto->id; // Generate an out-of-session token for the user receiving the message.
+            $customdata['notificationiconurl'] = $userpicture->get_url($PAGE)->out(false);
+        }
+        $eventdata->customdata = $customdata;
 
         message_send($eventdata);
     }
