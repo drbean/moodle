@@ -105,7 +105,7 @@ class exported_discussion_summaries {
      *
      * @param stdClass $user The user to export the posts for.
      * @param forum_entity $forum The forum that each of the $discussions belong to
-     * @param discussion_entity[] $discussions A list of all discussions that each of the $posts belong to
+     * @param discussion_summary_entity[] $discussions A list of all discussion summaries to export
      * @return stdClass[] List of exported posts in the same order as the $posts array.
      */
     public function build(
@@ -125,6 +125,12 @@ class exported_discussion_summaries {
 
         $replycounts = $postvault->get_reply_count_for_discussion_ids($user, $discussionids, $canseeanyprivatereply);
         $latestposts = $postvault->get_latest_post_id_for_discussion_ids($user, $discussionids, $canseeanyprivatereply);
+        $postauthorids = array_unique(array_reduce($discussions, function($carry, $summary) {
+            $firstpostauthorid = $summary->get_first_post_author()->get_id();
+            $lastpostauthorid = $summary->get_latest_post_author()->get_id();
+            return array_merge($carry, [$firstpostauthorid, $lastpostauthorid]);
+        }, []));
+        $postauthorcontextids = $this->get_author_context_ids($postauthorids);
 
         $unreadcounts = [];
         $favourites = $this->get_favourites($user);
@@ -144,10 +150,34 @@ class exported_discussion_summaries {
             $replycounts,
             $unreadcounts,
             $latestposts,
+            $postauthorcontextids,
             $favourites
         );
 
-        return (array) $summaryexporter->export($this->renderer);
+        $exportedposts = (array) $summaryexporter->export($this->renderer);
+        $firstposts = $postvault->get_first_post_for_discussion_ids($discussionids);
+
+        array_walk($exportedposts['summaries'], function($summary) use ($firstposts) {
+            $summary->discussion->times['created'] = (int) $firstposts[$summary->discussion->firstpostid]->created;
+        });
+
+        // Pass the current, preferred sort order for the discussions list.
+        $discussionlistvault = $this->vaultfactory->get_discussions_in_forum_vault();
+        $sortorder = get_user_preferences('forum_discussionlistsortorder',
+            $discussionlistvault::SORTORDER_LASTPOST_DESC);
+
+        $sortoptions = array(
+            'islastpostdesc' => $sortorder == $discussionlistvault::SORTORDER_LASTPOST_DESC,
+            'islastpostasc' => $sortorder == $discussionlistvault::SORTORDER_LASTPOST_ASC,
+            'isrepliesdesc' => $sortorder == $discussionlistvault::SORTORDER_REPLIES_DESC,
+            'isrepliesasc' => $sortorder == $discussionlistvault::SORTORDER_REPLIES_ASC,
+            'iscreateddesc' => $sortorder == $discussionlistvault::SORTORDER_CREATED_DESC,
+            'iscreatedasc' => $sortorder == $discussionlistvault::SORTORDER_CREATED_ASC
+        );
+
+        $exportedposts['state']['sortorder'] = $sortoptions;
+
+        return $exportedposts;
     }
 
     /**
@@ -223,5 +253,16 @@ class exported_discussion_summaries {
         }
 
         return $authorgroups;
+    }
+
+    /**
+     * Get the user context ids for each of the authors.
+     *
+     * @param int[] $authorids The list of author ids to fetch context ids for.
+     * @return int[] Context ids indexed by author id
+     */
+    private function get_author_context_ids(array $authorids) : array {
+        $authorvault = $this->vaultfactory->get_author_vault();
+        return $authorvault->get_context_ids_for_author_ids($authorids);
     }
 }
