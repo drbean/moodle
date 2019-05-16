@@ -91,7 +91,7 @@ class backpack_api {
         $this->backpackapiurl = $sitebackpack->backpackapiurl;
         $this->backpackapiversion = $sitebackpack->apiversion;
         $this->password = $sitebackpack->password;
-        $this->email = !empty($CFG->badges_defaultissuercontact) ? $CFG->badges_defaultissuercontact : $admin->email;
+        $this->email = !empty($CFG->badges_defaultissuercontact) ? $CFG->badges_defaultissuercontact : '';
         $this->isuserbackpack = false;
         $this->backpackid = $sitebackpack->id;
         if (!empty($userbackpack)) {
@@ -471,6 +471,21 @@ class backpack_api {
         }
 
         return $this->curl_request('issuers', null, null, $data);
+    }
+
+    /**
+     * Delete any user access tokens in the session so we will attempt to get new ones.
+     *
+     * @return void
+     */
+    public function clear_system_user_session() {
+        global $SESSION;
+
+        $useridkey = $this->get_token_key(BADGE_USER_ID_TOKEN);
+        unset($SESSION->$useridkey);
+
+        $expireskey = $this->get_token_key(BADGE_EXPIRES_TOKEN);
+        unset($SESSION->$expireskey);
     }
 
     /**

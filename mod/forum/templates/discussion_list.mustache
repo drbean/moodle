@@ -57,7 +57,14 @@
             {{{ pagination }}}
         {{/discussion_top_pagination}}
         {{$discussion_list_output}}
-            <table class="table table-hover table-striped">
+            <span id="discussion-table-description-{{uniqid}}" class="sr-only">
+                {{#str}} showingcountoftotaldiscussions, mod_forum, {"count": "{{visiblediscussioncount}}", "total":"{{totaldiscussioncount}}"} {{/str}}
+            </span>
+            <table
+                class="table table-hover table-striped discussion-list"
+                aria-label='{{#str}} showingcountoftotaldiscussions, mod_forum, {"count": "{{visiblediscussioncount}}", "total":"{{totaldiscussioncount}}"} {{/str}}'
+                aria-describedby="discussion-table-description-{{uniqid}}"
+            >
                 {{$discussion_list_header}}
                 <thead>
                     <tr>
@@ -142,22 +149,18 @@
                             </td>
                             <td scope="col" class="author align-middle">
                                 {{#firstpostauthor}}
-                                    <a href="{{urls.profile}}">
-                                        <div class="d-flex flex-row">
-                                            <div class="align-middle p-0">
-                                                <a href="{{urls.profile}}">
-                                                    <img {{!
-                                                        }} class="h-auto rounded-circle userpicture" {{!
-                                                        }} src="{{urls.profileimage}}" {{!
-                                                        }} alt="{{#str}}pictureof, moodle, {{fullname}}{{/str}}" {{!
-                                                        }}>
-                                                </a>
-                                            </div>
-                                            <div class="align-middle p-2">
-                                                <a href="{{urls.profile}}">{{fullname}}</a>
-                                            </div>
+                                    <div class="d-flex flex-row">
+                                        <div class="align-middle p-0">
+                                            <img
+                                                class="rounded-circle userpicture"
+                                                src="{{urls.profileimage}}"
+                                                alt="{{#str}}pictureof, moodle, {{fullname}}{{/str}}"
+                                            >
                                         </div>
-                                    </a>
+                                        <div class="align-middle p-2">
+                                            {{fullname}}
+                                        </div>
+                                    </div>
                                 {{/firstpostauthor}}
                             </td>
                             {{#forum.state.groupmode}}
@@ -213,11 +216,11 @@
                                     <div class="d-flex flex-row">
                                         <div class="align-middle p-0">
                                             <a href="{{latestpostauthor.urls.profile}}">
-                                                <img {{!
-                                                    }} class="h-auto rounded-circle userpicture" {{!
-                                                    }} src="{{latestpostauthor.urls.profileimage}}" {{!
-                                                    }} alt="{{#str}}pictureof, moodle, {{latestpostauthor.fullname}}{{/str}}" {{!
-                                                    }}>
+                                                <img
+                                                    class="rounded-circle userpicture"
+                                                    src="{{latestpostauthor.urls.profileimage}}"
+                                                    alt="{{#str}}pictureof, moodle, {{latestpostauthor.fullname}}{{/str}}"
+                                                >
                                             </a>
                                         </div>
                                         <div class="p-2 p-t-0 p-b-0 d-inline-flex flex-column">
@@ -257,13 +260,16 @@
                                 </div>
                                 {{/discussion.timed.istimed}}
                             </td>
-                            <td scope="col" class="p-0 align-middle">
+                            <td scope="col" class="p-0 align-middle" data-container="discussion-summary-actions">
                                 {{#discussion}}
-                                    <div class="d-flex flex-wrap">
-                                        <div class="p1-1">
+                                    <div class="d-flex flex-wrap justify-content-end pr-4">
+                                        <div class="pt-1 mt-2  {{^discussion.locked}}hidden{{/discussion.locked}}" data-region="locked-icon">
+                                            <span class="btn" >{{#pix}}i/lock, core, {{#str}}locked, forum{{/str}}{{/pix}}</span>
+                                        </div>
+                                        <div>
                                             {{> mod_forum/discussion_subscription_toggle}}
                                         </div>
-                                        <div class="p1-1 m-t-1" data-container='discussion-tools'>
+                                        <div class="mt-3" data-container='discussion-tools'>
                                             {{> mod_forum/forum_action_menu}}
                                         </div>
                                     </div>
