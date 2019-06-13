@@ -10808,6 +10808,8 @@ div.editor_atto_toolbar button .icon {
     width: 64px;
     height: 64px;
     font-size: 64px; }
+  .icon.movetarget {
+    width: 80px; }
 
 .navbar-dark a .icon {
   color: rgba(255, 255, 255, 0.5) !important;
@@ -12282,10 +12284,6 @@ li.section.hidden span.commands a.editing_show {
   text-align: center;
   clear: both; }
 
-.section img.movetarget {
-  height: 16px;
-  width: 80px; }
-
 input.titleeditor {
   width: 330px;
   vertical-align: text-bottom; }
@@ -12849,7 +12847,15 @@ span.editinstructions {
 
 #nav-drawer {
   right: auto;
-  left: 0; }
+  left: 0;
+  /* Override the z-indexes defined in bootstrap/_list-group.scss that
+       lead to side effects on the user tours positioning. */ }
+  #nav-drawer .list-group-item-action.active,
+  #nav-drawer .list-group-item.active {
+    z-index: inherit; }
+  #nav-drawer .list-group-item-action.active + .list-group-item,
+  #nav-drawer .list-group-item.active + .list-group-item {
+    border-top: none; }
 
 #page {
   margin-top: 50px; }
