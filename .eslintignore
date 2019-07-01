@@ -20,14 +20,12 @@ lib/mlbackend/php/phpml/
 lib/adodb/
 lib/bennu/
 lib/evalmath/
-lib/lessphp/
 lib/phpexcel/
 lib/google/
 lib/htmlpurifier/
 lib/jabber/
 lib/minify/matthiasmullie-minify/
 lib/minify/matthiasmullie-pathconverter/
-lib/pear/Auth/RADIUS.php
 lib/pear/Crypt/CHAP.php
 lib/pear/HTML/Common.php
 lib/pear/HTML/QuickForm.php
@@ -42,7 +40,6 @@ lib/yuilib/gallery/
 lib/jquery/
 lib/html2text/
 lib/markdown/
-lib/recaptchalib.php
 lib/xhprof/
 lib/horde/
 lib/requirejs/

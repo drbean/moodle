@@ -22,13 +22,6 @@
     <licenseversion></licenseversion>
   </library>
   <library>
-    <location>lessphp</location>
-    <name>less.php</name>
-    <license>Apache</license>
-    <version>1.7.0.10</version>
-    <licenseversion>2.0</licenseversion>
-  </library>
-  <library>
     <location>phpexcel</location>
     <name>PHPExcel</name>
     <license>LGPL</license>
@@ -67,13 +60,6 @@
     <location>minify/matthiasmullie-pathconverter</location>
     <name>MatthiasMullie\PathConverter</name>
     <license>MIT</license>
-    <version>1.1.0</version>
-    <licenseversion></licenseversion>
-  </library>
-  <library>
-    <location>pear/Auth/RADIUS.php</location>
-    <name>Pear_Auth_Radius</name>
-    <license>BSD</license>
     <version>1.1.0</version>
     <licenseversion></licenseversion>
   </library>
@@ -172,7 +158,7 @@
     <location>html2text</location>
     <name>HTML2Text</name>
     <license>GPL</license>
-    <version>4.1.0</version>
+    <version>4.2.1</version>
     <licenseversion>2.0+</licenseversion>
   </library>
   <library>
@@ -180,13 +166,6 @@
     <name>Markdown original+extra</name>
     <license>BSD</license>
     <version>1.7.0</version>
-    <licenseversion></licenseversion>
-  </library>
-  <library>
-    <location>recaptchalib.php</location>
-    <name>ReCAPTCHA</name>
-    <license>MIT</license>
-    <version>1.10</version>
     <licenseversion></licenseversion>
   </library>
   <library>
@@ -238,7 +217,7 @@
     <location>php-css-parser</location>
     <name>PHP-CSS-Parser</name>
     <license>MIT</license>
-    <version>8.1.0</version>
+    <version>8.3.0</version>
   </library>
   <library>
     <location>rtlcss</location>

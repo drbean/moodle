@@ -643,18 +643,20 @@ class edit_renderer extends \plugin_renderer_base {
         );
 
         // Add a random question.
-        $returnurl = new \moodle_url('/mod/quiz/edit.php', array('cmid' => $structure->get_cmid(), 'data-addonpage' => $page));
-        $params = array('returnurl' => $returnurl, 'cmid' => $structure->get_cmid(), 'appendqnumstring' => 'addarandomquestion');
-        $url = new \moodle_url('/mod/quiz/addrandom.php', $params);
-        $icon = new \pix_icon('t/add', $str->addarandomquestion, 'moodle', array('class' => 'iconsmall', 'title' => ''));
-        $attributes = array('class' => 'cm-edit-action addarandomquestion', 'data-action' => 'addarandomquestion');
-        if ($page) {
-            $title = get_string('addrandomquestiontopage', 'quiz', $page);
-        } else {
-            $title = get_string('addrandomquestionatend', 'quiz');
+        if ($structure->can_add_random_questions()) {
+            $returnurl = new \moodle_url('/mod/quiz/edit.php', array('cmid' => $structure->get_cmid(), 'data-addonpage' => $page));
+            $params = ['returnurl' => $returnurl, 'cmid' => $structure->get_cmid(), 'appendqnumstring' => 'addarandomquestion'];
+            $url = new \moodle_url('/mod/quiz/addrandom.php', $params);
+            $icon = new \pix_icon('t/add', $str->addarandomquestion, 'moodle', array('class' => 'iconsmall', 'title' => ''));
+            $attributes = array('class' => 'cm-edit-action addarandomquestion', 'data-action' => 'addarandomquestion');
+            if ($page) {
+                $title = get_string('addrandomquestiontopage', 'quiz', $page);
+            } else {
+                $title = get_string('addrandomquestionatend', 'quiz');
+            }
+            $attributes = array_merge(array('data-header' => $title, 'data-addonpage' => $page), $attributes);
+            $actions['addarandomquestion'] = new \action_menu_link_secondary($url, $icon, $str->addarandomquestion, $attributes);
         }
-        $attributes = array_merge(array('data-header' => $title, 'data-addonpage' => $page), $attributes);
-        $actions['addarandomquestion'] = new \action_menu_link_secondary($url, $icon, $str->addarandomquestion, $attributes);
 
         // Call question bank.
         $icon = new \pix_icon('t/add', $str->questionbank, 'moodle', array('class' => 'iconsmall', 'title' => ''));
