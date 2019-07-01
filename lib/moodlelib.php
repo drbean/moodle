@@ -3028,6 +3028,14 @@ function require_login($courseorid = null, $autologinguest = true, $cm = null, $
     }
 }
 
+/**
+ * A convenience function for where we must be logged in as admin
+ * @return void
+ */
+function require_admin() {
+    require_login(null, false);
+    require_capability('moodle/site:config', context_system::instance());
+}
 
 /**
  * This function just makes sure a user is logged out.
@@ -8610,7 +8618,7 @@ function format_float($float, $decimalpoints=1, $localized=true, $stripzeros=fal
     $result = number_format($float, $decimalpoints, $separator, '');
     if ($stripzeros) {
         // Remove zeros and final dot if not needed.
-        $result = preg_replace('~(' . preg_quote($separator) . ')?0+$~', '', $result);
+        $result = preg_replace('~(' . preg_quote($separator, '~') . ')?0+$~', '', $result);
     }
     return $result;
 }
