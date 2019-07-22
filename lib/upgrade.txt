@@ -7,11 +7,19 @@ information provided here is intended especially for developers.
 * The generate_uuid() function has been deprecated. Please use \core\uuid::generate() instead.
 * Remove lib/pear/auth/RADIUS.php (MDL-65746)
 * Core components are now defined in /lib/components.json instead of coded into /lib/classes/component.php
-* Subplugins should now be defined using /db/subplugins.json instead of /db/subplugins.php (which will still work in order to maintain backwards compatibility).
+* Subplugins should now be defined using /db/subplugins.json instead of /db/subplugins.php
 * The following functions have been finally deprecated and can not be used anymore:
     * allow_override()
     * allow_assign()
     * allow_switch()
+* Remove duplicate font-awesome SCSS, Please see /theme/boost/scss/fontawesome for usage (MDL-65936)
+* Remove lib/pear/Crypt/CHAP.php (MDL-65747)
+* New output component available: \core\output\checkbox_toggleall
+  - This allows developers to easily output groups of checkboxes that can be toggled by master controls in the form of a checkbox or
+    a button. Action elements which perform actions on the selected checkboxes can also be enabled/disabled depending on whether
+    at least a single checkbox item is selected or not.
+* Final deprecation (removal) of the core/modal_confirm dialogue.
+* Upgrade scssphp to v1.0.2, This involves renaming classes from Leafo => ScssPhp as the repo has changed.
 
 === 3.7 ===
 
