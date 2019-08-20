@@ -383,7 +383,7 @@ class renderer_base {
     /**
      * Whether we should display the main logo.
      *
-     * @param int $headinglevel
+     * @param int $headinglevel The heading level we want to check against.
      * @return bool
      */
     public function should_display_main_logo($headinglevel = 1) {
@@ -4038,10 +4038,10 @@ EOD;
     }
 
     /**
-     * Returns the URL for the favicon.
+     * Returns the moodle_url for the favicon.
      *
      * @since Moodle 2.5.1 2.6
-     * @return string The favicon URL
+     * @return moodle_url The moodle_url for the favicon
      */
     public function favicon() {
         return $this->image_url('favicon', 'theme');

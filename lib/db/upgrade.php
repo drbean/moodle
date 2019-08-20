@@ -3416,5 +3416,53 @@ function xmldb_main_upgrade($oldversion) {
         upgrade_main_savepoint(true, 2019070400.01);
     }
 
+    if ($oldversion < 2019072200.00) {
+
+        // Define field relativedatesmode to be added to course.
+        $table = new xmldb_table('course');
+        $field = new xmldb_field('relativedatesmode', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'enddate');
+
+        // Conditionally launch add field relativedatesmode.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2019072200.00);
+    }
+
+    if ($oldversion < 2019072500.01) {
+        // Remove the "popup" processor from the list of default processors for the messagecontactrequests notification.
+        $oldloggedinconfig = get_config('message', 'message_provider_moodle_messagecontactrequests_loggedin');
+        $oldloggedoffconfig = get_config('message', 'message_provider_moodle_messagecontactrequests_loggedoff');
+        $newloggedinconfig = implode(',', array_filter(explode(',', $oldloggedinconfig), function($value) {
+            return $value != 'popup';
+        }));
+        $newloggedoffconfig = implode(',', array_filter(explode(',', $oldloggedoffconfig), function($value) {
+            return $value != 'popup';
+        }));
+        set_config('message_provider_moodle_messagecontactrequests_loggedin', $newloggedinconfig, 'message');
+        set_config('message_provider_moodle_messagecontactrequests_loggedoff', $newloggedoffconfig, 'message');
+
+        upgrade_main_savepoint(true, 2019072500.01);
+    }
+
+    if ($oldversion < 2019072500.03) {
+        unset_config('httpswwwroot');
+
+        upgrade_main_savepoint(true, 2019072500.03);
+    }
+
+    if ($oldversion < 2019073100.00) {
+        // Update the empty tag instructions to null.
+        $instructions = get_config('core', 'auth_instructions');
+
+        if (trim(html_to_text($instructions)) === '') {
+            set_config('auth_instructions', '');
+        }
+
+        // Main savepoint reached.
+        upgrade_main_savepoint(true, 2019073100.00);
+    }
     return true;
 }
