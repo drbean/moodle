@@ -516,6 +516,8 @@ $string['enableactivitychooser'] = 'Enable activity chooser';
 $string['enableblogs'] = 'Enable blogs';
 $string['enablecalendarexport'] = 'Enable calendar export';
 $string['enablecomments'] = 'Enable comments';
+$string['enablecourserelativedates'] = 'Enable course relative dates';
+$string['enablecourserelativedates_desc'] = 'Allow courses to be set up to display dates relative to the user\'s start date in the course.';
 $string['enablecourserequests'] = 'Enable course requests';
 $string['enabled'] = 'Enabled';
 $string['enabledevicedetection'] = 'Enable device detection';
@@ -562,6 +564,8 @@ $string['experimentalsettings'] = 'Experimental settings';
 $string['extendedusernamechars'] = 'Allow extended characters in usernames';
 $string['extramemorylimit'] = 'Extra PHP memory limit';
 $string['fatalsessionautostart'] = '<p>Serious configuration error detected, please notify server administrator.</p><p> To operate properly, Moodle requires that administrator changes PHP settings.</p><p><code>session.auto_start</code> must be set to <code>off</code>.</p><p>This setting is controlled by editing <code>php.ini</code>, Apache/IIS <br />configuration or <code>.htaccess</code> file on the server.</p>';
+$string['filescleanupperiod'] = 'Clean trash pool files';
+$string['filescleanupperiod_help'] = 'How often trash files are removed. These are files that are associated with a context that no longer exists';
 $string['fileconversioncleanuptask'] = 'Cleanup of temporary records for file conversions.';
 $string['filecreated'] = 'New file created';
 $string['filestoredin'] = 'Save file into folder :';
@@ -1410,15 +1414,6 @@ $string['cachesessionhelp'] = 'User specific cache that expires when the user\'s
 $string['cacheapplication'] = 'Application cache';
 $string['cacheapplicationhelp'] = 'Cached items are shared among all users and expire by a determined time to live (ttl).';
 
-// Deprecated since Moodle 3.3.
-$string['loginpasswordautocomplete'] = 'Prevent password autocompletion on login form';
-$string['loginpasswordautocomplete_help'] = 'If enabled, users are not allowed to save their account password in their browser.';
-$string['unoconvwarning'] = 'The version of unoconv you have installed is not supported.';
-// Deprecated since Moodle 3.4
-$string['moodleorghubname'] = 'Moodle';
-$string['hubs'] = 'Hubs';
-$string['configloginhttps'] = 'Turning this on will make Moodle use a secure https connection just for the login page (providing a secure login), and then afterwards revert back to the normal http URL for general speed.  CAUTION: this setting REQUIRES https to be specifically enabled on the web server - if it is not then YOU COULD LOCK YOURSELF OUT OF YOUR SITE.';
-$string['loginhttps'] = 'Use HTTPS for logins';
 // Deprecated since Moodle 3.7.
 $string['allowblockstodock'] = 'Allow blocks to use the dock';
 $string['configallowblockstodock'] = 'If enabled and supported by the selected theme users can choose to move blocks to a special dock.';

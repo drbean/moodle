@@ -745,6 +745,63 @@ class core_course_courselib_testcase extends advanced_testcase {
         $this->assertGreaterThan($oldtimemodified, $newtimemodified);
     }
 
+    /**
+     * Relative dates mode settings provider for course creation.
+     */
+    public function create_course_relative_dates_provider() {
+        return [
+            [0, 0, 0],
+            [0, 1, 0],
+            [1, 0, 0],
+            [1, 1, 1],
+        ];
+    }
+
+    /**
+     * Test create_course by attempting to change the relative dates mode.
+     *
+     * @dataProvider create_course_relative_dates_provider
+     * @param int $setting The value for the 'enablecourserelativedates' admin setting.
+     * @param int $mode The value for the course's 'relativedatesmode' field.
+     * @param int $expectedvalue The expected value of the 'relativedatesmode' field after course creation.
+     */
+    public function test_relative_dates_mode_for_course_creation($setting, $mode, $expectedvalue) {
+        global $DB;
+
+        $this->resetAfterTest();
+
+        set_config('enablecourserelativedates', $setting);
+
+        // Generate a course with relative dates mode set to $mode.
+        $course = $this->getDataGenerator()->create_course(['relativedatesmode' => $mode]);
+
+        // Verify that the relative dates match what's expected.
+        $relativedatesmode = $DB->get_field('course', 'relativedatesmode', ['id' => $course->id]);
+        $this->assertEquals($expectedvalue, $relativedatesmode);
+    }
+
+    /**
+     * Test update_course by attempting to change the relative dates mode.
+     */
+    public function test_relative_dates_mode_for_course_update() {
+        global $DB;
+
+        $this->resetAfterTest();
+
+        set_config('enablecourserelativedates', 1);
+
+        // Generate a course with relative dates mode set to 1.
+        $course = $this->getDataGenerator()->create_course(['relativedatesmode' => 1]);
+
+        // Attempt to update the course with a changed relativedatesmode.
+        $course->relativedatesmode = 0;
+        update_course($course);
+
+        // Verify that the relative dates mode has not changed.
+        $relativedatesmode = $DB->get_field('course', 'relativedatesmode', ['id' => $course->id]);
+        $this->assertEquals(1, $relativedatesmode);
+    }
+
     public function test_course_add_cm_to_section() {
         global $DB;
         $this->resetAfterTest(true);
@@ -5148,5 +5205,1356 @@ class core_course_courselib_testcase extends advanced_testcase {
         $result = course_get_recent_courses($student->id);
         $this->assertCount(3, $result);
         $this->assertArrayNotHasKey($courses[0]->id, $result);
+    }
+
+    /**
+     * Test cases for the course_get_course_dates_for_user_ids tests.
+     */
+    public function get_course_get_course_dates_for_user_ids_test_cases() {
+        $now = time();
+        $pastcoursestart = $now - 100;
+        $futurecoursestart = $now + 100;
+
+        return [
+            'future course start fixed no users enrolled' => [
+                'relativedatemode' => false,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [[], []],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start fixed 1 users enrolled future' => [
+                'relativedatemode' => false,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    []
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start fixed 1 users enrolled past' => [
+                'relativedatemode' => false,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$futurecoursestart - 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    []
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start fixed 2 users enrolled future' => [
+                'relativedatemode' => false,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    ['manual' => [$futurecoursestart + 20, ENROL_USER_ACTIVE]]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start fixed 2 users enrolled past' => [
+                'relativedatemode' => false,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$futurecoursestart - 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    ['manual' => [$futurecoursestart - 20, ENROL_USER_ACTIVE]]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start fixed 2 users enrolled mixed' => [
+                'relativedatemode' => false,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    ['manual' => [$futurecoursestart - 20, ENROL_USER_ACTIVE]]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start fixed 2 users enrolled 2 methods' => [
+                'relativedatemode' => false,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$futurecoursestart + 10, ENROL_USER_ACTIVE],
+                        'self' => [$futurecoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$futurecoursestart + 20, ENROL_USER_ACTIVE],
+                        'self' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start fixed 2 users enrolled 2 methods 1 disabled' => [
+                'relativedatemode' => false,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_DISABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$futurecoursestart + 10, ENROL_USER_ACTIVE],
+                        'self' => [$futurecoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$futurecoursestart + 20, ENROL_USER_ACTIVE],
+                        'self' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start fixed 2 users enrolled 2 methods 2 disabled' => [
+                'relativedatemode' => false,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_DISABLED],
+                    ['self', ENROL_INSTANCE_DISABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$futurecoursestart + 10, ENROL_USER_ACTIVE],
+                        'self' => [$futurecoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$futurecoursestart + 20, ENROL_USER_ACTIVE],
+                        'self' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start fixed 2 users enrolled 2 methods 0 disabled 1 user suspended' => [
+                'relativedatemode' => false,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$futurecoursestart + 10, ENROL_USER_SUSPENDED],
+                        'self' => [$futurecoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$futurecoursestart + 20, ENROL_USER_SUSPENDED],
+                        'self' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start fixed 2 users enrolled 2 methods 0 disabled 2 user suspended' => [
+                'relativedatemode' => false,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$futurecoursestart + 10, ENROL_USER_SUSPENDED],
+                        'self' => [$futurecoursestart + 20, ENROL_USER_SUSPENDED]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$futurecoursestart + 20, ENROL_USER_SUSPENDED],
+                        'self' => [$futurecoursestart + 10, ENROL_USER_SUSPENDED]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start relative no users enrolled' => [
+                'relativedatemode' => true,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [[], []],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start relative 1 users enrolled future' => [
+                'relativedatemode' => true,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    []
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart + 10,
+                        'startoffset' => 10
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start relative 1 users enrolled past' => [
+                'relativedatemode' => true,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$futurecoursestart - 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    []
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start relative 2 users enrolled future' => [
+                'relativedatemode' => true,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    ['manual' => [$futurecoursestart + 20, ENROL_USER_ACTIVE]]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart + 10,
+                        'startoffset' => 10
+                    ],
+                    [
+                        'start' => $futurecoursestart + 20,
+                        'startoffset' => 20
+                    ]
+                ]
+            ],
+            'future course start relative 2 users enrolled past' => [
+                'relativedatemode' => true,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$futurecoursestart - 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    ['manual' => [$futurecoursestart - 20, ENROL_USER_ACTIVE]]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start relative 2 users enrolled mixed' => [
+                'relativedatemode' => true,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    ['manual' => [$futurecoursestart - 20, ENROL_USER_ACTIVE]]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart + 10,
+                        'startoffset' => 10
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start relative 2 users enrolled 2 methods' => [
+                'relativedatemode' => true,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$futurecoursestart + 10, ENROL_USER_ACTIVE],
+                        'self' => [$futurecoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$futurecoursestart + 20, ENROL_USER_ACTIVE],
+                        'self' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart + 10,
+                        'startoffset' => 10
+                    ],
+                    [
+                        'start' => $futurecoursestart + 10,
+                        'startoffset' => 10
+                    ]
+                ]
+            ],
+            'future course start relative 2 users enrolled 2 methods 1 disabled' => [
+                'relativedatemode' => true,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_DISABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$futurecoursestart + 10, ENROL_USER_ACTIVE],
+                        'self' => [$futurecoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$futurecoursestart + 20, ENROL_USER_ACTIVE],
+                        'self' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart + 20,
+                        'startoffset' => 20
+                    ],
+                    [
+                        'start' => $futurecoursestart + 10,
+                        'startoffset' => 10
+                    ]
+                ]
+            ],
+            'future course start relative 2 users enrolled 2 methods 2 disabled' => [
+                'relativedatemode' => true,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_DISABLED],
+                    ['self', ENROL_INSTANCE_DISABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$futurecoursestart + 10, ENROL_USER_ACTIVE],
+                        'self' => [$futurecoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$futurecoursestart + 20, ENROL_USER_ACTIVE],
+                        'self' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'future course start relative 2 users enrolled 2 methods 0 disabled 1 user suspended' => [
+                'relativedatemode' => true,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$futurecoursestart + 10, ENROL_USER_SUSPENDED],
+                        'self' => [$futurecoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$futurecoursestart + 20, ENROL_USER_SUSPENDED],
+                        'self' => [$futurecoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart + 20,
+                        'startoffset' => 20
+                    ],
+                    [
+                        'start' => $futurecoursestart + 10,
+                        'startoffset' => 10
+                    ]
+                ]
+            ],
+            'future course start relative 2 users enrolled 2 methods 0 disabled 2 user suspended' => [
+                'relativedatemode' => true,
+                'coursestart' => $futurecoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$futurecoursestart + 10, ENROL_USER_SUSPENDED],
+                        'self' => [$futurecoursestart + 20, ENROL_USER_SUSPENDED]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$futurecoursestart + 20, ENROL_USER_SUSPENDED],
+                        'self' => [$futurecoursestart + 10, ENROL_USER_SUSPENDED]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $futurecoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+
+            // Course start date in the past.
+            'past course start fixed no users enrolled' => [
+                'relativedatemode' => false,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [[], []],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start fixed 1 users enrolled future' => [
+                'relativedatemode' => false,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    []
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start fixed 1 users enrolled past' => [
+                'relativedatemode' => false,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$pastcoursestart - 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    []
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start fixed 2 users enrolled future' => [
+                'relativedatemode' => false,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    ['manual' => [$pastcoursestart + 20, ENROL_USER_ACTIVE]]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start fixed 2 users enrolled past' => [
+                'relativedatemode' => false,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$pastcoursestart - 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    ['manual' => [$pastcoursestart - 20, ENROL_USER_ACTIVE]]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start fixed 2 users enrolled mixed' => [
+                'relativedatemode' => false,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    ['manual' => [$pastcoursestart - 20, ENROL_USER_ACTIVE]]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start fixed 2 users enrolled 2 methods' => [
+                'relativedatemode' => false,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$pastcoursestart + 10, ENROL_USER_ACTIVE],
+                        'self' => [$pastcoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$pastcoursestart + 20, ENROL_USER_ACTIVE],
+                        'self' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start fixed 2 users enrolled 2 methods 1 disabled' => [
+                'relativedatemode' => false,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_DISABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$pastcoursestart + 10, ENROL_USER_ACTIVE],
+                        'self' => [$pastcoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$pastcoursestart + 20, ENROL_USER_ACTIVE],
+                        'self' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start fixed 2 users enrolled 2 methods 2 disabled' => [
+                'relativedatemode' => false,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_DISABLED],
+                    ['self', ENROL_INSTANCE_DISABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$pastcoursestart + 10, ENROL_USER_ACTIVE],
+                        'self' => [$pastcoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$pastcoursestart + 20, ENROL_USER_ACTIVE],
+                        'self' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start fixed 2 users enrolled 2 methods 0 disabled 1 user suspended' => [
+                'relativedatemode' => false,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$pastcoursestart + 10, ENROL_USER_SUSPENDED],
+                        'self' => [$pastcoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$pastcoursestart + 20, ENROL_USER_SUSPENDED],
+                        'self' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start fixed 2 users enrolled 2 methods 0 disabled 2 user suspended' => [
+                'relativedatemode' => false,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$pastcoursestart + 10, ENROL_USER_SUSPENDED],
+                        'self' => [$pastcoursestart + 20, ENROL_USER_SUSPENDED]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$pastcoursestart + 20, ENROL_USER_SUSPENDED],
+                        'self' => [$pastcoursestart + 10, ENROL_USER_SUSPENDED]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start relative no users enrolled' => [
+                'relativedatemode' => true,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [[], []],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start relative 1 users enrolled future' => [
+                'relativedatemode' => true,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    []
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart + 10,
+                        'startoffset' => 10
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start relative 1 users enrolled past' => [
+                'relativedatemode' => true,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$pastcoursestart - 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    []
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start relative 2 users enrolled future' => [
+                'relativedatemode' => true,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    ['manual' => [$pastcoursestart + 20, ENROL_USER_ACTIVE]]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart + 10,
+                        'startoffset' => 10
+                    ],
+                    [
+                        'start' => $pastcoursestart + 20,
+                        'startoffset' => 20
+                    ]
+                ]
+            ],
+            'past course start relative 2 users enrolled past' => [
+                'relativedatemode' => true,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$pastcoursestart - 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    ['manual' => [$pastcoursestart - 20, ENROL_USER_ACTIVE]]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start relative 2 users enrolled mixed' => [
+                'relativedatemode' => true,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    ['manual' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]],
+                    // User 2.
+                    ['manual' => [$pastcoursestart - 20, ENROL_USER_ACTIVE]]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart + 10,
+                        'startoffset' => 10
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start relative 2 users enrolled 2 methods' => [
+                'relativedatemode' => true,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$pastcoursestart + 10, ENROL_USER_ACTIVE],
+                        'self' => [$pastcoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$pastcoursestart + 20, ENROL_USER_ACTIVE],
+                        'self' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart + 10,
+                        'startoffset' => 10
+                    ],
+                    [
+                        'start' => $pastcoursestart + 10,
+                        'startoffset' => 10
+                    ]
+                ]
+            ],
+            'past course start relative 2 users enrolled 2 methods 1 disabled' => [
+                'relativedatemode' => true,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_DISABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$pastcoursestart + 10, ENROL_USER_ACTIVE],
+                        'self' => [$pastcoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$pastcoursestart + 20, ENROL_USER_ACTIVE],
+                        'self' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart + 20,
+                        'startoffset' => 20
+                    ],
+                    [
+                        'start' => $pastcoursestart + 10,
+                        'startoffset' => 10
+                    ]
+                ]
+            ],
+            'past course start relative 2 users enrolled 2 methods 2 disabled' => [
+                'relativedatemode' => true,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_DISABLED],
+                    ['self', ENROL_INSTANCE_DISABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$pastcoursestart + 10, ENROL_USER_ACTIVE],
+                        'self' => [$pastcoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$pastcoursestart + 20, ENROL_USER_ACTIVE],
+                        'self' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ],
+            'past course start relative 2 users enrolled 2 methods 0 disabled 1 user suspended' => [
+                'relativedatemode' => true,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$pastcoursestart + 10, ENROL_USER_SUSPENDED],
+                        'self' => [$pastcoursestart + 20, ENROL_USER_ACTIVE]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$pastcoursestart + 20, ENROL_USER_SUSPENDED],
+                        'self' => [$pastcoursestart + 10, ENROL_USER_ACTIVE]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart + 20,
+                        'startoffset' => 20
+                    ],
+                    [
+                        'start' => $pastcoursestart + 10,
+                        'startoffset' => 10
+                    ]
+                ]
+            ],
+            'past course start relative 2 users enrolled 2 methods 0 disabled 2 user suspended' => [
+                'relativedatemode' => true,
+                'coursestart' => $pastcoursestart,
+                'usercount' => 2,
+                'enrolmentmethods' => [
+                    ['manual', ENROL_INSTANCE_ENABLED],
+                    ['self', ENROL_INSTANCE_ENABLED]
+                ],
+                'enrolled' => [
+                    // User 1.
+                    [
+                        'manual' => [$pastcoursestart + 10, ENROL_USER_SUSPENDED],
+                        'self' => [$pastcoursestart + 20, ENROL_USER_SUSPENDED]
+                    ],
+                    // User 2.
+                    [
+                        'manual' => [$pastcoursestart + 20, ENROL_USER_SUSPENDED],
+                        'self' => [$pastcoursestart + 10, ENROL_USER_SUSPENDED]
+                    ]
+                ],
+                'expected' => [
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ],
+                    [
+                        'start' => $pastcoursestart,
+                        'startoffset' => 0
+                    ]
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Test the course_get_course_dates_for_user_ids function.
+     *
+     * @dataProvider get_course_get_course_dates_for_user_ids_test_cases()
+     * @param bool $relativedatemode Set the course to relative dates mode
+     * @param int $coursestart Course start date
+     * @param int $usercount Number of users to create
+     * @param array $enrolmentmethods Enrolment methods to set for the course
+     * @param array $enrolled Enrolment config for to set for the users
+     * @param array $expected Expected output
+     */
+    public function test_course_get_course_dates_for_user_ids(
+        $relativedatemode,
+        $coursestart,
+        $usercount,
+        $enrolmentmethods,
+        $enrolled,
+        $expected
+    ) {
+        global $DB;
+        $this->resetAfterTest();
+
+        $generator = $this->getDataGenerator();
+        $course  = $generator->create_course(['startdate' => $coursestart]);
+        $course->relativedatesmode = $relativedatemode;
+        $users = [];
+
+        for ($i = 0; $i < $usercount; $i++) {
+            $users[] = $generator->create_user();
+        }
+
+        foreach ($enrolmentmethods as [$type, $status]) {
+            $record = $DB->get_record('enrol', ['courseid' => $course->id, 'enrol' => $type]);
+            $plugin = enrol_get_plugin($type);
+            if ($record->status != $status) {
+                $plugin->update_status($record, $status);
+            }
+        }
+
+        foreach ($enrolled as $index => $enrolconfig) {
+            $user = $users[$index];
+            foreach ($enrolconfig as $type => [$starttime, $status]) {
+                $generator->enrol_user($user->id, $course->id, 'student', $type, $starttime, 0, $status);
+            }
+        }
+
+        $userids = array_map(function($user) {
+            return $user->id;
+        }, $users);
+        $actual = course_get_course_dates_for_user_ids($course, $userids);
+
+        foreach ($expected as $index => $exp) {
+            $userid = $userids[$index];
+            $act = $actual[$userid];
+
+            $this->assertEquals($exp['start'], $act['start']);
+            $this->assertEquals($exp['startoffset'], $act['startoffset']);
+        }
+    }
+
+    /**
+     * Test that calling course_get_course_dates_for_user_ids multiple times in the
+     * same request fill fetch the correct data for the user.
+     */
+    public function test_course_get_course_dates_for_user_ids_multiple_calls() {
+        $this->resetAfterTest();
+
+        $generator = $this->getDataGenerator();
+        $now = time();
+        $coursestart = $now - 1000;
+        $course  = $generator->create_course(['startdate' => $coursestart]);
+        $course->relativedatesmode = true;
+        $user1 = $generator->create_user();
+        $user2 = $generator->create_user();
+        $user1start = $coursestart + 100;
+        $user2start = $coursestart + 200;
+
+        $generator->enrol_user($user1->id, $course->id, 'student', 'manual', $user1start);
+        $generator->enrol_user($user2->id, $course->id, 'student', 'manual', $user2start);
+
+        $result = course_get_course_dates_for_user_ids($course, [$user1->id]);
+        $this->assertEquals($user1start, $result[$user1->id]['start']);
+
+        $result = course_get_course_dates_for_user_ids($course, [$user1->id, $user2->id]);
+        $this->assertEquals($user1start, $result[$user1->id]['start']);
+        $this->assertEquals($user2start, $result[$user2->id]['start']);
+
+        $result = course_get_course_dates_for_user_ids($course, [$user2->id]);
+        $this->assertEquals($user2start, $result[$user2->id]['start']);
+    }
+
+    /**
+     * Data provider for test_course_modules_pending_deletion.
+     *
+     * @return array An array of arrays contain test data
+     */
+    public function provider_course_modules_pending_deletion() {
+        return [
+            'Non-gradable activity, check all'              => [['forum'], 0, false, true],
+            'Gradable activity, check all'                  => [['assign'], 0, false, true],
+            'Non-gradable activity, check gradables'        => [['forum'], 0, true, false],
+            'Gradable activity, check gradables'            => [['assign'], 0, true, true],
+            'Non-gradable within multiple, check all'       => [['quiz', 'forum', 'assign'], 1, false, true],
+            'Non-gradable within multiple, check gradables' => [['quiz', 'forum', 'assign'], 1, true, false],
+            'Gradable within multiple, check all'           => [['quiz', 'forum', 'assign'], 2, false, true],
+            'Gradable within multiple, check gradables'     => [['quiz', 'forum', 'assign'], 2, true, true],
+        ];
+    }
+
+    /**
+     * Tests the function course_modules_pending_deletion.
+     *
+     * @param string[] $modules A complete list aff all available modules before deletion
+     * @param int $indextodelete The index of the module in the $modules array that we want to test with
+     * @param bool $gradable The value to pass to the gradable argument of the course_modules_pending_deletion function
+     * @param bool $expected The expected result
+     * @dataProvider provider_course_modules_pending_deletion
+     */
+    public function test_course_modules_pending_deletion(array $modules, int $indextodelete, bool $gradable, bool $expected) {
+        $this->resetAfterTest();
+
+        // Ensure recyclebin is enabled.
+        set_config('coursebinenable', true, 'tool_recyclebin');
+
+        // Create course and modules.
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+
+        $moduleinstances = [];
+        foreach ($modules as $module) {
+            $moduleinstances[] = $generator->create_module($module, array('course' => $course->id));
+        }
+
+        course_delete_module($moduleinstances[$indextodelete]->cmid, true); // Try to delete the instance asynchronously.
+        $this->assertEquals($expected, course_modules_pending_deletion($course->id, $gradable));
     }
 }

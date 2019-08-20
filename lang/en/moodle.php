@@ -467,6 +467,8 @@ $string['defaultcoursesummary'] = 'Write a concise and interesting paragraph her
 $string['defaultcourseteacher'] = 'Teacher';
 $string['defaultcourseteacherdescription'] = 'Teachers can do anything within a course, including changing the activities and grading students.';
 $string['defaultcourseteachers'] = 'Teachers';
+$string['defaulthomepageuser'] = 'Default home page';
+$string['defaulthomepageuser_help'] = 'This determines the home page for your account';
 $string['delete'] = 'Delete';
 $string['deleteablock'] = 'Delete a block';
 $string['deleteall'] = 'Delete all';
@@ -503,6 +505,7 @@ $string['desc'] = 'Descending';
 $string['description'] = 'Description';
 $string['descriptiona'] = 'Description: {$a}';
 $string['deselectall'] = 'Deselect all';
+$string['deselectnos'] = 'Deselect all \'No\'';
 $string['detailedless'] = 'Less detailed';
 $string['detailedmore'] = 'More detailed';
 $string['digitalminor'] = 'Digital minor';
@@ -1633,6 +1636,10 @@ $string['registrationsend'] = 'Send registration information to moodle.org';
 $string['registrationyes'] = 'Yes, notify me about important news (e.g. security issues or releases) ';
 $string['reject'] = 'Reject';
 $string['rejectdots'] = 'Reject...';
+$string['relativedatesmode'] = 'Relative dates mode';
+$string['relativedatesmode_help'] = 'Display course or activity dates relative to the user\'s start date in the course.<br />The user\'s course start date will be their enrolment start date, unless they are enrolled before the course begins in which case their start date will be the course start date.<br/><strong>WARNING: This is an experimental feature and not all activities may support it. Once the course has been created, this course setting can no longer be changed.</strong>';
+$string['relativedatesmode_warning'] = '<strong>Warning:</strong> Relative dates mode cannot be changed once the course has been created.';
+$string['relativedatestimediffformat'] = '%ad %hh %im';
 $string['reload'] = 'Reload';
 $string['remoteappuser'] = 'Remote {$a} User';
 $string['remove'] = 'Remove';
@@ -1783,6 +1790,7 @@ $string['selectedfile'] = 'Selected file';
 $string['selectedcategories'] = 'Selected categories';
 $string['selectednowmove'] = '{$a} files selected for moving. Now go into the destination folder and press \'Move files to here\'';
 $string['selectfiles'] = 'Select files';
+$string['selectitem'] = 'Select \'{$a}\'';
 $string['selectmoduletoviewhelp'] = 'Select an activity or resource to view its help.
 
 Double-click on an activity or resource name to quickly add it.';
@@ -2191,15 +2199,6 @@ $string['yourteacher'] = 'your {$a}';
 $string['yourwordforx'] = 'Your word for \'{$a}\'';
 $string['zippingbackup'] = 'Zipping backup';
 $string['deprecatedeventname'] = '{$a} (no longer in use)';
-
-// Deprecated since Moodle 3.3.
-$string['deletecomment'] = 'Delete this comment';
-$string['sectionusedefaultname'] = 'Use default section name';
-
-// Deprecated since Moodle 3.4.
-$string['publish'] = 'Publish';
-$string['extendenrol'] = 'Extend enrolment (individual)';
-$string['groupextendenrol'] = 'Extend enrolment (common)';
 
 // Deprecated since Moodle 3.6.
 $string['addedrecip'] = 'Added {$a} new recipient';

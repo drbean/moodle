@@ -1651,9 +1651,9 @@ function calendar_top_controls($type, $data) {
 
     switch ($type) {
         case 'frontpage':
-            $prevlink = calendar_get_link_previous(get_string('monthprev', 'access'), $urlbase, false, false, false,
+            $prevlink = calendar_get_link_previous(get_string('monthprev', 'calendar'), $urlbase, false, false, false,
                 true, $prevmonthtime);
-            $nextlink = calendar_get_link_next(get_string('monthnext', 'access'), $urlbase, false, false, false, true,
+            $nextlink = calendar_get_link_next(get_string('monthnext', 'calendar'), $urlbase, false, false, false, true,
                 $nextmonthtime);
             $calendarlink = calendar_get_link_href(new \moodle_url(CALENDAR_URL . 'view.php', array('view' => 'month')),
                 false, false, false, $time);
@@ -1675,9 +1675,9 @@ function calendar_top_controls($type, $data) {
 
             break;
         case 'course':
-            $prevlink = calendar_get_link_previous(get_string('monthprev', 'access'), $urlbase, false, false, false,
+            $prevlink = calendar_get_link_previous(get_string('monthprev', 'calendar'), $urlbase, false, false, false,
                 true, $prevmonthtime);
-            $nextlink = calendar_get_link_next(get_string('monthnext', 'access'), $urlbase, false, false, false,
+            $nextlink = calendar_get_link_next(get_string('monthnext', 'calendar'), $urlbase, false, false, false,
                 true, $nextmonthtime);
             $calendarlink = calendar_get_link_href(new \moodle_url(CALENDAR_URL . 'view.php', array('view' => 'month')),
                 false, false, false, $time);
@@ -3482,6 +3482,9 @@ function calendar_output_fragment_event_form($args) {
     if ($starttime) {
         $formoptions['starttime'] = $starttime;
     }
+    // Let's check first which event types user can add.
+    $eventtypes = calendar_get_allowed_event_types($courseid);
+    $formoptions['eventtypes'] = $eventtypes;
 
     if (is_null($eventid)) {
         if (!empty($courseid)) {
@@ -3491,6 +3494,7 @@ function calendar_output_fragment_event_form($args) {
                 $formoptions['groups'][$groupid] = $groupdata->name;
             }
         }
+
         $mform = new \core_calendar\local\event\forms\create(
             null,
             $formoptions,
@@ -3500,9 +3504,6 @@ function calendar_output_fragment_event_form($args) {
             true,
             $data
         );
-
-        // Let's check first which event types user can add.
-        $eventtypes = calendar_get_allowed_event_types($courseid);
 
         // If the user is on course context and is allowed to add course events set the event type default to course.
         if (!empty($courseid) && !empty($eventtypes['course'])) {
