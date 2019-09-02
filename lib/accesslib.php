@@ -5276,6 +5276,15 @@ abstract class context extends stdClass implements IteratorAggregate {
         $this->_locked = $locked;
         $DB->set_field('context', 'locked', (int) $locked, ['id' => $this->id]);
         $this->mark_dirty();
+
+        if ($locked) {
+            $eventname = '\\core\\event\\context_locked';
+        } else {
+            $eventname = '\\core\\event\\context_unlocked';
+        }
+        $event = $eventname::create(['context' => $this, 'objectid' => $this->id]);
+        $event->trigger();
+
         self::reset_caches();
 
         return $this;
@@ -5381,6 +5390,9 @@ abstract class context extends stdClass implements IteratorAggregate {
         $DB->delete_records('context', array('id'=>$this->_id));
         // purge static context cache if entry present
         context::cache_remove($this);
+
+        // Inform search engine to delete data related to this context.
+        \core_search\manager::context_deleted($this);
     }
 
     // ====== context level related methods ======
