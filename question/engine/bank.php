@@ -565,7 +565,7 @@ class question_finder implements cache_data_source {
             list($tagsql, $tagparams) = $DB->get_in_or_equal($tagids, SQL_PARAMS_NAMED, 'ti');
             $tagparams['tagcount'] = count($tagids);
             $tagparams['questionitemtype'] = 'question';
-            $tagparams['questioncomponent'] = 'core_question';
+            $tagparams['questioncomponent'] = 'quiz_tag';
             $where .= " AND q.id IN (SELECT ti.itemid
                                        FROM {tag_instance} ti
                                       WHERE ti.itemtype = :questionitemtype
