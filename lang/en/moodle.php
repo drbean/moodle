@@ -381,12 +381,11 @@ $string['coursesettings'] = 'Course default settings';
 $string['coursesmovedout'] = 'Courses moved out from {$a}';
 $string['coursespending'] = 'Courses pending approval';
 $string['coursesearch'] = 'Search courses';
-$string['coursesearch_help'] = '<p>You can search for multiple words at once and can refine your search as follows:</p>
-<ul>
-<li>word - find any match of this word within the text.</li>
-<li>+word - only exact matching words will be found.</li>
-<li>-word - don\'t include results containing this word.</li>
-</ul>';
+$string['coursesearch_help'] = 'You can search for multiple words at once and can refine your search as follows:
+
+* word - find any match of this word within the text
+* +word - only exact matching words will be found
+* -word - don\'t include results containing this word.';
 $string['coursestart'] = 'Course start';
 $string['coursesummary'] = 'Course summary';
 $string['coursesummary_help'] = 'The course summary is displayed in the list of courses. A course search searches course summary text in addition to course names.';
@@ -467,8 +466,8 @@ $string['defaultcoursesummary'] = 'Write a concise and interesting paragraph her
 $string['defaultcourseteacher'] = 'Teacher';
 $string['defaultcourseteacherdescription'] = 'Teachers can do anything within a course, including changing the activities and grading students.';
 $string['defaultcourseteachers'] = 'Teachers';
-$string['defaulthomepageuser'] = 'Default home page';
-$string['defaulthomepageuser_help'] = 'This determines the home page for your account';
+$string['defaulthomepageuser'] = 'Home page';
+$string['defaulthomepageuser_help'] = 'Your home page is the first link in the navigation.';
 $string['delete'] = 'Delete';
 $string['deleteablock'] = 'Delete a block';
 $string['deleteall'] = 'Delete all';
@@ -724,6 +723,7 @@ $string['emailresetconfirmationsubject'] = '{$a}: Password reset request';
 $string['emailresetconfirmsent'] = 'An email has been sent to your address at <b>{$a}</b>.
 <br />It contains easy instructions to confirm and complete this password change.
 If you continue to have difficulty, contact the site administrator.';
+$string['emailstop'] = 'Email stop';
 $string['emailtoprivatefiles'] = 'You can also e-mail files as attachments straight to your private files space. Simply attach your files to an e-mail and send it to {$a}';
 $string['emailtoprivatefilesdenied'] = 'Your administrator has disabled the option to upload your own private files.';
 $string['emailvia'] = '{$a->name} (via {$a->siteshortname})';
@@ -1054,10 +1054,10 @@ $string['indicator:completeduserprofile'] = 'User profile is completed';
 $string['indicator:completeduserprofile_help'] = 'This indicator represents that the student has completed their user profile.';
 $string['indicator:completionenabled'] = 'Completion tracking enabled';
 $string['indicator:completionenabled_help'] = 'This indicator represents that completion tracking has been enabled for this course.';
-$string['indicator:nostudent'] = 'There are no students';
-$string['indicator:nostudent_help'] = 'This indicator reflects that this course has no students.';
-$string['indicator:noteacher'] = 'There are no teachers';
-$string['indicator:noteacher_help'] = 'This indicator reflects that this course has no teachers.';
+$string['indicator:nostudent'] = 'Student enrolments';
+$string['indicator:nostudent_help'] = 'This indicator reflects the availability of students in the course.';
+$string['indicator:noteacher'] = 'Teacher availability';
+$string['indicator:noteacher_help'] = 'This indicator reflects the availability of teachers in the course.';
 $string['indicator:potentialcognitive'] = 'Course potential cognitive depth';
 $string['indicator:potentialcognitive_help'] = 'This indicator is based on the potential cognitive depth that could be reached by a student participating in course activities.';
 $string['indicator:potentialsocial'] = 'Course potential social breadth';
@@ -1145,7 +1145,7 @@ $string['maincoursepage'] = 'Main course page';
 $string['makeafolder'] = 'Create folder';
 $string['makeavailable'] = 'Make available';
 $string['makeeditable'] = 'If you make \'{$a}\' editable by the web server process (eg apache) then you could edit this file directly from this page';
-$string['makethismyhome'] = 'Make this my default home page';
+$string['makethismyhome'] = 'Make this my home page';
 $string['makeunavailable'] = 'Make unavailable';
 $string['manageblocks'] = 'Blocks';
 $string['managecategorythis'] = 'Manage this category';
@@ -1175,8 +1175,8 @@ $string['maxnumberweeks_desc'] = 'The maximum value in the number of sections dr
 $string['maxnumcoursesincombo'] = 'Browse <a href="{$a->link}">{$a->numberofcourses} courses</a>.';
 $string['maxsize'] = 'Max size: {$a}';
 $string['maxsizeandareasize'] = 'Maximum size for new files: {$a->size}, overall limit: {$a->areasize}';
-$string['maxsizeandattachments'] = 'Maximum size for new files: {$a->size}, maximum attachments: {$a->attachments}';
-$string['maxsizeandattachmentsandareasize'] = 'Maximum size for new files: {$a->size}, maximum attachments: {$a->attachments}, overall limit: {$a->areasize}';
+$string['maxsizeandattachments'] = 'Maximum file size: {$a->size}, maximum number of files: {$a->attachments}';
+$string['maxsizeandattachmentsandareasize'] = 'Maximum file size: {$a->size}, maximum number of files: {$a->attachments}, maximum total size: {$a->areasize}';
 $string['memberincourse'] = 'People in the course';
 $string['messagebody'] = 'Message body';
 $string['messagedselectedusers'] = 'Selected users have been messaged and the recipient list has been reset.';
@@ -1631,15 +1631,14 @@ for important notifications such as security alerts and new releases of Moodle.<
 <p>If you choose, you can allow your site name, country and URL to be added to the public list of Moodle Sites.</p>
 <p>All new registrations are verified manually before they are added to the list, but once you are added you can update your registration (and your entry on the public list) at any time by resubmitting this form.</p>';
 $string['registrationinfotitle'] = 'Registration information';
-$string['registrationno'] = 'No, I do not want to receive any email from Moodle HQ';
+$string['registrationno'] = 'No, I do not wish to receive any emails';
 $string['registrationsend'] = 'Send registration information to moodle.org';
-$string['registrationyes'] = 'Yes, notify me about important news (e.g. security issues or releases) ';
+$string['registrationyes'] = 'Yes, notify me of new Moodle releases, security alerts and other important news';
 $string['reject'] = 'Reject';
 $string['rejectdots'] = 'Reject...';
 $string['relativedatesmode'] = 'Relative dates mode';
 $string['relativedatesmode_help'] = 'Display course or activity dates relative to the user\'s start date in the course.<br />The user\'s course start date will be their enrolment start date, unless they are enrolled before the course begins in which case their start date will be the course start date.<br/><strong>WARNING: This is an experimental feature and not all activities may support it. Once the course has been created, this course setting can no longer be changed.</strong>';
 $string['relativedatesmode_warning'] = '<strong>Warning:</strong> Relative dates mode cannot be changed once the course has been created.';
-$string['relativedatestimediffformat'] = '%ad %hh %im';
 $string['reload'] = 'Reload';
 $string['remoteappuser'] = 'Remote {$a} User';
 $string['remove'] = 'Remove';
@@ -1919,7 +1918,7 @@ $string['statsreport10'] = 'User activity';
 $string['statsreport11'] = 'Most active courses';
 $string['statsreport12'] = 'Most active courses (weighted)';
 $string['statsreport13'] = 'Most participatory courses (enrolments)';
-$string['statsreport14'] = 'Most participatory courses (views/posts)';
+$string['statsreport14'] = 'Most participatory courses (posts/views)';
 $string['statsreport2'] = 'Views (all roles)';
 $string['statsreport3'] = 'Posts (all roles)';
 $string['statsreport4'] = 'All activity (all roles)';
@@ -2192,6 +2191,9 @@ $string['yes'] = 'Yes';
 $string['youareabouttocreatezip'] = 'You are about to create a zip file containing';
 $string['youaregoingtorestorefrom'] = 'You are about to start the restore process for';
 $string['youhaveupcomingactivitiesdue'] = 'You have upcoming activities due';
+$string['youhaveupcomingactivitiesdueinfo'] = 'Hi {$a},
+
+<br/><br/>You have upcoming activities due:';
 $string['youneedtoenrol'] = 'To perform that action you need to enrol in this course.';
 $string['yourlastlogin'] = 'Your last login was';
 $string['yourself'] = 'yourself';

@@ -15,15 +15,20 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version details
+ * Settings for the recentlyaccessedcourses block
  *
- * @package    block_community
- * @copyright  1999 onwards Martin Dougiamas (http://dougiamas.com)
+ * @package    block_recentlyaccessedcourses
+ * @copyright  2019 Mihail Geshoski <mihail@moodle.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+defined('MOODLE_INTERNAL') || die;
 
-$plugin->version   = 2019052000;        // The current plugin version (Date: YYYYMMDDXX)
-$plugin->requires  = 2019051100;        // Requires this Moodle version
-$plugin->component = 'block_community'; // Full name of the plugin (used for diagnostics)
+if ($ADMIN->fulltree) {
+    // Display Course Categories on the recently accessed courses block items.
+    $settings->add(new admin_setting_configcheckbox(
+        'block_recentlyaccessedcourses/displaycategories',
+        get_string('displaycategories', 'block_recentlyaccessedcourses'),
+        get_string('displaycategories_help', 'block_recentlyaccessedcourses'),
+        1));
+}
