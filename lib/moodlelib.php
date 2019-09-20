@@ -1648,7 +1648,7 @@ function purge_all_caches() {
  *        'other'  Purge all other caches?
  */
 function purge_caches($options = []) {
-    $defaults = array_fill_keys(['muc', 'theme', 'lang', 'js', 'filter', 'other'], false);
+    $defaults = array_fill_keys(['muc', 'theme', 'lang', 'js', 'template', 'filter', 'other'], false);
     if (empty(array_filter($options))) {
         $options = array_fill_keys(array_keys($defaults), true); // Set all options to true.
     } else {
@@ -1665,6 +1665,9 @@ function purge_caches($options = []) {
     }
     if ($options['js']) {
         js_reset_all_caches();
+    }
+    if ($options['template']) {
+        template_reset_all_caches();
     }
     if ($options['filter']) {
         reset_text_filters_cache();
@@ -2393,7 +2396,7 @@ function get_time_interval_string(int $time1, int $time2, string $format = ''): 
     $dtdate2 = new DateTime();
     $dtdate2->setTimeStamp($time2);
     $interval = $dtdate2->diff($dtdate);
-    $format = empty($format) ? get_string('relativedatestimediffformat', 'moodle') : $format;
+    $format = empty($format) ? get_string('dateintervaldayshoursmins', 'langconfig') : $format;
     return $interval->format($format);
 }
 
@@ -4243,6 +4246,9 @@ function delete_user(stdClass $user) {
     role_unassign_all(array('userid' => $user->id));
 
     // Now do a brute force cleanup.
+
+    // Remove user's calendar subscriptions.
+    $DB->delete_records('event_subscriptions', ['userid' => $user->id]);
 
     // Remove from all cohorts.
     $DB->delete_records('cohort_members', array('userid' => $user->id));
