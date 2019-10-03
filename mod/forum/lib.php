@@ -32,6 +32,7 @@ define('FORUM_MODE_FLATOLDEST', 1);
 define('FORUM_MODE_FLATNEWEST', -1);
 define('FORUM_MODE_THREADED', 2);
 define('FORUM_MODE_NESTED', 3);
+define('FORUM_MODE_MODERN', 4);
 
 define('FORUM_CHOOSESUBSCRIBE', 0);
 define('FORUM_FORCESUBSCRIBE', 1);
@@ -463,20 +464,13 @@ function forum_user_outline($course, $user, $mod, $forum) {
         }
         return $result;
     } else if ($grade) {
-        $result = new stdClass();
+        $result = (object) [
+            'time' => grade_get_date_for_user_grade($grade, $user),
+        ];
         if (!$grade->hidden || has_capability('moodle/grade:viewhidden', context_course::instance($course->id))) {
             $result->info = get_string('grade') . ': ' . $grade->str_long_grade;
         } else {
             $result->info = get_string('grade') . ': ' . get_string('hidden', 'grades');
-        }
-
-        //datesubmitted == time created. dategraded == time modified or time overridden
-        //if grade was last modified by the user themselves use date graded. Otherwise use date submitted
-        //TODO: move this copied & pasted code somewhere in the grades API. See MDL-26704
-        if ($grade->usermodified == $user->id || empty($grade->datesubmitted)) {
-            $result->time = $grade->dategraded;
-        } else {
-            $result->time = $grade->datesubmitted;
         }
 
         return $result;
@@ -2432,7 +2426,7 @@ function forum_get_discussion_subscription_icon($forum, $discussionid, $returnur
 
         return html_writer::link($subscriptionlink, $output, array(
                 'title' => get_string('clicktounsubscribe', 'forum'),
-                'class' => 'discussiontoggle iconsmall',
+                'class' => 'discussiontoggle btn btn-link',
                 'data-forumid' => $forum->id,
                 'data-discussionid' => $discussionid,
                 'data-includetext' => $includetext,
@@ -2446,7 +2440,7 @@ function forum_get_discussion_subscription_icon($forum, $discussionid, $returnur
 
         return html_writer::link($subscriptionlink, $output, array(
                 'title' => get_string('clicktosubscribe', 'forum'),
-                'class' => 'discussiontoggle iconsmall',
+                'class' => 'discussiontoggle btn btn-link',
                 'data-forumid' => $forum->id,
                 'data-discussionid' => $discussionid,
                 'data-includetext' => $includetext,
@@ -5191,7 +5185,8 @@ function forum_get_layout_modes() {
     return array (FORUM_MODE_FLATOLDEST => get_string('modeflatoldestfirst', 'forum'),
                   FORUM_MODE_FLATNEWEST => get_string('modeflatnewestfirst', 'forum'),
                   FORUM_MODE_THREADED   => get_string('modethreaded', 'forum'),
-                  FORUM_MODE_NESTED     => get_string('modenested', 'forum'));
+                  FORUM_MODE_NESTED     => get_string('modenested', 'forum'),
+                  FORUM_MODE_MODERN        => get_string('modemodern', 'forum'));
 }
 
 /**
@@ -5240,10 +5235,16 @@ function forum_get_extra_capabilities() {
 function forum_extend_settings_navigation(settings_navigation $settingsnav, navigation_node $forumnode) {
     global $USER, $PAGE, $CFG, $DB, $OUTPUT;
 
-    $forumobject = $DB->get_record("forum", array("id" => $PAGE->cm->instance));
     if (empty($PAGE->cm->context)) {
         $PAGE->cm->context = context_module::instance($PAGE->cm->instance);
     }
+
+    $vaultfactory = mod_forum\local\container::get_vault_factory();
+    $managerfactory = mod_forum\local\container::get_manager_factory();
+    $legacydatamapperfactory = mod_forum\local\container::get_legacy_data_mapper_factory();
+    $forumvault = $vaultfactory->get_forum_vault();
+    $forumentity = $forumvault->get_from_id($PAGE->cm->instance);
+    $forumobject = $legacydatamapperfactory->get_forum_data_mapper()->to_legacy_object($forumentity);
 
     $params = $PAGE->url->params();
     if (!empty($params['d'])) {
@@ -5378,6 +5379,12 @@ function forum_extend_settings_navigation(settings_navigation $settingsnav, navi
 
         $url = new moodle_url(rss_get_url($PAGE->cm->context->id, $userid, "mod_forum", $forumobject->id));
         $forumnode->add($string, $url, settings_navigation::TYPE_SETTING, null, null, new pix_icon('i/rss', ''));
+    }
+
+    $capabilitymanager = $managerfactory->get_capability_manager($forumentity);
+    if ($capabilitymanager->can_export_forum($USER)) {
+        $url = new moodle_url('/mod/forum/export.php', ['id' => $forumobject->id]);
+        $forumnode->add(get_string('export', 'mod_forum'), $url, navigation_node::TYPE_SETTING);
     }
 }
 
