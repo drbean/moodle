@@ -33,6 +33,13 @@ require_login();
 $model = new \core_analytics\model($id);
 \core_analytics\manager::check_can_manage_models();
 
+if (!\core_analytics\manager::is_analytics_enabled()) {
+    $PAGE->set_context(\context_system::instance());
+    $renderer = $PAGE->get_renderer('tool_analytics');
+    echo $renderer->render_analytics_disabled();
+    exit(0);
+}
+
 $returnurl = new \moodle_url('/admin/tool/analytics/index.php');
 $params = array('id' => $id, 'action' => $action);
 $url = new \moodle_url('/admin/tool/analytics/model.php', $params);
@@ -69,8 +76,8 @@ switch ($action) {
     case 'clear':
         $title = get_string('clearpredictions', 'tool_analytics');
         break;
-    case 'effectivenessreport':
-        $title = get_string('effectivenessreport', 'tool_analytics');
+    case 'insightsreport':
+        $title = get_string('insightsreport', 'tool_analytics');
         break;
     case 'invalidanalysables':
         $title = get_string('invalidanalysables', 'tool_analytics');
@@ -282,13 +289,13 @@ switch ($action) {
         redirect($returnurl);
         break;
 
-    case 'effectivenessreport':
+    case 'insightsreport':
 
         $contextid = optional_param('contextid', null, PARAM_INT);
 
         echo $OUTPUT->header();
 
-        $renderable = new \tool_analytics\output\effectiveness_report($model, $contextid);
+        $renderable = new \tool_analytics\output\insights_report($model, $contextid);
         $renderer = $PAGE->get_renderer('tool_analytics');
         echo $renderer->render($renderable);
 

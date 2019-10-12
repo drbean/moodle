@@ -48,7 +48,7 @@ class manager {
     /**
      * @var \core_analytics\predictor[]
      */
-    protected static $predictionprocessors = null;
+    protected static $predictionprocessors = [];
 
     /**
      * @var \core_analytics\local\target\base[]
@@ -97,6 +97,22 @@ class manager {
         } else {
             require_capability($capability, $context);
         }
+    }
+
+    /**
+     * Is analytics enabled globally?
+     *
+     * return bool
+     */
+    public static function is_analytics_enabled(): bool {
+        global $CFG;
+
+        if (isset($CFG->enableanalytics)) {
+            return $CFG->enableanalytics;
+        }
+
+        // Enabled by default.
+        return true;
     }
 
     /**
@@ -211,6 +227,14 @@ class manager {
             $predictionprocessors[$classfullpath] = self::get_predictions_processor($classfullpath, false);
         }
         return $predictionprocessors;
+    }
+
+    /**
+     * Resets the cached prediction processors.
+     * @return null
+     */
+    public static function reset_prediction_processors() {
+        self::$predictionprocessors = [];
     }
 
     /**

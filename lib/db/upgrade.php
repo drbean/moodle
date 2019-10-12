@@ -3551,5 +3551,63 @@ function xmldb_main_upgrade($oldversion) {
         upgrade_main_savepoint(true, 2019090500.01);
     }
 
+    if ($oldversion < 2019092700.01) {
+        upgrade_rename_prediction_actions_useful_incorrectly_flagged();
+        upgrade_main_savepoint(true, 2019092700.01);
+    }
+
+    if ($oldversion < 2019100800.02) {
+        // Rename the official moodle sites directory the site is registered with.
+        $DB->execute("UPDATE {registration_hubs}
+                         SET hubname = ?, huburl = ?
+                       WHERE huburl = ?", ['moodle', 'https://stats.moodle.org', 'https://moodle.net']);
+
+        // Convert the hub site specific settings to the new naming format without the hub URL in the name.
+        $hubconfig = get_config('hub');
+
+        if (!empty($hubconfig)) {
+            foreach (upgrade_convert_hub_config_site_param_names($hubconfig, 'https://moodle.net') as $name => $value) {
+                set_config($name, $value, 'hub');
+            }
+        }
+
+        upgrade_main_savepoint(true, 2019100800.02);
+    }
+
+    if ($oldversion < 2019100900.00) {
+        // If block_participants is no longer present, remove it.
+        if (!file_exists($CFG->dirroot . '/blocks/participants/block_participants.php')) {
+            // Delete instances.
+            $instances = $DB->get_records_list('block_instances', 'blockname', ['participants']);
+            $instanceids = array_keys($instances);
+
+            if (!empty($instanceids)) {
+                $DB->delete_records_list('block_positions', 'blockinstanceid', $instanceids);
+                $DB->delete_records_list('block_instances', 'id', $instanceids);
+                list($sql, $params) = $DB->get_in_or_equal($instanceids, SQL_PARAMS_NAMED);
+                $params['contextlevel'] = CONTEXT_BLOCK;
+                $DB->delete_records_select('context', "contextlevel=:contextlevel AND instanceid " . $sql, $params);
+
+                $preferences = array();
+                foreach ($instances as $instanceid => $instance) {
+                    $preferences[] = 'block' . $instanceid . 'hidden';
+                    $preferences[] = 'docked_block_instance_' . $instanceid;
+                }
+                $DB->delete_records_list('user_preferences', 'name', $preferences);
+            }
+
+            // Delete the block from the block table.
+            $DB->delete_records('block', array('name' => 'participants'));
+
+            // Remove capabilities.
+            capabilities_cleanup('block_participants');
+
+            // Clean config.
+            unset_all_config_for_plugin('block_participants');
+        }
+
+        upgrade_main_savepoint(true, 2019100900.00);
+    }
+
     return true;
 }

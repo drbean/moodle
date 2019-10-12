@@ -1998,6 +1998,8 @@ class core_renderer extends renderer_base {
         foreach ((array)$options as $key=>$value) {
             if (array_key_exists($key, $button)) {
                 $button->$key = $value;
+            } else {
+                $button->set_attribute($key, $value);
             }
         }
 
@@ -4261,6 +4263,17 @@ EOD;
     public function full_header() {
         global $PAGE;
 
+        if ($PAGE->include_region_main_settings_in_header_actions() && !$PAGE->blocks->is_block_present('settings')) {
+            // Only include the region main settings if the page has requested it and it doesn't already have
+            // the settings block on it. The region main settings are included in the settings block and
+            // duplicating the content causes behat failures.
+            $PAGE->add_header_action(html_writer::div(
+                $this->region_main_settings_menu(),
+                'd-print-none',
+                ['id' => 'region-main-settings-menu']
+            ));
+        }
+
         $header = new stdClass();
         $header->settingsmenu = $this->context_header_settings_menu();
         $header->contextheader = $this->context_header();
@@ -4268,6 +4281,7 @@ EOD;
         $header->navbar = $this->navbar();
         $header->pageheadingbutton = $this->page_heading_button();
         $header->courseheader = $this->course_header();
+        $header->headeractions = $PAGE->get_header_actions();
         return $this->render_from_template('core/full_header', $header);
     }
 
