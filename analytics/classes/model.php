@@ -539,7 +539,7 @@ class model {
             debugging('Prediction processor ' . $predictorname . ' is not ready to be used. Model ' .
                 $this->model->id . ' could not be deleted.');
         } else {
-            $predictor->delete_output_dir($this->get_output_dir(array(), true));
+            $predictor->delete_output_dir($this->get_output_dir(array(), true), $this->get_unique_id());
         }
 
         $DB->delete_records('analytics_models', array('id' => $this->model->id));
@@ -1236,11 +1236,17 @@ class model {
             $sql .= " AND NOT EXISTS (
               SELECT 1
                 FROM {analytics_prediction_actions} apa
-               WHERE apa.predictionid = ap.id AND apa.userid = :userid AND (apa.actionname = :fixed OR apa.actionname = :notuseful)
+               WHERE apa.predictionid = ap.id AND apa.userid = :userid AND
+                     (apa.actionname = :fixed OR apa.actionname = :notuseful OR
+                     apa.actionname = :useful OR apa.actionname = :notapplicable OR
+                     apa.actionname = :incorrectlyflagged)
             )";
             $params['userid'] = $USER->id;
             $params['fixed'] = \core_analytics\prediction::ACTION_FIXED;
             $params['notuseful'] = \core_analytics\prediction::ACTION_NOT_USEFUL;
+            $params['useful'] = \core_analytics\prediction::ACTION_USEFUL;
+            $params['notapplicable'] = \core_analytics\prediction::ACTION_NOT_APPLICABLE;
+            $params['incorrectlyflagged'] = \core_analytics\prediction::ACTION_INCORRECTLY_FLAGGED;
         }
 
         return $DB->get_records_sql($sql, $params);
@@ -1319,11 +1325,17 @@ class model {
             $sql .= " AND NOT EXISTS (
               SELECT 1
                 FROM {analytics_prediction_actions} apa
-               WHERE apa.predictionid = ap.id AND apa.userid = :userid AND (apa.actionname = :fixed OR apa.actionname = :notuseful)
+               WHERE apa.predictionid = ap.id AND apa.userid = :userid AND
+                     (apa.actionname = :fixed OR apa.actionname = :notuseful OR
+                     apa.actionname = :useful OR apa.actionname = :notapplicable OR
+                     apa.actionname = :incorrectlyflagged)
             )";
             $params['userid'] = $USER->id;
             $params['fixed'] = \core_analytics\prediction::ACTION_FIXED;
             $params['notuseful'] = \core_analytics\prediction::ACTION_NOT_USEFUL;
+            $params['useful'] = \core_analytics\prediction::ACTION_USEFUL;
+            $params['notapplicable'] = \core_analytics\prediction::ACTION_NOT_APPLICABLE;
+            $params['incorrectlyflagged'] = \core_analytics\prediction::ACTION_INCORRECTLY_FLAGGED;
         }
 
         $sql .= " ORDER BY ap.timecreated DESC";

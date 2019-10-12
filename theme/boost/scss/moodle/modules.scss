@@ -109,6 +109,16 @@ select {
     }
 }
 
+.discussion-settings-container {
+    .custom-select {
+        width: 100%;
+    }
+
+    input {
+        max-width: 100%;
+    }
+}
+
 .forumpost {
     border: $border-width solid $border-color;
     display: block;
@@ -371,6 +381,13 @@ $author-image-margin-sm: 8px;
             height: 30px;
         }
     }
+}
+
+// Make filter popover content scrollable if needed.
+.filter-scrollable {
+    overflow-y: auto;
+    max-height: 25em;
+    margin-bottom: 1em;
 }
 
 // End styling for mod_forum.

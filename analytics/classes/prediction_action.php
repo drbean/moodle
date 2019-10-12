@@ -33,22 +33,7 @@ defined('MOODLE_INTERNAL') || die();
  * @copyright 2017 David Monllao {@link http://www.davidmonllao.com}
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class prediction_action {
-
-    /**
-     * @var string
-     */
-    protected $actionname = null;
-
-    /**
-     * @var \moodle_url
-     */
-    protected $url = null;
-
-    /**
-     * @var \action_menu_link
-     */
-    protected $actionlink = null;
+class prediction_action extends action {
 
     /**
      * Prediction action constructor.
@@ -60,56 +45,24 @@ class prediction_action {
      * @param string $text Link text
      * @param bool $primary Primary button or secondary.
      * @param array $attributes Link attributes
+     * @param string|false $type
      * @return void
      */
     public function __construct($actionname, \core_analytics\prediction $prediction, \moodle_url $actionurl, \pix_icon $icon,
-                                $text, $primary = false, $attributes = array()) {
+                                $text, $primary = false, $attributes = array(), $type = false) {
 
         $this->actionname = $actionname;
         $this->text = $text;
+        $this->set_type($type);
 
         $this->url = self::transform_to_forward_url($actionurl, $actionname, $prediction->get_prediction_data()->id);
 
+        // The \action_menu_link items are displayed as an icon with a label, no need to show any text.
         if ($primary === false) {
-            $this->actionlink = new \action_menu_link_secondary($this->url, $icon, $this->text, $attributes);
+            $this->actionlink = new \action_menu_link_secondary($this->url, $icon, '', $attributes);
         } else {
-            $this->actionlink = new \action_menu_link_primary($this->url, $icon, $this->text, $attributes);
+            $this->actionlink = new \action_menu_link_primary($this->url, $icon, '', $attributes);
         }
-    }
-
-    /**
-     * Returns the action name.
-     *
-     * @return string
-     */
-    public function get_action_name() {
-        return $this->actionname;
-    }
-
-    /**
-     * Returns the url to the action.
-     *
-     * @return \moodle_url
-     */
-    public function get_url() {
-        return $this->url;
-    }
-
-    /**
-     * Returns the link to the action.
-     *
-     * @return \action_menu_link
-     */
-    public function get_action_link() {
-        return $this->actionlink;
-    }
-
-    /**
-     * Returns the action text.
-     * @return string
-     */
-    public function get_text() {
-        return $this->text;
     }
 
     /**
