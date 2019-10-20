@@ -73,13 +73,24 @@ class summary_table extends table_sql {
     protected $context = null;
 
     /**
+     * @var bool
+     */
+    private $showwordcharcounts = null;
+
+    /**
+     * @var bool Whether the user can see all private replies or not.
+     */
+    protected $canseeprivatereplies;
+
+    /**
      * Forum report table constructor.
      *
      * @param int $courseid The ID of the course the forum(s) exist within.
      * @param array $filters Report filters in the format 'type' => [values].
      * @param bool $bulkoperations Is the user allowed to perform bulk operations?
+     * @param bool $canseeprivatereplies Whether the user can see all private replies or not.
      */
-    public function __construct(int $courseid, array $filters, bool $bulkoperations) {
+    public function __construct(int $courseid, array $filters, bool $bulkoperations, bool $canseeprivatereplies) {
         global $USER, $OUTPUT;
 
         $forumid = $filters['forums'][0];
@@ -88,6 +99,7 @@ class summary_table extends table_sql {
 
         $this->cm = get_coursemodule_from_instance('forum', $forumid, $courseid);
         $this->context = \context_module::instance($this->cm->id);
+        $this->canseeprivatereplies = $canseeprivatereplies;
 
         // Only show their own summary unless they have permission to view all.
         if (!has_capability('forumreport/summary:viewall', $this->context)) {
@@ -118,6 +130,11 @@ class summary_table extends table_sql {
         $this->logreader = $this->get_internal_log_reader();
         if ($this->logreader) {
             $columnheaders['viewcount'] = get_string('viewcount', 'forumreport_summary');
+        }
+
+        if ($this->show_word_char_counts()) {
+            $columnheaders['wordcount'] = get_string('wordcount', 'forumreport_summary');
+            $columnheaders['charcount'] = get_string('charcount', 'forumreport_summary');
         }
 
         $columnheaders['earliestpost'] = get_string('earliestpost', 'forumreport_summary');
@@ -179,8 +196,11 @@ class summary_table extends table_sql {
      * @return string User's full name.
      */
     public function col_fullname($data): string {
-        global $OUTPUT;
+        if ($this->is_downloading()) {
+            return fullname($data);
+        }
 
+        global $OUTPUT;
         return $OUTPUT->user_picture($data, array('size' => 35, 'courseid' => $this->cm->course, 'includefullname' => true));
     }
 
@@ -307,58 +327,36 @@ class summary_table extends table_sql {
                 break;
 
             case self::FILTER_GROUPS:
-                // Skip adding filter if not applied, or all options are selected.
-                if ($this->is_filtered_by_groups($values)) {
-                    // Include users without groups if that option (-1) is selected.
-                    $nonekey = array_search(-1, $values, true);
+                // Filter data to only include content within specified groups (and/or no groups).
+                // Additionally, only display users who can post within the selected option(s).
 
-                    // Users within selected groups or not in any groups are included.
-                    if ($nonekey !== false && count($values) > 1) {
-                        unset($values[$nonekey]);
-                        list($groupidin, $groupidparams) = $DB->get_in_or_equal($values, SQL_PARAMS_NAMED, 'groupid');
+                // Only filter by groups the user has access to.
+                $groups = $this->get_filter_groups($values);
 
-                        // No select fields required.
-                        // No joins required (handled by where to prevent data duplication).
-                        $this->sql->filterwhere .= "
-                            AND (u.id =
-                                (SELECT gm.userid
-                                   FROM {groups_members} gm
-                                  WHERE gm.userid = u.id
-                                    AND gm.groupid {$groupidin}
-                               GROUP BY gm.userid
-                                  LIMIT 1)
-                            OR
-                                (SELECT nogm.userid
-                                   FROM mdl_groups_members nogm
-                                  WHERE nogm.userid = u.id
-                               GROUP BY nogm.userid
-                                  LIMIT 1)
-                            IS NULL)";
+                // Skip adding filter if not applied, or all valid options are selected.
+                if (!empty($groups)) {
+                    // Posts within selected groups and/or not in any groups (group ID -1) are included.
+                    // No user filtering as anyone enrolled can potentially post to unrestricted discussions.
+                    if (array_search(-1, $groups) !== false) {
+                        list($groupidin, $groupidparams) = $DB->get_in_or_equal($groups, SQL_PARAMS_NAMED);
+
+                        $this->sql->filterwhere .= " AND d.groupid {$groupidin}";
                         $this->sql->params += $groupidparams;
 
-                    } else if ($nonekey !== false) {
-                        // Only users within no groups are included.
-                        unset($values[$nonekey]);
+                    } else {
+                        // Only posts and users within selected groups are included.
+                        list($groupusersin, $groupusersparams) = $DB->get_in_or_equal($groups, SQL_PARAMS_NAMED);
+                        list($groupidin, $groupidparams) = $DB->get_in_or_equal($groups, SQL_PARAMS_NAMED);
 
-                        // No select fields required.
-                        $this->sql->filterfromjoins .= " LEFT JOIN {groups_members} nogm ON nogm.userid = u.id";
-                        $this->sql->filterwhere .= " AND nogm.id IS NULL";
-
-                    } else if (!empty($values)) {
-                        // Only users within selected groups are included.
-                        list($groupidin, $groupidparams) = $DB->get_in_or_equal($values, SQL_PARAMS_NAMED, 'groupid');
-
-                        // No select fields required.
                         // No joins required (handled by where to prevent data duplication).
                         $this->sql->filterwhere .= "
-                            AND u.id = (
-                                 SELECT gm.userid
-                                   FROM {groups_members} gm
-                                  WHERE gm.userid = u.id
-                                    AND gm.groupid {$groupidin}
-                               GROUP BY gm.userid
-                                  LIMIT 1)";
-                        $this->sql->params += $groupidparams;
+                            AND u.id IN (
+                                SELECT gm.userid
+                                  FROM {groups_members} gm
+                                 WHERE gm.groupid {$groupusersin}
+                            )
+                            AND d.groupid {$groupidin}";
+                        $this->sql->params += $groupusersparams + $groupidparams;
                     }
                 }
 
@@ -384,6 +382,7 @@ class summary_table extends table_sql {
         $this->collapsible(false);
         $this->sortable(true, 'firstname', SORT_ASC);
         $this->pageable(true);
+        $this->is_downloadable(true);
         $this->no_sorting('select');
         $this->set_attribute('id', 'forumreport_summary_table');
     }
@@ -394,13 +393,14 @@ class summary_table extends table_sql {
      * @return void.
      */
     protected function define_base_sql(): void {
+        global $USER;
+
         $this->sql = new \stdClass();
 
         $userfields = get_extra_user_fields($this->context);
         $userfieldssql = \user_picture::fields('u', $userfields);
 
         // Define base SQL query format.
-        // Ignores private replies as they are not visible to all participants.
         $this->sql->basefields = ' ue.userid AS userid,
                                    e.courseid AS courseid,
                                    f.id as forumid,
@@ -411,6 +411,17 @@ class summary_table extends table_sql {
                                    MIN(p.created) AS earliestpost,
                                    MAX(p.created) AS latestpost';
 
+        // Handle private replies.
+        $privaterepliessql = '';
+        $privaterepliesparams = [];
+        if (!$this->canseeprivatereplies) {
+            $privaterepliessql = ' AND (p.privatereplyto = :privatereplyto
+                                        OR p.userid = :privatereplyfrom
+                                        OR p.privatereplyto = 0)';
+            $privaterepliesparams['privatereplyto'] = $USER->id;
+            $privaterepliesparams['privatereplyfrom'] = $USER->id;
+        }
+
         $this->sql->basefromjoins = '    {enrol} e
                                     JOIN {user_enrolments} ue ON ue.enrolid = e.id
                                     JOIN {user} u ON u.id = ue.userid
@@ -418,7 +429,7 @@ class summary_table extends table_sql {
                                     JOIN {forum_discussions} d ON d.forum = f.id
                                LEFT JOIN {forum_posts} p ON p.discussion =  d.id
                                      AND p.userid = ue.userid
-                                     AND p.privatereplyto = 0
+                                     ' . $privaterepliessql . '
                                LEFT JOIN (
                                             SELECT COUNT(fi.id) AS attcount, fi.itemid AS postid, fi.userid
                                               FROM {files} fi
@@ -436,14 +447,20 @@ class summary_table extends table_sql {
             $this->fill_log_summary_temp_table($this->context->id);
 
             $this->sql->basefields .= ', CASE WHEN tmp.viewcount IS NOT NULL THEN tmp.viewcount ELSE 0 END AS viewcount';
-            $this->sql->basefromjoins .= ' LEFT JOIN {' . self::LOG_SUMMARY_TEMP_TABLE . '} tmp ON tmp.userid = u.id';
+            $this->sql->basefromjoins .= ' LEFT JOIN {' . self::LOG_SUMMARY_TEMP_TABLE . '} tmp ON tmp.userid = u.id ';
             $this->sql->basegroupby .= ', tmp.viewcount';
+        }
+
+        if ($this->show_word_char_counts()) {
+            // All p.wordcount values should be NOT NULL, this CASE WHEN is an extra just-in-case.
+            $this->sql->basefields .= ', SUM(CASE WHEN p.wordcount IS NOT NULL THEN p.wordcount ELSE 0 END) AS wordcount';
+            $this->sql->basefields .= ', SUM(CASE WHEN p.charcount IS NOT NULL THEN p.charcount ELSE 0 END) AS charcount';
         }
 
         $this->sql->params = [
             'component' => 'mod_forum',
             'courseid' => $this->cm->course,
-        ];
+        ] + $privaterepliesparams;
 
         // Handle if a user is limited to viewing their own summary.
         if (!empty($this->userid)) {
@@ -626,24 +643,96 @@ class summary_table extends table_sql {
     }
 
     /**
-     * Check whether the groups filter will be applied by checking whether the number of groups selected
-     * matches the total number of options available (all groups plus no groups option).
+     * Get the final list of groups to filter by, based on the groups submitted,
+     * and those the user has access to.
      *
-     * @param array $groups The group IDs selected.
+     *
+     * @param array $groups The group IDs submitted.
+     * @return array Group objects of groups to use in groups filter.
+     *                If no filtering required (all groups selected), returns [].
+     */
+    protected function get_filter_groups(array $groups): array {
+        global $USER;
+
+        $groupmode = groups_get_activity_groupmode($this->cm);
+        $aag = has_capability('moodle/site:accessallgroups', $this->context);
+        $allowedgroups = [];
+        $filtergroups = [];
+
+        // Filtering only valid if a forum groups mode is enabled.
+        if (in_array($groupmode, [VISIBLEGROUPS, SEPARATEGROUPS])) {
+            $allgroupsobj = groups_get_all_groups($this->cm->course, 0, $this->cm->groupingid);
+            $allgroups = [];
+
+            foreach ($allgroupsobj as $group) {
+                $allgroups[] = $group->id;
+            }
+
+            if ($groupmode == VISIBLEGROUPS || $aag) {
+                $nogroups = new \stdClass();
+                $nogroups->id = -1;
+                $nogroups->name = get_string('groupsnone');
+
+                // Any groups and no groups.
+                $allowedgroupsobj = $allgroupsobj + [$nogroups];
+            } else {
+                // Only assigned groups.
+                $allowedgroupsobj = groups_get_all_groups($this->cm->course, $USER->id, $this->cm->groupingid);
+            }
+
+            foreach ($allowedgroupsobj as $group) {
+                $allowedgroups[] = $group->id;
+            }
+
+            // If not all groups in course are selected, filter by allowed groups submitted.
+            if (!empty($groups) && !empty(array_diff($allowedgroups, $groups))) {
+                $filtergroups = array_intersect($groups, $allowedgroups);
+            } else if (!empty(array_diff($allgroups, $allowedgroups))) {
+                // If user's 'all groups' is a subset of the course groups, filter by all groups available to them.
+                $filtergroups = $allowedgroups;
+            }
+        }
+
+        return $filtergroups;
+    }
+
+    /**
+     * Download the summary report in the selected format.
+     *
+     * @param string $format The format to download the report.
+     */
+    public function download($format) {
+        $filename = 'summary_report_' . userdate(time(), get_string('backupnameformat', 'langconfig'),
+                99, false);
+
+        $this->is_downloading($format, $filename);
+        $this->out($this->perpage, false);
+    }
+
+    /*
+     * Should the word / char counts be displayed?
+     *
+     * We don't want to show word/char columns if there is any null value because this means
+     * that they have not been calculated yet.
      * @return bool
      */
-    protected function is_filtered_by_groups(array $groups): bool {
-        static $groupsavailablecount = null;
+    protected function show_word_char_counts(): bool {
+        global $DB;
 
-        if (empty($groups)) {
-            return false;
+        if (is_null($this->showwordcharcounts)) {
+            // This should be really fast.
+            $sql = "SELECT 'x'
+                      FROM {forum_posts} fp
+                      JOIN {forum_discussions} fd ON fd.id = fp.discussion
+                     WHERE fd.forum = :forumid AND (fp.wordcount IS NULL OR fp.charcount IS NULL)";
+
+            if ($DB->record_exists_sql($sql, ['forumid' => $this->cm->instance])) {
+                $this->showwordcharcounts = false;
+            } else {
+                $this->showwordcharcounts = true;
+            }
         }
 
-        // Find total number of options available (groups plus 'no groups'), if not already fetched.
-        if (is_null($groupsavailablecount)) {
-            $groupsavailablecount = 1 + count(groups_get_activity_allowed_groups($this->cm));
-        }
-
-        return (count($groups) < $groupsavailablecount);
+        return $this->showwordcharcounts;
     }
 }

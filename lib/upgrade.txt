@@ -2,7 +2,7 @@ This files describes API changes in core libraries and APIs,
 information provided here is intended especially for developers.
 
 === 3.8 ===
-
+* The rotate_image function has been added to the stored_file class (MDL-63349)
 * The yui checknet module is removed. Call \core\session\manager::keepalive instead.
 * The generate_uuid() function has been deprecated. Please use \core\uuid::generate() instead.
 * Remove lib/pear/auth/RADIUS.php (MDL-65746)
@@ -22,6 +22,8 @@ information provided here is intended especially for developers.
     at least a single checkbox item is selected or not.
 * Final deprecation (removal) of the core/modal_confirm dialogue.
 * Upgrade scssphp to v1.0.2, This involves renaming classes from Leafo => ScssPhp as the repo has changed.
+* Implement supports_xsendfile() method and allow support for xsendfile in alternative_file_system_class
+  independently of local files (MDL-66304).
 * The methods get_local_path_from_storedfile and get_remote_path_from_storedfile in lib/filestore/file_system.php
   are now public. If you are overriding these then you will need to change your methods to public in your class.
 * $CFG->httpswwwroot has been removed. It is no longer necessary as loginhttps has already been removed and it's no longer being
