@@ -69,6 +69,12 @@ class export_form extends \moodleform {
         ];
         $mform->addElement('autocomplete', 'discussionids', get_string('discussions', 'mod_forum'), $discussions, $options);
 
+        // Date fields.
+        $mform->addElement('date_time_selector', 'from', get_string('postsfrom', 'mod_forum'),
+                ['optional' => true]);
+        $mform->addElement('date_time_selector', 'to', get_string('poststo', 'mod_forum'),
+                ['optional' => true]);
+
         // Export formats.
         $formats = \core_plugin_manager::instance()->get_plugins_of_type('dataformat');
         $options = [];
@@ -76,6 +82,15 @@ class export_form extends \moodleform {
             $options[$format->name] = $format->displayname;
         }
         $mform->addElement('select', 'format', 'Format', $options);
+
+        $mform->addElement('header', 'optionsheader', get_string('exportoptions', 'mod_forum'));
+
+        $mform->addElement('checkbox', 'striphtml', '', get_string('exportstriphtml', 'mod_forum'));
+        $mform->addHelpButton('striphtml', 'exportstriphtml', 'mod_forum');
+
+        $mform->addElement('checkbox', 'humandates', '', get_string('exporthumandates', 'mod_forum'));
+        $mform->addHelpButton('humandates', 'exporthumandates', 'mod_forum');
+
         $this->add_action_buttons(true, get_string('export', 'mod_forum'));
     }
 }
