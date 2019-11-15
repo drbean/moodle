@@ -2430,4 +2430,34 @@ $capabilities = array(
             'user' => CAP_ALLOW
         )
     ),
+
+    // Set display option buttons to an H5P content.
+    'moodle/h5p:setdisplayoptions' => array(
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => array(
+            'editingteacher' => CAP_ALLOW,
+        )
+    ),
+
+    // Allow to deploy H5P content.
+    'moodle/h5p:deploy' => array(
+        'riskbitmask' => RISK_XSS,
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => array(
+            'manager'        => CAP_ALLOW,
+            'editingteacher' => CAP_ALLOW,
+        )
+    ),
+
+    // Allow to update H5P content-type libraries.
+    'moodle/h5p:updatelibraries' => [
+        'riskbitmask' => RISK_XSS,
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => [
+            'manager' => CAP_ALLOW,
+        ]
+    ],
 );

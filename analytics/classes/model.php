@@ -493,13 +493,15 @@ class model {
             $predictionsprocessor = $this->model->predictionsprocessor;
         }
 
-        if ($contextids !== false) {
+        if ($contextids === false) {
+            $contextsstr = $this->model->contextids;
+        } else if (!$contextids) {
+            $contextsstr = null;
+        } else {
             $contextsstr = json_encode($contextids);
 
             // Reset the internal cache.
             $this->contexts = null;
-        } else {
-            $contextsstr = $this->model->contextids;
         }
 
         if ($this->model->timesplitting !== $timesplittingid ||
@@ -1394,6 +1396,10 @@ class model {
             }
 
             $current++;
+        }
+
+        if (empty($predictions)) {
+            return array();
         }
 
         return [$current, $predictions];
