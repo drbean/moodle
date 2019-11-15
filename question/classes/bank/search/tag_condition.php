@@ -62,7 +62,7 @@ class tag_condition extends condition {
             list($tagsql, $tagparams) = $DB->get_in_or_equal($selectedtagids, SQL_PARAMS_NAMED);
             $tagparams['tagcount'] = count($selectedtagids);
             $tagparams['questionitemtype'] = 'question';
-            $tagparams['questioncomponent'] = 'core_question';
+            $tagparams['questioncomponent'] = 'quiz_tag_writing';
             $this->selectedtagids = $selectedtagids;
             $this->params = $tagparams;
             $this->where = "q.id IN (SELECT ti.itemid
