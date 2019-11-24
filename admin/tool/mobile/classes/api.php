@@ -99,7 +99,7 @@ class api {
                     $lang = array();
                     if (!empty($addoninfo['lang'])) {
                         $stringmanager = get_string_manager();
-                        $langs = $stringmanager->get_list_of_translations();
+                        $langs = $stringmanager->get_list_of_translations(true);
                         foreach ($langs as $langid => $langname) {
                             foreach ($addoninfo['lang'] as $stringinfo) {
                                 $lang[$langid][$stringinfo[0]] =
@@ -177,6 +177,10 @@ class api {
             'langmenu' => $CFG->langmenu,
             'langlist' => $CFG->langlist,
             'locale' => $CFG->locale,
+            'tool_mobile_minimumversion' => get_config('tool_mobile', 'minimumversion'),
+            'tool_mobile_iosappid' => get_config('tool_mobile', 'iosappid'),
+            'tool_mobile_androidappid' => get_config('tool_mobile', 'androidappid'),
+            'tool_mobile_setuplink' => clean_param(get_config('tool_mobile', 'setuplink'), PARAM_URL),
         );
 
         $typeoflogin = get_config('tool_mobile', 'typeoflogin');
@@ -194,10 +198,10 @@ class api {
 
         // Check that we are receiving a moodle_url object, themes can override get_logo_url and may return incorrect values.
         if (($logourl = $OUTPUT->get_logo_url()) && $logourl instanceof moodle_url) {
-            $settings['logourl'] = $logourl->out(false);
+            $settings['logourl'] = clean_param($logourl->out(false), PARAM_URL);
         }
         if (($compactlogourl = $OUTPUT->get_compact_logo_url()) && $compactlogourl instanceof moodle_url) {
-            $settings['compactlogourl'] = $compactlogourl->out(false);
+            $settings['compactlogourl'] = clean_param($compactlogourl->out(false), PARAM_URL);
         }
 
         // Identity providers.
@@ -206,6 +210,12 @@ class api {
         $identityprovidersdata = \auth_plugin_base::prepare_identity_providers_for_output($identityproviders, $OUTPUT);
         if (!empty($identityprovidersdata)) {
             $settings['identityproviders'] = $identityprovidersdata;
+            // Clean URLs to avoid breaking Web Services.
+            // We can't do it in prepare_identity_providers_for_output() because it may break the web output.
+            foreach ($settings['identityproviders'] as &$ip) {
+                $ip['url'] = (!empty($ip['url'])) ? clean_param($ip['url'], PARAM_URL) : '';
+                $ip['iconurl'] = (!empty($ip['iconurl'])) ? clean_param($ip['iconurl'], PARAM_URL) : '';
+            }
         }
 
         // If age is verified, return also the admin contact details.
@@ -280,6 +290,22 @@ class api {
             $settings->tool_mobile_apppolicy = get_config('tool_mobile', 'apppolicy');
         }
 
+        if (empty($section) or $section == 'calendar') {
+            $settings->calendartype = $CFG->calendartype;
+            $settings->calendar_site_timeformat = $CFG->calendar_site_timeformat;
+            $settings->calendar_startwday = $CFG->calendar_startwday;
+            $settings->calendar_adminseesall = $CFG->calendar_adminseesall;
+            $settings->calendar_lookahead = $CFG->calendar_lookahead;
+            $settings->calendar_maxevents = $CFG->calendar_maxevents;
+        }
+
+        if (empty($section) or $section == 'coursecolors') {
+            $colornumbers = range(1, 10);
+            foreach ($colornumbers as $number) {
+                $settings->{'core_admin_coursecolor' . $number} = get_config('core_admin', 'coursecolor' . $number);
+            }
+        }
+
         return $settings;
     }
 
@@ -336,6 +362,7 @@ class api {
         $mainmenu = new lang_string('mainmenu', 'tool_mobile');
         $course = new lang_string('course');
         $modules = new lang_string('managemodules');
+        $blocks = new lang_string('blocks');
         $user = new lang_string('user');
         $files = new lang_string('files');
         $remoteaddons = new lang_string('remoteaddons', 'tool_mobile');
@@ -350,31 +377,80 @@ class api {
                 $coursemodules['$mmCourseDelegate_mmaMod' . ucfirst($mod->name)] = $mod->displayname;
             }
         }
+        asort($coursemodules);
 
         $remoteaddonslist = array();
         $mobileplugins = self::get_plugins_supporting_mobile();
         foreach ($mobileplugins as $plugin) {
             $displayname = core_plugin_manager::instance()->plugin_name($plugin['component']) . " - " . $plugin['addon'];
-            $remoteaddonslist['remoteAddOn_' . $plugin['component'] . '_' . $plugin['addon']] = $displayname;
+            $remoteaddonslist['sitePlugin_' . $plugin['component'] . '_' . $plugin['addon']] = $displayname;
 
         }
 
+        // Display blocks.
+        $availableblocks = core_plugin_manager::instance()->get_plugins_of_type('block');
+        $courseblocks = array();
+        $appsupportedblocks = array(
+            'activity_modules' => 'CoreBlockDelegate_AddonBlockActivityModules',
+            'site_main_menu' => 'CoreBlockDelegate_AddonBlockSiteMainMenu',
+            'myoverview' => 'CoreBlockDelegate_AddonBlockMyOverview',
+            'timeline' => 'CoreBlockDelegate_AddonBlockTimeline',
+            'recentlyaccessedcourses' => 'CoreBlockDelegate_AddonBlockRecentlyAccessedCourses',
+            'starredcourses' => 'CoreBlockDelegate_AddonBlockStarredCourses',
+            'recentlyaccesseditems' => 'CoreBlockDelegate_AddonBlockRecentlyAccessedItems',
+            'badges' => 'CoreBlockDelegate_AddonBlockBadges',
+            'blog_menu' => 'CoreBlockDelegate_AddonBlockBlogMenu',
+            'blog_recent' => 'CoreBlockDelegate_AddonBlockBlogRecent',
+            'blog_tags' => 'CoreBlockDelegate_AddonBlockBlogTags',
+            'calendar_month' => 'CoreBlockDelegate_AddonBlockCalendarMonth',
+            'calendar_upcoming' => 'CoreBlockDelegate_AddonBlockCalendarUpcoming',
+            'comments' => 'CoreBlockDelegate_AddonBlockComments',
+            'completionstatus' => 'CoreBlockDelegate_AddonBlockCompletionStatus',
+            'feedback' => 'CoreBlockDelegate_AddonBlockFeedback',
+            'glossary_random' => 'CoreBlockDelegate_AddonBlockGlossaryRandom',
+            'html' => 'CoreBlockDelegate_AddonBlockHtml',
+            'lp' => 'CoreBlockDelegate_AddonBlockLp',
+            'news_items' => 'CoreBlockDelegate_AddonBlockNewsItems',
+            'online_users' => 'CoreBlockDelegate_AddonBlockOnlineUsers',
+            'selfcompletion' => 'CoreBlockDelegate_AddonBlockSelfCompletion',
+            'tags' => 'CoreBlockDelegate_AddonBlockTags',
+        );
+
+        foreach ($availableblocks as $block) {
+            if (isset($appsupportedblocks[$block->name])) {
+                $courseblocks[$appsupportedblocks[$block->name]] = $block->displayname;
+            }
+        }
+        asort($courseblocks);
+
         $features = array(
-            'NoDelegate_CoreOffline' => new lang_string('offlineuse', 'tool_mobile'),
-            '$mmLoginEmailSignup' => new lang_string('startsignup'),
+            "$general" => array(
+                'NoDelegate_CoreOffline' => new lang_string('offlineuse', 'tool_mobile'),
+                'NoDelegate_SiteBlocks' => new lang_string('blocks'),
+                'NoDelegate_CoreComments' => new lang_string('comments'),
+                'NoDelegate_CoreRating' => new lang_string('ratings', 'rating'),
+                'NoDelegate_CoreTag' => new lang_string('tags'),
+                '$mmLoginEmailSignup' => new lang_string('startsignup'),
+                'NoDelegate_ForgottenPassword' => new lang_string('forgotten'),
+                'NoDelegate_ResponsiveMainMenuItems' => new lang_string('responsivemainmenuitems', 'tool_mobile'),
+            ),
             "$mainmenu" => array(
-                '$mmSideMenuDelegate_mmCourses' => new lang_string('mycourses'),
                 '$mmSideMenuDelegate_mmaFrontpage' => new lang_string('sitehome'),
-                '$mmSideMenuDelegate_mmaGrades' => new lang_string('grades', 'grades'),
-                '$mmSideMenuDelegate_mmaCompetency' => new lang_string('myplans', 'tool_lp'),
+                '$mmSideMenuDelegate_mmCourses' => new lang_string('mycourses'),
+                'CoreMainMenuDelegate_CoreCoursesDashboard' => new lang_string('myhome'),
+                '$mmSideMenuDelegate_mmaCalendar' => new lang_string('calendar', 'calendar'),
                 '$mmSideMenuDelegate_mmaNotifications' => new lang_string('notifications', 'message'),
                 '$mmSideMenuDelegate_mmaMessages' => new lang_string('messages', 'message'),
-                '$mmSideMenuDelegate_mmaCalendar' => new lang_string('calendar', 'calendar'),
+                '$mmSideMenuDelegate_mmaGrades' => new lang_string('grades', 'grades'),
+                '$mmSideMenuDelegate_mmaCompetency' => new lang_string('myplans', 'tool_lp'),
+                'CoreMainMenuDelegate_AddonBlog' => new lang_string('blog', 'blog'),
                 '$mmSideMenuDelegate_mmaFiles' => new lang_string('files'),
                 '$mmSideMenuDelegate_website' => new lang_string('webpage'),
                 '$mmSideMenuDelegate_help' => new lang_string('help'),
             ),
             "$course" => array(
+                'NoDelegate_CourseBlocks' => new lang_string('blocks'),
+                'CoreCourseOptionsDelegate_AddonBlog' => new lang_string('blog', 'blog'),
                 '$mmCoursesDelegate_search' => new lang_string('search'),
                 '$mmCoursesDelegate_mmaCompetency' => new lang_string('competencies', 'competency'),
                 '$mmCoursesDelegate_mmaParticipants' => new lang_string('participants'),
@@ -385,6 +461,7 @@ class api {
                 'NoDelegate_CoreCoursesDownload' => new lang_string('downloadcourses', 'tool_mobile'),
             ),
             "$user" => array(
+                'CoreUserDelegate_AddonBlog:blogs' => new lang_string('blog', 'blog'),
                 '$mmUserDelegate_mmaBadges' => new lang_string('badges', 'badges'),
                 '$mmUserDelegate_mmaCompetency:learningPlan' => new lang_string('competencies', 'competency'),
                 '$mmUserDelegate_mmaCourseCompletion:viewCompletion' => new lang_string('coursecompletion', 'completion'),
@@ -401,6 +478,7 @@ class api {
                 'files_upload' => new lang_string('upload'),
             ),
             "$modules" => $coursemodules,
+            "$blocks" => $courseblocks,
         );
 
         if (!empty($remoteaddonslist)) {

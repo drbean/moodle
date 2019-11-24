@@ -613,7 +613,7 @@ function data_set_events($data) {
             $event->visible      = instance_is_visible('data', $data);
             $event->timeduration = 0;
             $calendarevent = calendar_event::load($event->id);
-            $calendarevent->update($event);
+            $calendarevent->update($event, false);
         } else {
             // Calendar event is on longer needed.
             $calendarevent = calendar_event::load($event->id);
@@ -633,7 +633,7 @@ function data_set_events($data) {
             $event->timesort     = $data->timeavailablefrom;
             $event->visible      = instance_is_visible('data', $data);
             $event->timeduration = 0;
-            calendar_event::create($event);
+            calendar_event::create($event, false);
         }
     }
 
@@ -652,7 +652,7 @@ function data_set_events($data) {
             $event->visible      = instance_is_visible('data', $data);
             $event->timeduration = 0;
             $calendarevent = calendar_event::load($event->id);
-            $calendarevent->update($event);
+            $calendarevent->update($event, false);
         } else {
             // Calendar event is on longer needed.
             $calendarevent = calendar_event::load($event->id);
@@ -672,7 +672,7 @@ function data_set_events($data) {
             $event->timesort     = $data->timeavailableto;
             $event->visible      = instance_is_visible('data', $data);
             $event->timeduration = 0;
-            calendar_event::create($event);
+            calendar_event::create($event, false);
         }
     }
 }
@@ -1421,6 +1421,7 @@ function data_approve_entry($entryid, $approve) {
 
 /**
  * Populate the field contents of a new record with the submitted data.
+ * An event has been previously triggered upon the creation of the new record in data_add_record().
  *
  * @param  stdClass $data           database object
  * @param  stdClass $context        context object
@@ -1449,18 +1450,6 @@ function data_add_fields_contents_to_new_record($data, $context, $recordid, $fie
     foreach ($processeddata->fields as $fieldname => $field) {
         $field->update_content($recordid, $datarecord->$fieldname, $fieldname);
     }
-
-    // Trigger an event for updating this record.
-    $event = \mod_data\event\record_created::create(array(
-        'objectid' => $recordid,
-        'context' => $context,
-        'courseid' => $data->course,
-        'other' => array(
-            'dataid' => $data->id
-        )
-    ));
-    $event->add_record_snapshot('data', $data);
-    $event->trigger();
 }
 
 /**

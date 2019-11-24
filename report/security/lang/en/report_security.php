@@ -31,7 +31,7 @@ Please note that this measure does not improve security of the server significan
 $string['check_configrw_name'] = 'Writable config.php';
 $string['check_configrw_ok'] = 'config.php can not be modified by PHP scripts.';
 $string['check_configrw_warning'] = 'PHP scripts may modify config.php.';
-$string['check_cookiesecure_details'] = '<p>If you enable https communication it is recommended that you also enable secure cookies. You should also add permanent redirection from http to https. Ideally also serve HSTS headers well.</p>';
+$string['check_cookiesecure_details'] = '<p>If https communication is enabled, it is recommended to enable sending of secure cookies. You should have permanent redirection from http to https and ideally serve HSTS headers as well.</p>';
 $string['check_cookiesecure_error'] = 'Please enable secure cookies';
 $string['check_cookiesecure_name'] = 'Secure cookies';
 $string['check_cookiesecure_ok'] = 'Secure cookies enabled.';
@@ -61,11 +61,11 @@ $string['check_frontpagerole_error'] = 'Incorrectly defined frontpage role "{$a}
 $string['check_frontpagerole_name'] = 'Frontpage role';
 $string['check_frontpagerole_notset'] = 'Frontpage role is not set.';
 $string['check_frontpagerole_ok'] = 'Frontpage role definition is OK.';
-$string['check_google_details'] = '<p>The Open to Google setting enables search engines to enter courses with guest access. There is no point in enabling this setting if guest login is not allowed.</p>';
-$string['check_google_error'] = 'Search engine access is allowed but guest access is disabled.';
-$string['check_google_info'] = 'Search engines may enter as guests.';
-$string['check_google_name'] = 'Open to Google';
-$string['check_google_ok'] = 'Search engine access is not enabled.';
+$string['check_crawlers_details'] = '<p>The "Open to search engines" setting enables search engines to enter courses with guest access. There is no point in enabling this setting if guest login is not allowed.</p>';
+$string['check_crawlers_error'] = 'Search engine access is allowed but guest access is disabled.';
+$string['check_crawlers_info'] = 'Search engines may enter as guests.';
+$string['check_crawlers_name'] = 'Open to search engines';
+$string['check_crawlers_ok'] = 'Search engine access is not enabled.';
 $string['check_guestrole_details'] = '<p>The guest role is used for guests, not logged in users and temporary guest course access. Please make sure no risky capabilities are allowed in this role.</p>
 <p>The only supported legacy type for guest role is <em>Guest</em>.</p>';
 $string['check_guestrole_error'] = 'The guest role "{$a}" is incorrectly defined!';

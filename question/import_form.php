@@ -59,10 +59,12 @@ class question_import_form extends moodleform {
                 $separator .= $OUTPUT->help_icon('pluginname', 'qformat_' . $shortname);
             }
             $separator .= '&nbsp';
+            $separator .= '<div class="w-100"></div>';
             $separators[] = $separator;
         }
 
         $radioarray[] = $mform->createElement('static', 'makelasthelpiconshowup', '');
+	$mform->setDefault('format', "xml");
         $mform->addGroup($radioarray, "formatchoices", '', $separators, false);
         $mform->addRule("formatchoices", null, 'required', null, 'client');
 
@@ -78,7 +80,7 @@ class question_import_form extends moodleform {
         $categorygroup[] = $mform->createElement('checkbox', 'contextfromfile', '', get_string('getcontextfromfile', 'question'));
         $mform->addGroup($categorygroup, 'categorygroup', '', '', false);
         $mform->disabledIf('categorygroup', 'catfromfile', 'notchecked');
-        $mform->setDefault('catfromfile', 1);
+        $mform->setDefault('catfromfile', false);
         $mform->setDefault('contextfromfile', 1);
 
         $matchgrades = array();
@@ -95,11 +97,11 @@ class question_import_form extends moodleform {
         // The file to import
         $mform->addElement('header', 'importfileupload', get_string('importquestions', 'question'));
 
-        $mform->addElement('filepicker', 'newfile', get_string('import'));
-        $mform->addRule('newfile', null, 'required', null, 'client');
-
         // Submit button.
         $mform->addElement('submit', 'submitbutton', get_string('import'));
+
+        $mform->addElement('filepicker', 'newfile', get_string('import'));
+        $mform->addRule('newfile', null, 'required', null, 'client');
 
         // Set a template for the format select elements
         $renderer = $mform->defaultRenderer();
@@ -112,6 +114,7 @@ class question_import_form extends moodleform {
      * @param array $data the submitted data.
      * @param array $errors the errors so far.
      * @return array the updated errors.
+     * @throws moodle_exception
      */
     protected function validate_uploaded_file($data, $errors) {
         if (empty($data['newfile'])) {
@@ -120,7 +123,7 @@ class question_import_form extends moodleform {
         }
 
         $files = $this->get_draft_files('newfile');
-        if (count($files) < 1) {
+        if (!is_array($files) || count($files) < 1) {
             $errors['newfile'] = get_string('required');
             return $errors;
         }

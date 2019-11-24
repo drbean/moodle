@@ -380,6 +380,11 @@ function question_delete_question($questionid) {
     // Finally delete the question record itself
     $DB->delete_records('question', array('id' => $questionid));
     question_bank::notify_question_edited($questionid);
+
+    // Log the deletion of this question.
+    $event = \core\event\question_deleted::create_from_question_instance($question);
+    $event->add_record_snapshot('question', $question);
+    $event->trigger();
 }
 
 /**
@@ -659,7 +664,7 @@ function question_move_question_tags_to_new_context(array $questions, context $n
 /**
  * This function should be considered private to the question bank, it is called from
  * question/editlib.php question/contextmoveq.php and a few similar places to to the
- * work of acutally moving questions and associated data. However, callers of this
+ * work of actually moving questions and associated data. However, callers of this
  * function also have to do other work, which is why you should not call this method
  * directly from outside the questionbank.
  *
@@ -673,7 +678,7 @@ function question_move_questions_to_category($questionids, $newcategoryid) {
             array('id' => $newcategoryid));
     list($questionidcondition, $params) = $DB->get_in_or_equal($questionids);
     $questions = $DB->get_records_sql("
-            SELECT q.id, q.qtype, qc.contextid
+            SELECT q.id, q.qtype, qc.contextid, q.idnumber, q.category
               FROM {question} q
               JOIN {question_categories} qc ON q.category = qc.id
              WHERE  q.id $questionidcondition", $params);
@@ -682,6 +687,32 @@ function question_move_questions_to_category($questionids, $newcategoryid) {
             question_bank::get_qtype($question->qtype)->move_files(
                     $question->id, $question->contextid, $newcontextid);
         }
+        // Check whether there could be a clash of idnumbers in the new category.
+        if (((string) $question->idnumber !== '') &&
+                $DB->record_exists('question', ['idnumber' => $question->idnumber, 'category' => $newcategoryid])) {
+            $rec = $DB->get_records_select('question', "category = ? AND idnumber LIKE ?",
+                    [$newcategoryid, $question->idnumber . '_%'], 'idnumber DESC', 'id, idnumber', 0, 1);
+            $unique = 1;
+            if (count($rec)) {
+                $rec = reset($rec);
+                $idnumber = $rec->idnumber;
+                if (strpos($idnumber, '_') !== false) {
+                    $unique = substr($idnumber, strpos($idnumber, '_') + 1) + 1;
+                }
+            }
+            // For the move process, add a numerical increment to the idnumber. This means that if a question is
+            // mistakenly moved then the idnumber will not be completely lost.
+            $q = new stdClass();
+            $q->id = $question->id;
+            $q->category = $newcategoryid;
+            $q->idnumber = $question->idnumber . '_' . $unique;
+            $DB->update_record('question', $q);
+        }
+
+        // Log this question move.
+        $event = \core\event\question_moved::create_from_question_instance($question, context::instance_by_id($question->contextid),
+                ['oldcategoryid' => $question->category, 'newcategoryid' => $newcategoryid]);
+        $event->trigger();
     }
 
     // Move the questions themselves.
@@ -775,7 +806,7 @@ function question_preview_url($questionid, $preferredbehaviour = null,
     }
 
     if (!is_null($maxmark)) {
-        $params['maxmark'] = $maxmark;
+        $params['maxmark'] = format_float($maxmark, strlen($maxmark), true, true);
     }
 
     if (!is_null($displayoptions)) {
@@ -900,8 +931,6 @@ function question_load_questions($questionids, $extrafields = '', $join = '') {
  * @param stdClass[]|null $filtercourses The courses to filter the course tags by.
  */
 function _tidy_question($question, $category, array $tagobjects = null, array $filtercourses = null) {
-    global $CFG;
-
     // Load question-type specific fields.
     if (!question_bank::is_qtype_installed($question->qtype)) {
         $question->questiontext = html_writer::tag('p', get_string('warningmissingtype',
@@ -1230,7 +1259,14 @@ function question_category_select_menu($contexts, $top = false, $currentcat = 0,
         $options[] = array($group => $opts);
     }
     echo html_writer::label(get_string('questioncategory', 'core_question'), 'id_movetocategory', false, array('class' => 'accesshide'));
-    $attrs = array('id' => 'id_movetocategory', 'class' => 'custom-select');
+    $attrs = array(
+        'id' => 'id_movetocategory',
+        'class' => 'custom-select',
+        'data-action' => 'toggle',
+        'data-togglegroup' => 'qbank',
+        'data-toggle' => 'action',
+        'disabled' => true,
+    );
     echo html_writer::select($options, 'category', $selected, $choose, $attrs);
 }
 
@@ -1404,11 +1440,25 @@ function question_category_options($contexts, $top = false, $currentcat = 0,
             if ($category->contextid == $contextid) {
                 $cid = $category->id;
                 if ($currentcat != $cid || $currentcat == 0) {
-                    $countstring = !empty($category->questioncount) ?
-                            " ($category->questioncount)" : '';
-                    $categoriesarray[$contextstring][$cid] =
-                            format_string($category->indentedname, true,
-                                array('context' => $context)) . $countstring;
+                    $a = new stdClass;
+                    $a->name = format_string($category->indentedname, true,
+                            array('context' => $context));
+                    if ($category->idnumber !== null && $category->idnumber !== '') {
+                        $a->idnumber = s($category->idnumber);
+                    }
+                    if (!empty($category->questioncount)) {
+                        $a->questioncount = $category->questioncount;
+                    }
+                    if (isset($a->idnumber) && isset($a->questioncount)) {
+                        $formattedname = get_string('categorynamewithidnumberandcount', 'question', $a);
+                    } else if (isset($a->idnumber)) {
+                        $formattedname = get_string('categorynamewithidnumber', 'question', $a);
+                    } else if (isset($a->questioncount)) {
+                        $formattedname = get_string('categorynamewithcount', 'question', $a);
+                    } else {
+                        $formattedname = $a->name;
+                    }
+                    $categoriesarray[$contextstring][$cid] = $formattedname;
                 }
             }
         }
@@ -1630,25 +1680,44 @@ class context_to_string_translator{
 /**
  * Check capability on category
  *
- * @param mixed $questionorid object or id. If an object is passed, it should include ->contextid and ->createdby.
+ * @param int|stdClass $questionorid object or id. If an object is passed, it should include ->contextid and ->createdby.
  * @param string $cap 'add', 'edit', 'view', 'use', 'move' or 'tag'.
- * @param integer $notused no longer used.
- * @return boolean this user has the capability $cap for this question $question?
+ * @param int $notused no longer used.
+ * @return bool this user has the capability $cap for this question $question?
+ * @throws coding_exception
  */
 function question_has_capability_on($questionorid, $cap, $notused = -1) {
-    global $USER;
+    global $USER, $DB;
 
     if (is_numeric($questionorid)) {
-        $question = question_bank::load_question_data((int)$questionorid);
+        $questionid = (int)$questionorid;
     } else if (is_object($questionorid)) {
+        // All we really need in this function is the contextid and author of the question.
+        // We won't bother fetching other details of the question if these 2 fields are provided.
         if (isset($questionorid->contextid) && isset($questionorid->createdby)) {
             $question = $questionorid;
+        } else if (!empty($questionorid->id)) {
+            $questionid = $questionorid->id;
         }
+    }
 
-        if (!isset($question) && isset($questionorid->id) && $questionorid->id != 0) {
-            $question = question_bank::load_question_data($questionorid->id);
+    // At this point, either $question or $questionid is expected to be set.
+    if (isset($questionid)) {
+        try {
+            $question = question_bank::load_question_data($questionid);
+        } catch (Exception $e) {
+            // Let's log the exception for future debugging.
+            debugging($e->getMessage(), DEBUG_NORMAL, $e->getTrace());
+
+            // Well, at least we tried. Seems that we really have to read from DB.
+            $question = $DB->get_record_sql('SELECT q.id, q.createdby, qc.contextid
+                                               FROM {question} q
+                                               JOIN {question_categories} qc ON q.category = qc.id
+                                              WHERE q.id = :id', ['id' => $questionid]);
         }
-    } else {
+    }
+
+    if (!isset($question)) {
         throw new coding_exception('$questionorid parameter needs to be an integer or an object.');
     }
 
@@ -1820,14 +1889,14 @@ class question_edit_contexts {
     }
 
     /**
-     * @return array all parent contexts
+     * @return context[] all parent contexts
      */
     public function all() {
         return $this->allcontexts;
     }
 
     /**
-     * @return object lowest context which must be either the module or course context
+     * @return context lowest context which must be either the module or course context
      */
     public function lowest() {
         return $this->allcontexts[0];
@@ -1835,7 +1904,7 @@ class question_edit_contexts {
 
     /**
      * @param string $cap capability
-     * @return array parent contexts having capability, zero based index
+     * @return context[] parent contexts having capability, zero based index
      */
     public function having_cap($cap) {
         $contextswithcap = array();
@@ -1849,7 +1918,7 @@ class question_edit_contexts {
 
     /**
      * @param array $caps capabilities
-     * @return array parent contexts having at least one of $caps, zero based index
+     * @return context[] parent contexts having at least one of $caps, zero based index
      */
     public function having_one_cap($caps) {
         $contextswithacap = array();
@@ -1866,14 +1935,14 @@ class question_edit_contexts {
 
     /**
      * @param string $tabname edit tab name
-     * @return array parent contexts having at least one of $caps, zero based index
+     * @return context[] parent contexts having at least one of $caps, zero based index
      */
     public function having_one_edit_tab_cap($tabname) {
         return $this->having_one_cap(self::$caps[$tabname]);
     }
 
     /**
-     * @return those contexts where a user can add a question and then use it.
+     * @return context[] those contexts where a user can add a question and then use it.
      */
     public function having_add_and_use() {
         $contextswithcap = array();
@@ -1938,7 +2007,7 @@ class question_edit_contexts {
     /**
      * Throw error if at least one parent context hasn't got one of the caps $caps
      *
-     * @param array $cap capabilities
+     * @param array $caps capabilities
      */
     public function require_one_cap($caps) {
         if (!$this->have_one_cap($caps)) {
@@ -2228,6 +2297,33 @@ function question_make_export_url($contextid, $categoryid, $format, $withcategor
     return moodle_url::make_file_url($urlbase,
             "/$contextid/question/export/{$categoryid}/{$format}/{$withcategories}" .
             "/{$withcontexts}/{$filename}", true);
+}
+
+/**
+ * Get the URL to export a single question (exportone.php).
+ *
+ * @param stdClass|question_definition $question the question definition as obtained from
+ *      question_bank::load_question_data() or question_bank::make_question().
+ *      (Only ->id and ->contextid are used.)
+ * @return moodle_url the requested URL.
+ */
+function question_get_export_single_question_url($question) {
+    $params = ['id' => $question->id, 'sesskey' => sesskey()];
+    $context = context::instance_by_id($question->contextid);
+    switch ($context->contextlevel) {
+        case CONTEXT_MODULE:
+            $params['cmid'] = $context->instanceid;
+            break;
+
+        case CONTEXT_COURSE:
+            $params['courseid'] = $context->instanceid;
+            break;
+
+        default:
+            $params['courseid'] = SITEID;
+    }
+
+    return new moodle_url('/question/exportone.php', $params);
 }
 
 /**

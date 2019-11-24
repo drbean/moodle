@@ -49,15 +49,6 @@
 defined('MOODLE_INTERNAL') || die;
 
 /**
- * Returns all other caps used in module.
- *
- * @return array
- */
-function lti_get_extra_capabilities() {
-    return array('moodle/site:accessallgroups');
-}
-
-/**
  * List of features supported in URL module
  * @param string $feature FEATURE_xx constant for requested feature
  * @return mixed True if module supports feature, false if not, null if doesn't know
@@ -209,6 +200,7 @@ function lti_delete_instance($id) {
     $cm = get_coursemodule_from_instance('lti', $id);
     \core_completion\api::update_completion_date_event($cm->id, 'lti', $id, null);
 
+    // We must delete the module record after we delete the grade item.
     return $DB->delete_records("lti", array("id" => $basiclti->id));
 }
 
@@ -371,26 +363,11 @@ function lti_grades($basicltiid) {
 }
 
 /**
- * This function returns if a scale is being used by one basiclti
- * it it has support for grading and scales. Commented code should be
- * modified if necessary. See forum, glossary or journal modules
- * as reference.
- *
- * @param int $basicltiid ID of an instance of this module
- * @return mixed
- *
- * @TODO: implement this moodle function (if needed)
- **/
-function lti_scale_used ($basicltiid, $scaleid) {
-    $return = false;
-
-    // $rec = get_record("basiclti","id","$basicltiid","scale","-$scaleid");
-    //
-    // if (!empty($rec)  && !empty($scaleid)) {
-    //     $return = true;
-    // }
-
-    return $return;
+ * @deprecated since Moodle 3.8
+ */
+function lti_scale_used() {
+    throw new coding_exception('lti_scale_used() can not be used anymore. Plugins can implement ' .
+        '<modname>_scale_used_anywhere, all implementations of <modname>_scale_used are now ignored');
 }
 
 /**
@@ -639,15 +616,28 @@ function mod_lti_get_fontawesome_icon_map() {
  *
  * @param calendar_event $event
  * @param \core_calendar\action_factory $factory
+ * @param int $userid User id to use for all capability checks, etc. Set to 0 for current user (default).
  * @return \core_calendar\local\event\entities\action_interface|null
  */
 function mod_lti_core_calendar_provide_event_action(calendar_event $event,
-                                                      \core_calendar\action_factory $factory) {
-    $cm = get_fast_modinfo($event->courseid)->instances['lti'][$event->instance];
+                                                      \core_calendar\action_factory $factory,
+                                                      int $userid = 0) {
+    global $USER;
+
+    if (empty($userid)) {
+        $userid = $USER->id;
+    }
+
+    $cm = get_fast_modinfo($event->courseid, $userid)->instances['lti'][$event->instance];
+
+    if (!$cm->uservisible) {
+        // The module is not visible to the user for any reason.
+        return null;
+    }
 
     $completion = new \completion_info($cm->get_course());
 
-    $completiondata = $completion->get_data($cm, false);
+    $completiondata = $completion->get_data($cm, false, $userid);
 
     if ($completiondata->completionstate != COMPLETION_INCOMPLETE) {
         return null;

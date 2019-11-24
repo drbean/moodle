@@ -296,9 +296,7 @@ class MoodleQuickForm_filemanager extends HTML_QuickForm_element implements temp
         $output = $PAGE->get_renderer('core', 'files');
         $html .= $output->render($fm);
 
-        $html .= html_writer::empty_tag('input', array('value' => $draftitemid, 'name' => $elname, 'type' => 'hidden'));
-        // label element needs 'for' attribute work
-        $html .= html_writer::empty_tag('input', array('value' => '', 'id' => 'id_'.$elname, 'type' => 'hidden'));
+        $html .= html_writer::empty_tag('input', array('value' => $draftitemid, 'name' => $elname, 'type' => 'hidden', 'id' => $id));
 
         if (!empty($options->accepted_types) && $options->accepted_types != '*') {
             $html .= html_writer::tag('p', get_string('filesofthesetypes', 'form'));
@@ -320,10 +318,14 @@ class MoodleQuickForm_filemanager extends HTML_QuickForm_element implements temp
     /**
      * Check that all files have the allowed type.
      *
-     * @param array $value Draft item id with the uploaded files.
+     * @param int $value Draft item id with the uploaded files.
      * @return string|null Validation error message or null.
      */
     public function validateSubmitValue($value) {
+
+        if (empty($value)) {
+            return;
+        }
 
         $filetypesutil = new \core_form\filetypes_util();
         $whitelist = $filetypesutil->normalize_file_types($this->_options['accepted_types']);

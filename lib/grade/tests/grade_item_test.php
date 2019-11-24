@@ -67,6 +67,8 @@ class core_grade_item_testcase extends grade_base_testcase {
         $this->sub_test_update_final_grade();
         $this->sub_test_grade_item_can_control_visibility();
         $this->sub_test_grade_item_fix_sortorder();
+        $this->sub_test_grade_item_created_event();
+        $this->sub_test_grade_item_updated_event();
     }
 
     protected function sub_test_grade_item_construct() {
@@ -113,9 +115,32 @@ class core_grade_item_testcase extends grade_base_testcase {
         $grade_item = new grade_item($this->grade_items[7], false); // Use a grade item not touched by previous (or future) tests.
         $this->assertTrue(method_exists($grade_item, 'delete'));
 
+        // Add two files.
+        $dummy = array(
+            'contextid' => $grade_item->get_context()->id,
+            'component' => GRADE_FILE_COMPONENT,
+            'filearea' => GRADE_HISTORY_FEEDBACK_FILEAREA,
+            'itemid' => 1,
+            'filepath' => '/',
+            'filename' => 'feedback1.txt'
+        );
+
+        $fs = get_file_storage();
+        $fs->create_file_from_string($dummy, '');
+
+        $dummy['itemid'] = 2;
+        $fs->create_file_from_string($dummy, '');
+
+        $files = $fs->get_area_files($grade_item->get_context()->id, GRADE_FILE_COMPONENT, GRADE_HISTORY_FEEDBACK_FILEAREA);
+        // Includes directories.
+        $this->assertCount(4, $files);
+
         $this->assertTrue($grade_item->delete());
 
         $this->assertFalse($DB->get_record('grade_items', array('id' => $grade_item->id)));
+
+        $files = $fs->get_area_files($grade_item->get_context()->id, GRADE_FILE_COMPONENT, GRADE_HISTORY_FEEDBACK_FILEAREA);
+        $this->assertEmpty($files);
 
         // Keep our reference collection the same as the database.
         unset($this->grade_items[7]);
@@ -954,4 +979,75 @@ class core_grade_item_testcase extends grade_base_testcase {
         $this->assertEquals($todefaults['weightoverride'], $gi->weightoverride);
     }
 
+    /**
+     * Test that grade item event triggered when a grade item is created.
+     */
+    protected function sub_test_grade_item_created_event() {
+        $sink = $this->redirectEvents();
+
+        $gradeitem = new grade_item();
+
+        $gradeitem->courseid = $this->courseid;
+        $gradeitem->categoryid = $this->grade_categories[1]->id;
+        $gradeitem->itemname = 'unittestgradeitem4';
+        $gradeitem->itemtype = 'mod';
+        $gradeitem->itemmodule = 'quiz';
+        $gradeitem->iteminfo = 'Grade item used for unit testing';
+
+        $gradeitem->insert();
+
+        $result = $sink->get_events();
+        $sink->close();
+
+        $this->assertCount(1, $result);
+
+        $event = reset($result);
+        $this->assertEventContextNotUsed($event);
+        $this->assertInstanceOf('core\event\grade_item_created', $event);
+
+        $eventgradeitem = $event->get_grade_item();
+
+        $this->assertInstanceOf('grade_item', $eventgradeitem);
+        $this->assertEquals($gradeitem->id, $eventgradeitem->id);
+        $this->assertEquals($gradeitem->itemname, $event->other['itemname']);
+        $this->assertEquals($gradeitem->itemtype, $event->other['itemtype']);
+        $this->assertEquals($gradeitem->itemmodule, $event->other['itemmodule']);
+    }
+
+    /**
+     * Test that grade item event triggered when a grade item is updated.
+     */
+    protected function sub_test_grade_item_updated_event() {
+        $gradeitem = new grade_item();
+
+        $gradeitem->courseid = $this->courseid;
+        $gradeitem->categoryid = $this->grade_categories[1]->id;
+        $gradeitem->itemname = 'unittestgradeitem4';
+        $gradeitem->itemtype = 'mod';
+        $gradeitem->itemmodule = 'quiz';
+        $gradeitem->iteminfo = 'Grade item used for unit testing';
+        $gradeitem->insert();
+
+        $sink = $this->redirectEvents();
+
+        $gradeitem->itemname = 'updatedname';
+        $gradeitem->update();
+
+        $result = $sink->get_events();
+        $sink->close();
+
+        $this->assertCount(1, $result);
+
+        $event = reset($result);
+        $this->assertInstanceOf('core\event\grade_item_updated', $event);
+        $this->assertEventContextNotUsed($event);
+
+        $eventgradeitem = $event->get_grade_item();
+
+        $this->assertInstanceOf('grade_item', $eventgradeitem);
+        $this->assertEquals($gradeitem->id, $eventgradeitem->id);
+        $this->assertEquals($gradeitem->itemtype, $event->other['itemtype']);
+        $this->assertEquals($gradeitem->itemmodule, $event->other['itemmodule']);
+        $this->assertEquals('updatedname', $event->other['itemname']);
+    }
 }

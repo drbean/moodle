@@ -55,7 +55,6 @@ class event_exporter extends event_exporter_base {
             'type' => event_action_exporter::read_properties_definition(),
             'optional' => true,
         ];
-
         return $values;
     }
 
@@ -91,6 +90,10 @@ class event_exporter extends event_exporter_base {
             $url = \course_get_url($this->related['course'] ?: SITEID);
         }
         $values['url'] = $url->out(false);
+
+        // Override default formatted time to make sure the date portion of the time is always rendered.
+        $legacyevent = container::get_event_mapper()->from_event_to_legacy_event($event);
+        $values['formattedtime'] = calendar_format_event_time($legacyevent, time(), null, false);
 
         if ($event instanceof action_event_interface) {
             $actionrelated = [

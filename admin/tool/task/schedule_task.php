@@ -44,9 +44,8 @@ function tool_task_mtrace_wrapper($message, $eol) {
 $taskname = required_param('task', PARAM_RAW_TRIMMED);
 
 // Basic security checks.
-require_login();
+require_admin();
 $context = context_system::instance();
-require_capability('moodle/site:config', $context);
 
 if (!get_config('tool_task', 'enablerunnow')) {
     print_error('nopermissions', 'error', '', get_string('runnow', 'tool_task'));
@@ -88,7 +87,8 @@ echo html_writer::start_tag('pre');
 $CFG->mtrace_wrapper = 'tool_task_mtrace_wrapper';
 
 // Run the specified task (this will output an error if it doesn't exist).
-cron_run_single_task($task);
+\tool_task\run_from_cli::execute($task);
+
 echo html_writer::end_tag('pre');
 
 $output = $PAGE->get_renderer('tool_task');

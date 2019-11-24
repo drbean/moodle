@@ -135,7 +135,7 @@ class core_user_renderer extends plugin_renderer_base {
         }
 
         $criteria = get_string('role');
-        $roleoptions = [];
+        $roleoptions = $this->format_filter_option(USER_FILTER_ROLE, $criteria, -1, get_string('noroles', 'role'));
         foreach ($roles as $id => $role) {
             $roleoptions += $this->format_filter_option(USER_FILTER_ROLE, $criteria, $id, $role);
         }
@@ -145,6 +145,11 @@ class core_user_renderer extends plugin_renderer_base {
         if (has_capability('moodle/site:accessallgroups', $context) || $course->groupmode != SEPARATEGROUPS) {
             // List all groups if the user can access all groups, or we are in visible group mode or no groups mode.
             $groups = $manager->get_all_groups();
+            if (!empty($groups)) {
+                // Add 'No group' option, to enable filtering users without any group.
+                $nogroup[USERSWITHOUTGROUP] = (object)['name' => get_string('nogroup', 'group')];
+                $groups = $nogroup + $groups;
+            }
         } else {
             // Otherwise, just list the groups the user belongs to.
             $groups = groups_get_all_groups($course->id, $USER->id);

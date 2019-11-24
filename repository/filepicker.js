@@ -265,9 +265,8 @@ YUI.add('moodle-core_filepicker', function(Y) {
                         if (root.path == mytreeel.path) {
                             root.origpath = options.filepath;
                             root.origlist = fileslist;
-                        } else if (!root.isLeaf && root.expanded) {
-                            Y.bind(options.treeview_dynload, options.callbackcontext)(root, null);
                         }
+                        // Removed bind as of MDL-62415 as it overwrites the search tree results
                     }
                 }
             } else {
@@ -684,7 +683,7 @@ M.core_filepicker.init = function(Y, options) {
                         if (scope.options.editor_target && scope.options.env == 'editor') {
                             // editor needs to update url
                             scope.options.editor_target.value = urlimage;
-                            scope.options.editor_target.onchange();
+                            scope.options.editor_target.dispatchEvent(new Event('change'), {'bubbles': true});
                         }
                         var fileinfo = {'client_id':scope.options.client_id,
                             'url': urlimage,
@@ -701,7 +700,7 @@ M.core_filepicker.init = function(Y, options) {
                 var data = this.process_dlg.dialogdata;
                 if (scope.options.editor_target && scope.options.env == 'editor') {
                     scope.options.editor_target.value = data.newfile.url;
-                    scope.options.editor_target.onchange();
+                    scope.options.editor_target.dispatchEvent(new Event('change'), {'bubbles': true});
                 }
                 scope.hide();
                 var formcallback_scope = scope.options.magicscope ? scope.options.magicscope : scope;
@@ -1236,7 +1235,7 @@ M.core_filepicker.init = function(Y, options) {
                         }
                         if (scope.options.editor_target && scope.options.env=='editor') {
                             scope.options.editor_target.value=obj.url;
-                            scope.options.editor_target.onchange();
+                            scope.options.editor_target.dispatchEvent(new Event('change'), {'bubbles': true});
                         }
                         scope.hide();
                         obj.client_id = client_id;
@@ -1804,7 +1803,7 @@ M.core_filepicker.init = function(Y, options) {
                             }
                             if (scope.options.editor_target&&scope.options.env=='editor') {
                                 scope.options.editor_target.value=o.url;
-                                scope.options.editor_target.onchange();
+                                scope.options.editor_target.dispatchEvent(new Event('change'), {'bubbles': true});
                             }
                             scope.hide();
                             o.client_id = client_id;

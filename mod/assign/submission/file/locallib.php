@@ -67,11 +67,13 @@ class assign_submission_file extends assign_submission_plugin {
     public function get_settings(MoodleQuickForm $mform) {
         global $CFG, $COURSE;
 
-        $defaultmaxfilesubmissions = $this->get_config('maxfilesubmissions');
-        $defaultmaxsubmissionsizebytes = $this->get_config('maxsubmissionsizebytes');
         if ($this->assignment->has_instance()) {
+            $defaultmaxfilesubmissions = $this->get_config('maxfilesubmissions');
+            $defaultmaxsubmissionsizebytes = $this->get_config('maxsubmissionsizebytes');
             $defaultfiletypes = $this->get_config('filetypeslist');
         } else {
+            $defaultmaxfilesubmissions = get_config('assignsubmission_file', 'maxfiles');
+            $defaultmaxsubmissionsizebytes = get_config('assignsubmission_file', 'maxbytes');
             $defaultfiletypes = get_config('assignsubmission_file', 'filetypes');
         }
         $defaultfiletypes = (string)$defaultfiletypes;
@@ -88,7 +90,7 @@ class assign_submission_file extends assign_submission_plugin {
                               'maxfilessubmission',
                               'assignsubmission_file');
         $mform->setDefault('assignsubmission_file_maxfiles', $defaultmaxfilesubmissions);
-        $mform->disabledIf('assignsubmission_file_maxfiles', 'assignsubmission_file_enabled', 'notchecked');
+        $mform->hideIf('assignsubmission_file_maxfiles', 'assignsubmission_file_enabled', 'notchecked');
 
         $choices = get_max_upload_sizes($CFG->maxbytes,
                                         $COURSE->maxbytes,
@@ -106,7 +108,7 @@ class assign_submission_file extends assign_submission_plugin {
                               'maximumsubmissionsize',
                               'assignsubmission_file');
         $mform->setDefault('assignsubmission_file_maxsizebytes', $defaultmaxsubmissionsizebytes);
-        $mform->disabledIf('assignsubmission_file_maxsizebytes',
+        $mform->hideIf('assignsubmission_file_maxsizebytes',
                            'assignsubmission_file_enabled',
                            'notchecked');
 
@@ -114,7 +116,7 @@ class assign_submission_file extends assign_submission_plugin {
         $mform->addElement('filetypes', 'assignsubmission_file_filetypes', $name);
         $mform->addHelpButton('assignsubmission_file_filetypes', 'acceptedfiletypes', 'assignsubmission_file');
         $mform->setDefault('assignsubmission_file_filetypes', $defaultfiletypes);
-        $mform->disabledIf('assignsubmission_file_filetypes', 'assignsubmission_file_enabled', 'notchecked');
+        $mform->hideIf('assignsubmission_file_filetypes', 'assignsubmission_file_enabled', 'notchecked');
     }
 
     /**
@@ -250,6 +252,9 @@ class assign_submission_file extends assign_submission_plugin {
         if (!empty($submission->userid) && ($submission->userid != $USER->id)) {
             $params['relateduserid'] = $submission->userid;
         }
+        if ($this->assignment->is_blind_marking()) {
+            $params['anonymous'] = 1;
+        }
         $event = \assignsubmission_file\event\assessable_uploaded::create($params);
         $event->set_legacy_files($files);
         $event->trigger();
@@ -300,6 +305,28 @@ class assign_submission_file extends assign_submission_plugin {
             $event->trigger();
             return $filesubmission->id > 0;
         }
+    }
+
+    /**
+     * Remove files from this submission.
+     *
+     * @param stdClass $submission The submission
+     * @return boolean
+     */
+    public function remove(stdClass $submission) {
+        global $DB;
+        $fs = get_file_storage();
+
+        $fs->delete_area_files($this->assignment->get_context()->id,
+                               'assignsubmission_file',
+                               ASSIGNSUBMISSION_FILE_FILEAREA,
+                               $submission->id);
+
+        $currentsubmission = $this->get_file_submission($submission->id);
+        $currentsubmission->numfiles = 0;
+        $DB->update_record('assignsubmission_file', $currentsubmission);
+
+        return true;
     }
 
     /**
@@ -609,5 +636,13 @@ class assign_submission_file extends assign_submission_plugin {
         $sets = $util->normalize_file_types($typeslist);
 
         return $sets;
+    }
+
+    /**
+     * Determine if the plugin allows image file conversion
+     * @return bool
+     */
+    public function allow_image_conversion() {
+        return true;
     }
 }

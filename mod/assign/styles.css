@@ -182,13 +182,20 @@
     background-color: #fc9;
 }
 
+.path-mod-assign .gradingtable .commentscontainer .comment-ctrl .comment-area textarea {
+    resize: both;
+}
+
 .path-mod-assign td.submissioneditable {
     color: red;
 }
 
 .path-mod-assign .expandsummaryicon {
-    cursor: pointer;
     display: none;
+}
+
+.path-mod-assign .expandsummaryicon i {
+    pointer-events: none;
 }
 
 .path-mod-assign.jsenabled .expandsummaryicon {
@@ -354,14 +361,14 @@
 .path-mod-assign [data-region="configure-filters"] {
     display: none;
     text-align: left;
-    width: auto;
+    width: 480px;
     background-color: #fff;
     background-clip: padding-box;
     box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
     border-radius: 6px;
     position: absolute;
     margin-top: 28px;
-    margin-left: -140px;
+    margin-left: -452px;
     padding: 10px 0;
     z-index: 1;
 }
@@ -389,11 +396,6 @@
     right: 13px;
     border-width: 6px;
     border-bottom-color: #fff;
-}
-
-.path-mod-assign [data-region="configure-filters"] label {
-    display: block;
-    padding: 3px 20px;
 }
 
 .path-mod-assign .alignment [data-region="configure-filters"] input {
@@ -486,7 +488,6 @@
     border: 1px solid #ccc;
     border-top: none;
     background-color: #fff;
-    z-index: 99999;
 }
 
 .path-mod-assign [data-region="review-panel"] [data-region="review-panel-toggle"] .expand-icon,
@@ -766,8 +767,11 @@
 /***** Start rubric *****/
 
 .path-mod-assign [data-region="grade-panel"] .gradingform_rubric {
+    max-width: 100%;
     padding-bottom: 0;
-    max-width: none;
+}
+.path-mod-assign .gradingform_rubric {
+    max-width: calc(100vw - 200px);
 }
 
 .path-mod-assign [data-region="grade-panel"] .gradingform_rubric .criterion .description {
@@ -978,7 +982,6 @@
     left: auto;
     right: 15px;
     margin: 0;
-    height: 100%;
     line-height: 60px;
 }
 
@@ -1087,7 +1090,6 @@
         border: 1px solid #ccc;
         border-radius: 0 0 4px 0;
         background-color: #fff;
-        z-index: 99999;
     }
 
     .path-mod-assign [data-region="review-panel"] [data-region="review-panel-toggle"] .expand-icon,
@@ -1165,6 +1167,7 @@
         width: auto;
         display: inline-block;
         margin: 0 auto;
+        height: auto;
     }
 
     .path-mod-assign [data-region="user-selector"] .alignment {

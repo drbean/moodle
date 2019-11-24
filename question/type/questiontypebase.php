@@ -234,6 +234,27 @@ class question_type {
     }
 
     /**
+     * Get extra actions for a question of this type to add to the question bank edit menu.
+     *
+     * This method is called if the {@link edit_menu_column} is being used in the
+     * question bank, which it is by default since Moodle 3.8. If applicable for
+     * your question type, you can return arn array of {@link action_menu_link}s.
+     * These will be added at the end of the Edit menu for this question.
+     *
+     * The $question object passed in will have a hard-to-predict set of fields,
+     * because the fields present depend on which columns are included in the
+     * question bank view. However, you can rely on 'id', 'createdby',
+     * 'contextid', 'hidden' and 'category' (id) being present, and so you
+     * can call question_has_capability_on without causing performance problems.
+     *
+     * @param stdClass $question the available information about the particular question the action is for.
+     * @return action_menu_link[] any actions you want to add to the Edit menu for this question.
+     */
+    public function get_extra_question_bank_actions(stdClass $question): array {
+        return [];
+    }
+
+    /**
      * This method should be overriden if you want to include a special heading or some other
      * html on a question editing page besides the question editing form.
      *
@@ -350,13 +371,28 @@ class question_type {
             $question->defaultmark = $form->defaultmark;
         }
 
+        if (isset($form->idnumber) && ((string) $form->idnumber !== '')) {
+            // While this check already exists in the form validation, this is a backstop preventing unnecessary errors.
+            if (strpos($form->category, ',') !== false) {
+                list($category, $categorycontextid) = explode(',', $form->category);
+            } else {
+                $category = $form->category;
+            }
+            if (!$DB->record_exists('question',
+                    ['idnumber' => $form->idnumber, 'category' => $category])) {
+                $question->idnumber = $form->idnumber;
+            }
+        }
+
         // If the question is new, create it.
+        $newquestion = false;
         if (empty($question->id)) {
             // Set the unique code.
             $question->stamp = make_unique_id_code();
             $question->createdby = $USER->id;
             $question->timecreated = time();
             $question->id = $DB->insert_record('question', $question);
+            $newquestion = true;
         }
 
         // Now, whether we are updating a existing question, or creating a new
@@ -377,6 +413,16 @@ class question_type {
                     $this->fileoptions, $question->generalfeedback);
         }
         $DB->update_record('question', $question);
+
+        if ($newquestion) {
+            // Log the creation of this question.
+            $event = \core\event\question_created::create_from_question_instance($question, $context);
+            $event->trigger();
+        } else {
+            // Log the update of this question.
+            $event = \core\event\question_updated::create_from_question_instance($question, $context);
+            $event->trigger();
+        }
 
         // Now to save all the answers and type-specific options.
         $form->id = $question->id;
@@ -851,6 +897,7 @@ class question_type {
         $question->stamp = $questiondata->stamp;
         $question->version = $questiondata->version;
         $question->hidden = $questiondata->hidden;
+        $question->idnumber = $questiondata->idnumber;
         $question->timecreated = $questiondata->timecreated;
         $question->timemodified = $questiondata->timemodified;
         $question->createdby = $questiondata->createdby;

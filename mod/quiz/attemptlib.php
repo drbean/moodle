@@ -235,6 +235,25 @@ class quiz {
     }
 
     /**
+     * Checks user enrollment in the current course.
+     *
+     * @param int $userid
+     * @return null|stdClass user record
+     */
+    public function is_participant($userid) {
+        return is_enrolled($this->get_context(), $userid, 'mod/quiz:attempt', $this->show_only_active_users());
+    }
+
+    /**
+     * Check is only active users in course should be shown.
+     *
+     * @return bool true if only active users should be shown.
+     */
+    public function show_only_active_users() {
+        return !has_capability('moodle/course:viewsuspendedusers', $this->get_context());
+    }
+
+    /**
      * @return whether any questions have been added to this quiz.
      */
     public function has_questions() {
@@ -569,7 +588,7 @@ class quiz_attempt {
         $this->quba = question_engine::load_questions_usage_by_activity($this->attempt->uniqueid);
         $this->slots = $DB->get_records('quiz_slots',
                 array('quizid' => $this->get_quizid()), 'slot',
-                'slot, requireprevious, questionid, includingsubcategories');
+                'slot, id, requireprevious, questionid, includingsubcategories');
         $this->sections = array_values($DB->get_records('quiz_sections',
                 array('quizid' => $this->get_quizid()), 'firstslot'));
 
@@ -1101,7 +1120,7 @@ class quiz_attempt {
      * @return question_usage_by_activity the usage.
      */
     public function get_question_usage() {
-        if (!PHPUNIT_TEST) {
+        if (!(PHPUNIT_TEST || defined('BEHAT_TEST'))) {
             throw new coding_exception('get_question_usage is only for use in unit tests. ' .
                     'For other operations, use the quiz_attempt api, or extend it properly.');
         }
@@ -1384,17 +1403,44 @@ class quiz_attempt {
     }
 
     /**
+     * Generates the title of the attempt page.
+     *
+     * @param int $page the page number (starting with 0) in the attempt.
+     * @return string
+     */
+    public function attempt_page_title(int $page) : string {
+        if ($this->get_num_pages() > 1) {
+            $a = new stdClass();
+            $a->name = $this->get_quiz_name();
+            $a->currentpage = $page + 1;
+            $a->totalpages = $this->get_num_pages();
+            $title = get_string('attempttitlepaged', 'quiz', $a);
+        } else {
+            $title = get_string('attempttitle', 'quiz', $this->get_quiz_name());
+        }
+
+        return $title;
+    }
+
+    /**
      * @param int $slot if speified, the slot number of a specific question to link to.
      * @param int $page if specified, a particular page to link to. If not givem deduced
      *      from $slot, or goes to the first page.
-     * @param int $questionid a question id. If set, will add a fragment to the URL
-     * to jump to a particuar question on the page.
      * @param int $thispage if not -1, the current page. Will cause links to other things on
      * this page to be output as only a fragment.
      * @return string the URL to continue this attempt.
      */
     public function attempt_url($slot = null, $page = -1, $thispage = -1) {
         return $this->page_and_question_url('attempt', $slot, $page, false, $thispage);
+    }
+
+    /**
+     * Generates the title of the summary page.
+     *
+     * @return string
+     */
+    public function summary_page_title() : string {
+        return get_string('attemptsummarytitle', 'quiz', $this->get_quiz_name());
     }
 
     /**
@@ -1409,6 +1455,27 @@ class quiz_attempt {
      */
     public function processattempt_url() {
         return new moodle_url('/mod/quiz/processattempt.php');
+    }
+
+    /**
+     * Generates the title of the review page.
+     *
+     * @param int $page the page number (starting with 0) in the attempt.
+     * @param bool $showall whether the review page contains the entire attempt on one page.
+     * @return string
+     */
+    public function review_page_title(int $page, bool $showall = false) : string {
+        if (!$showall && $this->get_num_pages() > 1) {
+            $a = new stdClass();
+            $a->name = $this->get_quiz_name();
+            $a->currentpage = $page + 1;
+            $a->totalpages = $this->get_num_pages();
+            $title = get_string('attemptreviewtitlepaged', 'quiz', $a);
+        } else {
+            $title = get_string('attemptreviewtitle', 'quiz', $this->get_quiz_name());
+        }
+
+        return $title;
     }
 
     /**
@@ -1814,10 +1881,12 @@ class quiz_attempt {
      * @param int  $timestamp  the timestamp that should be stored as the modifed
      *                         time in the database for these actions. If null, will use the current time.
      * @param bool $becomingoverdue
-     * @param array|null $simulatedresponses If not null, then we are testing, and this is an array of simulated data, keys are slot
-     *                                          nos and values are arrays representing student responses which will be passed to
-     *                                          question_definition::prepare_simulated_post_data method and then have the
-     *                                          appropriate prefix added.
+     * @param array|null $simulatedresponses If not null, then we are testing, and this is an array of simulated data.
+     *      There are two formats supported here, for historical reasons. The newer approach is to pass an array created by
+     *      {@link core_question_generator::get_simulated_post_data_for_questions_in_usage()}.
+     *      the second is to pass an array slot no => contains arrays representing student
+     *      responses which will be passed to {@link question_definition::prepare_simulated_post_data()}.
+     *      This second method will probably get deprecated one day.
      */
     public function process_submitted_actions($timestamp, $becomingoverdue = false, $simulatedresponses = null) {
         global $DB;
@@ -1825,7 +1894,12 @@ class quiz_attempt {
         $transaction = $DB->start_delegated_transaction();
 
         if ($simulatedresponses !== null) {
-            $simulatedpostdata = $this->quba->prepare_simulated_post_data($simulatedresponses);
+            if (is_int(key($simulatedresponses))) {
+                // Legacy approach. Should be removed one day.
+                $simulatedpostdata = $this->quba->prepare_simulated_post_data($simulatedresponses);
+            } else {
+                $simulatedpostdata = $simulatedresponses;
+            }
         } else {
             $simulatedpostdata = null;
         }
@@ -1851,8 +1925,12 @@ class quiz_attempt {
     }
 
     /**
-     * Replace a question in an attempt with a new attempt at the same qestion.
-     * @param int $slot the questoin to restart.
+     * Replace a question in an attempt with a new attempt at the same question.
+     *
+     * Well, for randomised questions, it won't be the same question, it will be
+     * a different randomised selection.
+     *
+     * @param int $slot the question to restart.
      * @param int $timestamp the timestamp to record for this action.
      */
     public function process_redo_question($slot, $timestamp) {
@@ -1864,7 +1942,7 @@ class quiz_attempt {
         }
 
         $qubaids = new \mod_quiz\question\qubaids_for_users_attempts(
-                $this->get_quizid(), $this->get_userid());
+                $this->get_quizid(), $this->get_userid(), 'all', true);
 
         $transaction = $DB->start_delegated_transaction();
 
@@ -2095,7 +2173,8 @@ class quiz_attempt {
                 // First question on page, go to top.
                 $fragment = '#';
             } else {
-                $fragment = '#q' . $slot;
+                $qa = $this->get_question_attempt($slot);
+                $fragment = '#' . $qa->get_outer_question_div_unique_id();
             }
         }
 

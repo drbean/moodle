@@ -834,7 +834,23 @@ abstract class moodle_database {
      * @return string The sql with tablenames being prefixed with $CFG->prefix
      */
     protected function fix_table_names($sql) {
-        return preg_replace('/\{([a-z][a-z0-9_]*)\}/', $this->prefix.'$1', $sql);
+        return preg_replace_callback(
+            '/\{([a-z][a-z0-9_]*)\}/',
+            function($matches) {
+                return $this->fix_table_name($matches[1]);
+            },
+            $sql
+        );
+    }
+
+    /**
+     * Adds the prefix to the table name.
+     *
+     * @param string $tablename The table name
+     * @return string The prefixed table name
+     */
+    protected function fix_table_name($tablename) {
+        return $this->prefix . $tablename;
     }
 
     /**
@@ -1080,7 +1096,7 @@ abstract class moodle_database {
      * Returns detailed information about columns in table. This information is cached internally.
      * @param string $table The table's name.
      * @param bool $usecache Flag to use internal cacheing. The default is true.
-     * @return array of database_column_info objects indexed with column names
+     * @return database_column_info[] of database_column_info objects indexed with column names
      */
     public abstract function get_columns($table, $usecache=true);
 

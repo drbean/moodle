@@ -26,7 +26,6 @@
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
-require_once($CFG->dirroot . '/grade/grading/tests/fixtures/marking_guide.php');
 
 use \core_privacy\tests\provider_testcase;
 use \core_privacy\local\request\approved_contextlist;
@@ -85,6 +84,19 @@ class core_grading_privacy_testcase extends provider_testcase {
         // User0 hasn't created or modified any grading definition.
         $contextlist = provider::get_contexts_for_userid($this->user0->id);
         $this->assertCount(0, $contextlist);
+    }
+
+    /**
+     * Test retrieval of user ids in a given context.
+     */
+    public function test_get_users_in_context() {
+        $this->resetAfterTest();
+        $this->grading_setup_test_scenario_data();
+        // Instance two has one user who created the definitions and another who modified it.
+        $userlist = new \core_privacy\local\request\userlist($this->instancecontext2, 'core_grading');
+        provider::get_users_in_context($userlist);
+        // Check that we get both.
+        $this->assertCount(2, $userlist->get_userids());
     }
 
     /**
@@ -255,51 +267,28 @@ class core_grading_privacy_testcase extends provider_testcase {
         $course = $this->getDataGenerator()->create_course();
         $module = $this->getDataGenerator()->create_module('assign', ['course' => $course]);
         $user = $this->getDataGenerator()->create_user();
+        $guidegenerator = \testing_util::get_data_generator()->get_plugin_generator('gradingform_guide');
 
         $this->setUser($user);
 
         $modulecontext = context_module::instance($module->cmid);
-        $guide = new test_guide($modulecontext, 'testrubrib', 'Description text');
-        $guide->add_criteria(
-            'Spelling mistakes',
-            'Full marks will be given for no spelling mistakes.',
-            'Deduct 5 points per spelling mistake made.',
-            25
-        );
-        $guide->add_criteria(
-            'Pictures',
-            'Full marks will be given for including 3 pictures.',
-            'Give 5 points for each picture present',
-            15
-        );
-        $guide->create_guide();
+        $controller = $guidegenerator->get_test_guide($modulecontext);
 
-        $controller = $guide->manager->get_controller('guide');
         // In the situation of mod_assign this would be the id from assign_grades.
         $itemid = 1;
         $instance = $controller->create_instance($user->id, $itemid);
-        // I need the ids for the criteria and there doesn't seem to be a nice method to get it.
-        $criteria = $DB->get_records('gradingform_guide_criteria');
-        $data = ['criteria' => []];
-        foreach ($criteria as $key => $value) {
-            if ($value->shortname == 'Spelling mistakes') {
-                $data['criteria'][$key]['remark'] = 'This user made several mistakes.';
-                $data['criteria'][$key]['remarkformat'] = 0;
-                $data['criteria'][$key]['score'] = 5;
-            } else {
-                $data['criteria'][$key]['remark'] = 'This user has two pictures.';
-                $data['criteria'][$key]['remarkformat'] = 0;
-                $data['criteria'][$key]['score'] = 10;
-            }
-        }
-        $data['itemid'] = $itemid;
+        $data = $guidegenerator->get_test_form_data(
+            $controller,
+            $itemid,
+            5, 'This user made several mistakes.',
+            10, 'This user has two pictures.'
+        );
 
-        // Update this instance with data.
         $instance->update($data);
         $instanceid = $instance->get_data('id');
 
         provider::export_item_data($modulecontext, $itemid, ['Test']);
-        $data = (array) writer::with_context($modulecontext)->get_data(['Test', 'Marking guide', $instanceid]);
+        $data = (array) writer::with_context($modulecontext)->get_data(['Test', 'Marking guide', $instance->get_data('id')]);
         $this->assertCount(2, $data);
         $this->assertEquals('This user made several mistakes.', $data['Spelling mistakes']->remark);
         $this->assertEquals(5, $data['Spelling mistakes']->score);
@@ -316,67 +305,32 @@ class core_grading_privacy_testcase extends provider_testcase {
         $course = $this->getDataGenerator()->create_course();
         $module = $this->getDataGenerator()->create_module('assign', ['course' => $course]);
         $user = $this->getDataGenerator()->create_user();
+        $guidegenerator = \testing_util::get_data_generator()->get_plugin_generator('gradingform_guide');
 
         $this->setUser($user);
 
         $modulecontext = context_module::instance($module->cmid);
-        $guide = new test_guide($modulecontext, 'testrubrib', 'Description text');
-        $guide->add_criteria(
-            'Spelling mistakes',
-            'Full marks will be given for no spelling mistakes.',
-            'Deduct 5 points per spelling mistake made.',
-            25
-        );
-        $guide->add_criteria(
-            'Pictures',
-            'Full marks will be given for including 3 pictures.',
-            'Give 5 points for each picture present',
-            15
-        );
-        $guide->create_guide();
+        $controller = $guidegenerator->get_test_guide($modulecontext);
 
-        $controller = $guide->manager->get_controller('guide');
         // In the situation of mod_assign this would be the id from assign_grades.
         $itemid = 1;
         $instance = $controller->create_instance($user->id, $itemid);
-        // I need the ids for the criteria and there doesn't seem to be a nice method to get it.
-        $criteria = $DB->get_records('gradingform_guide_criteria');
-        $data = ['criteria' => []];
-        foreach ($criteria as $key => $value) {
-            if ($value->shortname == 'Spelling mistakes') {
-                $data['criteria'][$key]['remark'] = 'This user made several mistakes.';
-                $data['criteria'][$key]['remarkformat'] = 0;
-                $data['criteria'][$key]['score'] = 5;
-            } else {
-                $data['criteria'][$key]['remark'] = 'This user has two pictures.';
-                $data['criteria'][$key]['remarkformat'] = 0;
-                $data['criteria'][$key]['score'] = 10;
-            }
-        }
-        $data['itemid'] = $itemid;
-
-        // Update this instance with data.
+        $data = $guidegenerator->get_test_form_data(
+            $controller,
+            $itemid,
+            5, 'This user made several mistakes.',
+            10, 'This user has two pictures.'
+        );
         $instance->update($data);
 
         $itemid = 2;
         $instance = $controller->create_instance($user->id, $itemid);
-        // I need the ids for the criteria and there doesn't seem to be a nice method to get it.
-        $criteria = $DB->get_records('gradingform_guide_criteria');
-        $data = ['criteria' => []];
-        foreach ($criteria as $key => $value) {
-            if ($value->shortname == 'Spelling mistakes') {
-                $data['criteria'][$key]['remark'] = 'This user made no mistakes.';
-                $data['criteria'][$key]['remarkformat'] = 0;
-                $data['criteria'][$key]['score'] = 25;
-            } else {
-                $data['criteria'][$key]['remark'] = 'This user has one pictures.';
-                $data['criteria'][$key]['remarkformat'] = 0;
-                $data['criteria'][$key]['score'] = 5;
-            }
-        }
-        $data['itemid'] = $itemid;
-
-        // Update this instance with data.
+        $data = $guidegenerator->get_test_form_data(
+            $controller,
+            $itemid,
+            25, 'This user made no mistakes.',
+            5, 'This user has one picture.'
+        );
         $instance->update($data);
 
         // Check how many records we have in the fillings table.
@@ -393,6 +347,70 @@ class core_grading_privacy_testcase extends provider_testcase {
         provider::delete_instance_data($modulecontext);
         $records = $DB->get_records('gradingform_guide_fillings');
         $this->assertEmpty($records);
+    }
+
+    /**
+     * Test the deletion of multiple instances at once.
+     */
+    public function test_delete_data_for_instances() {
+        global $DB;
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $module = $this->getDataGenerator()->create_module('assign', ['course' => $course]);
+        $user1 = $this->getDataGenerator()->create_user();
+        $user2 = $this->getDataGenerator()->create_user();
+        $user3 = $this->getDataGenerator()->create_user();
+        $guidegenerator = \testing_util::get_data_generator()->get_plugin_generator('gradingform_guide');
+
+        $this->setUser($user1);
+
+        $modulecontext = context_module::instance($module->cmid);
+        $controller = $guidegenerator->get_test_guide($modulecontext);
+
+        // In the situation of mod_assign this would be the id from assign_grades.
+        $itemid1 = 1;
+        $instance1 = $controller->create_instance($user1->id, $itemid1);
+        $data = $guidegenerator->get_test_form_data(
+            $controller,
+            $itemid1,
+            5, 'This user made several mistakes.',
+            10, 'This user has two pictures.'
+        );
+        $instance1->update($data);
+
+        $itemid2 = 2;
+        $instance2 = $controller->create_instance($user2->id, $itemid2);
+        $data = $guidegenerator->get_test_form_data(
+            $controller,
+            $itemid2,
+            15, 'This user made a couple of mistakes.',
+            10, 'This user has one picture.'
+        );
+        $instance2->update($data);
+
+        $itemid3 = 3;
+        $instance3 = $controller->create_instance($user3->id, $itemid3);
+        $data = $guidegenerator->get_test_form_data(
+            $controller,
+            $itemid3,
+            20, 'This user made one mistakes.',
+            10, 'This user has one picture.'
+        );
+        $instance3->update($data);
+
+        $records = $DB->get_records('gradingform_guide_fillings');
+        $this->assertCount(6, $records);
+
+        // Delete all user data for items 1 and 3.
+        provider::delete_data_for_instances($modulecontext, [$itemid1, $itemid3]);
+
+        $records = $DB->get_records('gradingform_guide_fillings');
+        $this->assertCount(2, $records);
+        $instanceid = $instance2->get_data('id');
+        // The instance id should match for all remaining records.
+        foreach ($records as $record) {
+            $this->assertEquals($instanceid, $record->instanceid);
+        }
     }
 
     /**

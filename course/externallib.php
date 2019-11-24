@@ -26,7 +26,10 @@
 
 defined('MOODLE_INTERNAL') || die;
 
+use core_course\external\course_summary_exporter;
+
 require_once("$CFG->libdir/externallib.php");
+require_once("lib.php");
 
 /**
  * Course external functions
@@ -56,6 +59,8 @@ class core_course_external extends external_api {
                                                 'The expected keys (value format) are:
                                                 excludemodules (bool) Do not return modules, return only the sections structure
                                                 excludecontents (bool) Do not return module contents (i.e: files inside a resource)
+                                                includestealthmodules (bool) Return stealth modules for students in a special
+                                                    section (with id -1)
                                                 sectionid (int) Return only this section
                                                 sectionnumber (int) Return only this section with number (order)
                                                 cmid (int) Return only this module information (among the whole sections structure)
@@ -81,6 +86,7 @@ class core_course_external extends external_api {
     public static function get_course_contents($courseid, $options = array()) {
         global $CFG, $DB;
         require_once($CFG->dirroot . "/course/lib.php");
+        require_once($CFG->libdir . '/completionlib.php');
 
         //validate parameter
         $params = self::validate_parameters(self::get_course_contents_parameters(),
@@ -96,6 +102,7 @@ class core_course_external extends external_api {
                     switch ($name) {
                         case 'excludemodules':
                         case 'excludecontents':
+                        case 'includestealthmodules':
                             $value = clean_param($option['value'], PARAM_BOOL);
                             $filters[$name] = $value;
                             break;
@@ -161,20 +168,13 @@ class core_course_external extends external_api {
             $modinfo = get_fast_modinfo($course);
             $sections = $modinfo->get_section_info_all();
             $coursenumsections = course_get_format($course)->get_last_section_number();
+            $stealthmodules = array();   // Array to keep all the modules available but not visible in a course section/topic.
+
+            $completioninfo = new completion_info($course);
 
             //for each sections (first displayed to last displayed)
             $modinfosections = $modinfo->get_sections();
             foreach ($sections as $key => $section) {
-
-                // Show the section if the user is permitted to access it, OR if it's not available
-                // but there is some available info text which explains the reason & should display.
-                $showsection = $section->uservisible ||
-                    ($section->visible && !$section->available &&
-                    !empty($section->availableinfo));
-
-                if (!$showsection) {
-                    continue;
-                }
 
                 // This becomes true when we are filtering and we found the value to filter with.
                 $sectionfound = false;
@@ -216,8 +216,8 @@ class core_course_external extends external_api {
 
                 $sectioncontents = array();
 
-                // For each module of the section (if it is visible).
-                if ($section->uservisible and empty($filters['excludemodules']) and !empty($modinfosections[$section->section])) {
+                // For each module of the section.
+                if (empty($filters['excludemodules']) and !empty($modinfosections[$section->section])) {
                     foreach ($modinfosections[$section->section] as $cmid) {
                         $cm = $modinfo->cms[$cmid];
 
@@ -261,12 +261,29 @@ class core_course_external extends external_api {
                         $module['id'] = $cm->id;
                         $module['name'] = external_format_string($cm->name, $modcontext->id);
                         $module['instance'] = $cm->instance;
-                        $module['modname'] = $cm->modname;
-                        $module['modplural'] = $cm->modplural;
+                        $module['modname'] = (string) $cm->modname;
+                        $module['modplural'] = (string) $cm->modplural;
                         $module['modicon'] = $cm->get_icon_url()->out(false);
                         $module['indent'] = $cm->indent;
+                        $module['onclick'] = $cm->onclick;
+                        $module['afterlink'] = $cm->afterlink;
+                        $module['customdata'] = json_encode($cm->customdata);
+                        $module['completion'] = $cm->completion;
+                        $module['noviewlink'] = plugin_supports('mod', $cm->modname, FEATURE_NO_VIEW_LINK, false);
 
-                        if (!empty($cm->showdescription) or $cm->modname == 'label') {
+                        // Check module completion.
+                        $completion = $completioninfo->is_enabled($cm);
+                        if ($completion != COMPLETION_DISABLED) {
+                            $completiondata = $completioninfo->get_data($cm, true);
+                            $module['completiondata'] = array(
+                                'state'         => $completiondata->completionstate,
+                                'timecompleted' => $completiondata->timemodified,
+                                'overrideby'    => $completiondata->overrideby,
+                                'valueused'     => core_availability\info::completion_value_used($course, $cm->id)
+                            );
+                        }
+
+                        if (!empty($cm->showdescription) or $module['noviewlink']) {
                             // We want to use the external format. However from reading get_formatted_content(), $cm->content format is always FORMAT_HTML.
                             $options = array('noclean' => true);
                             list($module['description'], $descriptionformat) = external_format_text($cm->content,
@@ -302,7 +319,33 @@ class core_course_external extends external_api {
                             require_once($CFG->dirroot . '/mod/' . $cm->modname . '/lib.php');
                             $getcontentfunction = $cm->modname.'_export_contents';
                             if (function_exists($getcontentfunction)) {
-                                if (empty($filters['excludecontents']) and $contents = $getcontentfunction($cm, $baseurl)) {
+                                $contents = $getcontentfunction($cm, $baseurl);
+                                $module['contentsinfo'] = array(
+                                    'filescount' => count($contents),
+                                    'filessize' => 0,
+                                    'lastmodified' => 0,
+                                    'mimetypes' => array(),
+                                );
+                                foreach ($contents as $content) {
+                                    // Check repository file (only main file).
+                                    if (!isset($module['contentsinfo']['repositorytype'])) {
+                                        $module['contentsinfo']['repositorytype'] =
+                                            isset($content['repositorytype']) ? $content['repositorytype'] : '';
+                                    }
+                                    if (isset($content['filesize'])) {
+                                        $module['contentsinfo']['filessize'] += $content['filesize'];
+                                    }
+                                    if (isset($content['timemodified']) &&
+                                            ($content['timemodified'] > $module['contentsinfo']['lastmodified'])) {
+
+                                        $module['contentsinfo']['lastmodified'] = $content['timemodified'];
+                                    }
+                                    if (isset($content['mimetype'])) {
+                                        $module['contentsinfo']['mimetypes'][$content['mimetype']] = $content['mimetype'];
+                                    }
+                                }
+
+                                if (empty($filters['excludecontents']) and !empty($contents)) {
                                     $module['contents'] = $contents;
                                 } else {
                                     $module['contents'] = array();
@@ -310,8 +353,13 @@ class core_course_external extends external_api {
                             }
                         }
 
-                        //assign result to $sectioncontents
-                        $sectioncontents[] = $module;
+                        // Assign result to $sectioncontents, there is an exception,
+                        // stealth activities in non-visible sections for students go to a special section.
+                        if (!empty($filters['includestealthmodules']) && !$section->uservisible && $cm->is_stealth()) {
+                            $stealthmodules[] = $module;
+                        } else {
+                            $sectioncontents[] = $module;
+                        }
 
                         // If we just did a filtering, break the loop.
                         if ($modfound) {
@@ -323,13 +371,46 @@ class core_course_external extends external_api {
                 $sectionvalues['modules'] = $sectioncontents;
 
                 // assign result to $coursecontents
-                $coursecontents[] = $sectionvalues;
+                $coursecontents[$key] = $sectionvalues;
 
                 // Break the loop if we are filtering.
                 if ($sectionfound) {
                     break;
                 }
             }
+
+            // Now that we have iterated over all the sections and activities, check the visibility.
+            // We didn't this before to be able to retrieve stealth activities.
+            foreach ($coursecontents as $sectionnumber => $sectioncontents) {
+                $section = $sections[$sectionnumber];
+                // Show the section if the user is permitted to access it, OR if it's not available
+                // but there is some available info text which explains the reason & should display.
+                $showsection = $section->uservisible ||
+                    ($section->visible && !$section->available &&
+                    !empty($section->availableinfo));
+
+                if (!$showsection) {
+                    unset($coursecontents[$sectionnumber]);
+                    continue;
+                }
+
+                // Remove modules information if the section is not visible for the user.
+                if (!$section->uservisible) {
+                    $coursecontents[$sectionnumber]['modules'] = array();
+                }
+            }
+
+            // Include stealth modules in special section (without any info).
+            if (!empty($stealthmodules)) {
+                $coursecontents[] = array(
+                    'id' => -1,
+                    'name' => '',
+                    'summary' => '',
+                    'summaryformat' => FORMAT_MOODLE,
+                    'modules' => $stealthmodules
+                );
+            }
+
         }
         return $coursecontents;
     }
@@ -374,6 +455,25 @@ class core_course_external extends external_api {
                                     'modplural' => new external_value(PARAM_TEXT, 'activity module plural name'),
                                     'availability' => new external_value(PARAM_RAW, 'module availability settings', VALUE_OPTIONAL),
                                     'indent' => new external_value(PARAM_INT, 'number of identation in the site'),
+                                    'onclick' => new external_value(PARAM_RAW, 'Onclick action.', VALUE_OPTIONAL),
+                                    'afterlink' => new external_value(PARAM_RAW, 'After link info to be displayed.',
+                                        VALUE_OPTIONAL),
+                                    'customdata' => new external_value(PARAM_RAW, 'Custom data (JSON encoded).', VALUE_OPTIONAL),
+                                    'noviewlink' => new external_value(PARAM_BOOL, 'Whether the module has no view page',
+                                        VALUE_OPTIONAL),
+                                    'completion' => new external_value(PARAM_INT, 'Type of completion tracking:
+                                        0 means none, 1 manual, 2 automatic.', VALUE_OPTIONAL),
+                                    'completiondata' => new external_single_structure(
+                                        array(
+                                            'state' => new external_value(PARAM_INT, 'Completion state value:
+                                                0 means incomplete, 1 complete, 2 complete pass, 3 complete fail'),
+                                            'timecompleted' => new external_value(PARAM_INT, 'Timestamp for completion status.'),
+                                            'overrideby' => new external_value(PARAM_INT, 'The user id who has overriden the
+                                                status.'),
+                                            'valueused' => new external_value(PARAM_BOOL, 'Whether the completion status affects
+                                                the availability of another activity.', VALUE_OPTIONAL),
+                                        ), 'Module completion data.', VALUE_OPTIONAL
+                                    ),
                                     'contents' => new external_multiple_structure(
                                           new external_single_structure(
                                               array(
@@ -397,9 +497,26 @@ class core_course_external extends external_api {
                                                   'userid' => new external_value(PARAM_INT, 'User who added this content to moodle'),
                                                   'author' => new external_value(PARAM_TEXT, 'Content owner'),
                                                   'license' => new external_value(PARAM_TEXT, 'Content license'),
+                                                  'tags' => new external_multiple_structure(
+                                                       \core_tag\external\tag_item_exporter::get_read_structure(), 'Tags',
+                                                            VALUE_OPTIONAL
+                                                   ),
                                               )
                                           ), VALUE_DEFAULT, array()
-                                      )
+                                      ),
+                                    'contentsinfo' => new external_single_structure(
+                                        array(
+                                            'filescount' => new external_value(PARAM_INT, 'Total number of files.'),
+                                            'filessize' => new external_value(PARAM_INT, 'Total files size.'),
+                                            'lastmodified' => new external_value(PARAM_INT, 'Last time files were modified.'),
+                                            'mimetypes' => new external_multiple_structure(
+                                                new external_value(PARAM_RAW, 'File mime type.'),
+                                                'Files mime types.'
+                                            ),
+                                            'repositorytype' => new external_value(PARAM_PLUGIN, 'The repository type for
+                                                the main file.', VALUE_OPTIONAL),
+                                        ), 'Contents summary information.', VALUE_OPTIONAL
+                                    ),
                                 )
                             ), 'list of module'
                     )
@@ -483,6 +600,19 @@ class core_course_external extends external_api {
             if (array_key_exists('numsections', $courseformatoptions)) {
                 // For backward-compartibility
                 $courseinfo['numsections'] = $courseformatoptions['numsections'];
+            }
+
+            $handler = core_course\customfield\course_handler::create();
+            if ($customfields = $handler->export_instance_data($course->id)) {
+                $courseinfo['customfields'] = [];
+                foreach ($customfields as $data) {
+                    $courseinfo['customfields'][] = [
+                        'type' => $data->get_type(),
+                        'value' => $data->get_value(),
+                        'name' => $data->get_name(),
+                        'shortname' => $data->get_shortname()
+                    ];
+                }
             }
 
             //some field should be returned only if the user has update permission
@@ -595,9 +725,16 @@ class core_course_external extends external_api {
                                 new external_single_structure(
                                     array('name' => new external_value(PARAM_ALPHANUMEXT, 'course format option name'),
                                         'value' => new external_value(PARAM_RAW, 'course format option value')
-                                )),
-                                    'additional options for particular course format', VALUE_OPTIONAL
+                                )), 'additional options for particular course format', VALUE_OPTIONAL
                              ),
+                            'customfields' => new external_multiple_structure(
+                                new external_single_structure(
+                                    ['name' => new external_value(PARAM_TEXT, 'The name of the custom field'),
+                                     'shortname' => new external_value(PARAM_ALPHANUMEXT, 'The shortname of the custom field'),
+                                     'type'  => new external_value(PARAM_COMPONENT,
+                                         'The type of the custom field - text, checkbox...'),
+                                     'value' => new external_value(PARAM_RAW, 'The value of the custom field')]
+                                ), 'Custom fields and associated values', VALUE_OPTIONAL),
                         ), 'course'
                 )
         );
@@ -671,8 +808,14 @@ class core_course_external extends external_api {
                                         'value' => new external_value(PARAM_RAW, 'course format option value')
                                 )),
                                     'additional options for particular course format', VALUE_OPTIONAL),
-                        )
-                    ), 'courses to create'
+                            'customfields' => new external_multiple_structure(
+                                new external_single_structure(
+                                    array(
+                                        'shortname'  => new external_value(PARAM_ALPHANUMEXT, 'The shortname of the custom field'),
+                                        'value' => new external_value(PARAM_RAW, 'The value of the custom field'),
+                                )), 'custom fields for the course', VALUE_OPTIONAL
+                            )
+                    )), 'courses to create'
                 )
             )
         );
@@ -760,6 +903,13 @@ class core_course_external extends external_api {
                 }
             }
 
+            // Custom fields.
+            if (!empty($course['customfields'])) {
+                foreach ($course['customfields'] as $field) {
+                    $course['customfield_'.$field['shortname']] = $field['value'];
+                }
+            }
+
             //Note: create_course() core function check shortname, idnumber, category
             $course['id'] = create_course((object) $course)->id;
 
@@ -841,8 +991,14 @@ class core_course_external extends external_api {
                                 new external_single_structure(
                                     array('name' => new external_value(PARAM_ALPHANUMEXT, 'course format option name'),
                                         'value' => new external_value(PARAM_RAW, 'course format option value')
-                                )),
-                                    'additional options for particular course format', VALUE_OPTIONAL),
+                                )), 'additional options for particular course format', VALUE_OPTIONAL),
+                            'customfields' => new external_multiple_structure(
+                                new external_single_structure(
+                                    [
+                                        'shortname'  => new external_value(PARAM_ALPHANUMEXT, 'The shortname of the custom field'),
+                                        'value' => new external_value(PARAM_RAW, 'The value of the custom field')
+                                    ]
+                                ), 'Custom fields', VALUE_OPTIONAL),
                         )
                     ), 'courses to update'
                 )
@@ -953,6 +1109,13 @@ class core_course_external extends external_api {
                         if (isset($option['name']) && isset($option['value'])) {
                             $course[$option['name']] = $option['value'];
                         }
+                    }
+                }
+
+                // Prepare list of custom fields.
+                if (isset($course['customfields'])) {
+                    foreach ($course['customfields'] as $field) {
+                        $course['customfield_' . $field['shortname']] = $field['value'];
                     }
                 }
 
@@ -1714,7 +1877,7 @@ class core_course_external extends external_api {
             if (!isset($excludedcats[$category->id])) {
 
                 // Final check to see if the category is visible to the user.
-                if ($category->visible or has_capability('moodle/category:viewhiddencategories', $context)) {
+                if (core_course_category::can_view_category($category)) {
 
                     $categoryinfo = array();
                     $categoryinfo['id'] = $category->id;
@@ -2217,6 +2380,8 @@ class core_course_external extends external_api {
                     'Optional list of required capabilities (used to filter the list)', VALUE_DEFAULT, array()
                 ),
                 'limittoenrolled' => new external_value(PARAM_BOOL, 'limit to enrolled courses', VALUE_DEFAULT, 0),
+                'onlywithcompletion' => new external_value(PARAM_BOOL, 'limit to courses where completion is enabled',
+                    VALUE_DEFAULT, 0),
             )
         );
     }
@@ -2261,8 +2426,13 @@ class core_course_external extends external_api {
         foreach ($course->get_course_contacts() as $contact) {
              $coursecontacts[] = array(
                 'id' => $contact['user']->id,
-                'fullname' => $contact['username']
-            );
+                'fullname' => $contact['username'],
+                'roles' => array_map(function($role){
+                    return array('id' => $role->id, 'name' => $role->displayname);
+                }, $contact['roles']),
+                'role' => array('id' => $contact['role']->id, 'name' => $contact['role']->displayname),
+                'rolename' => $contact['rolename']
+             );
         }
 
         // Allowed enrolment methods (maybe we can self-enrol).
@@ -2296,6 +2466,20 @@ class core_course_external extends external_api {
         $coursereturns['contacts']          = $coursecontacts;
         $coursereturns['enrollmentmethods'] = $enroltypes;
         $coursereturns['sortorder']         = $course->sortorder;
+
+        $handler = core_course\customfield\course_handler::create();
+        if ($customfields = $handler->export_instance_data($course->id)) {
+            $coursereturns['customfields'] = [];
+            foreach ($customfields as $data) {
+                $coursereturns['customfields'][] = [
+                    'type' => $data->get_type(),
+                    'value' => $data->get_value(),
+                    'name' => $data->get_name(),
+                    'shortname' => $data->get_shortname()
+                ];
+            }
+        }
+
         return $coursereturns;
     }
 
@@ -2308,6 +2492,7 @@ class core_course_external extends external_api {
      * @param int $perpage          Items per page
      * @param array $requiredcapabilities Optional list of required capabilities (used to filter the list).
      * @param int $limittoenrolled  Limit to only enrolled courses
+     * @param int onlywithcompletion Limit to only courses where completion is enabled
      * @return array of course objects and warnings
      * @since Moodle 3.0
      * @throws moodle_exception
@@ -2317,7 +2502,8 @@ class core_course_external extends external_api {
                                           $page=0,
                                           $perpage=0,
                                           $requiredcapabilities=array(),
-                                          $limittoenrolled=0) {
+                                          $limittoenrolled=0,
+                                          $onlywithcompletion=0) {
         global $CFG;
 
         $warnings = array();
@@ -2327,7 +2513,9 @@ class core_course_external extends external_api {
             'criteriavalue' => $criteriavalue,
             'page'          => $page,
             'perpage'       => $perpage,
-            'requiredcapabilities' => $requiredcapabilities
+            'requiredcapabilities' => $requiredcapabilities,
+            'limittoenrolled' => $limittoenrolled,
+            'onlywithcompletion' => $onlywithcompletion
         );
         $params = self::validate_parameters(self::search_courses_parameters(), $parameters);
         self::validate_context(context_system::instance());
@@ -2353,6 +2541,9 @@ class core_course_external extends external_api {
         // Prepare the search API options.
         $searchcriteria = array();
         $searchcriteria[$params['criterianame']] = $params['criteriavalue'];
+        if ($params['onlywithcompletion']) {
+            $searchcriteria['onlywithcompletion'] = true;
+        }
 
         $options = array();
         if ($params['perpage'] != 0) {
@@ -2426,6 +2617,17 @@ class core_course_external extends external_api {
                 new external_value(PARAM_PLUGIN, 'enrollment method'),
                 'enrollment methods list'
             ),
+            'customfields' => new external_multiple_structure(
+                new external_single_structure(
+                    array(
+                        'name' => new external_value(PARAM_RAW, 'The name of the custom field'),
+                        'shortname' => new external_value(PARAM_RAW,
+                            'The shortname of the custom field - to be able to build the field class in the code'),
+                        'type'  => new external_value(PARAM_ALPHANUMEXT,
+                            'The type of the custom field - text field, checkbox...'),
+                        'value' => new external_value(PARAM_RAW, 'The value of the custom field'),
+                    )
+                ), 'Custom fields', VALUE_OPTIONAL),
         );
 
         if (!$onlypublicdata) {
@@ -2710,121 +2912,6 @@ class core_course_external extends external_api {
     /**
      * Returns description of method parameters
      *
-     * @deprecated since 3.3
-     * @todo The final deprecation of this function will take place in Moodle 3.7 - see MDL-57487.
-     * @return external_function_parameters
-     * @since Moodle 3.2
-     */
-    public static function get_activities_overview_parameters() {
-        return new external_function_parameters(
-            array(
-                'courseids' => new external_multiple_structure(new external_value(PARAM_INT, 'Course id.')),
-            )
-        );
-    }
-
-    /**
-     * Return activities overview for the given courses.
-     *
-     * @deprecated since 3.3
-     * @todo The final deprecation of this function will take place in Moodle 3.7 - see MDL-57487.
-     * @param array $courseids a list of course ids
-     * @return array of warnings and the activities overview
-     * @since Moodle 3.2
-     * @throws moodle_exception
-     */
-    public static function get_activities_overview($courseids) {
-        global $USER;
-
-        // Parameter validation.
-        $params = self::validate_parameters(self::get_activities_overview_parameters(), array('courseids' => $courseids));
-        $courseoverviews = array();
-
-        list($courses, $warnings) = external_util::validate_courses($params['courseids']);
-
-        if (!empty($courses)) {
-            // Add lastaccess to each course (required by print_overview function).
-            // We need the complete user data, the ws server does not load a complete one.
-            $user = get_complete_user_data('id', $USER->id);
-            foreach ($courses as $course) {
-                if (isset($user->lastcourseaccess[$course->id])) {
-                    $course->lastaccess = $user->lastcourseaccess[$course->id];
-                } else {
-                    $course->lastaccess = 0;
-                }
-            }
-
-            $overviews = array();
-            if ($modules = get_plugin_list_with_function('mod', 'print_overview')) {
-                foreach ($modules as $fname) {
-                    $fname($courses, $overviews);
-                }
-            }
-
-            // Format output.
-            foreach ($overviews as $courseid => $modules) {
-                $courseoverviews[$courseid]['id'] = $courseid;
-                $courseoverviews[$courseid]['overviews'] = array();
-
-                foreach ($modules as $modname => $overviewtext) {
-                    $courseoverviews[$courseid]['overviews'][] = array(
-                        'module' => $modname,
-                        'overviewtext' => $overviewtext // This text doesn't need formatting.
-                    );
-                }
-            }
-        }
-
-        $result = array(
-            'courses' => $courseoverviews,
-            'warnings' => $warnings
-        );
-        return $result;
-    }
-
-    /**
-     * Returns description of method result value
-     *
-     * @deprecated since 3.3
-     * @todo The final deprecation of this function will take place in Moodle 3.7 - see MDL-57487.
-     * @return external_description
-     * @since Moodle 3.2
-     */
-    public static function get_activities_overview_returns() {
-        return new external_single_structure(
-            array(
-                'courses' => new external_multiple_structure(
-                    new external_single_structure(
-                        array(
-                            'id' => new external_value(PARAM_INT, 'Course id'),
-                            'overviews' => new external_multiple_structure(
-                                new external_single_structure(
-                                    array(
-                                        'module' => new external_value(PARAM_PLUGIN, 'Module name'),
-                                        'overviewtext' => new external_value(PARAM_RAW, 'Overview text'),
-                                    )
-                                )
-                            )
-                        )
-                    ), 'List of courses'
-                ),
-                'warnings' => new external_warnings()
-            )
-        );
-    }
-
-    /**
-     * Marking the method as deprecated.
-     *
-     * @return bool
-     */
-    public static function get_activities_overview_is_deprecated() {
-        return true;
-    }
-
-    /**
-     * Returns description of method parameters
-     *
      * @return external_function_parameters
      * @since Moodle 3.2
      */
@@ -3012,6 +3099,7 @@ class core_course_external extends external_api {
      */
     public static function get_courses_by_field($field = '', $value = '') {
         global $DB, $CFG;
+        require_once($CFG->dirroot . '/course/lib.php');
         require_once($CFG->libdir . '/filterlib.php');
 
         $params = self::validate_parameters(self::get_courses_by_field_parameters(),
@@ -3044,7 +3132,20 @@ class core_course_external extends external_api {
             }
 
             if ($params['field'] === 'ids') {
-                $courses = $DB->get_records_list('course', 'id', explode(',', $value), 'id ASC');
+                // Preload categories to avoid loading one at a time.
+                $courseids = explode(',', $value);
+                list ($listsql, $listparams) = $DB->get_in_or_equal($courseids);
+                $categoryids = $DB->get_fieldset_sql("
+                        SELECT DISTINCT cc.id
+                          FROM {course} c
+                          JOIN {course_categories} cc ON cc.id = c.category
+                         WHERE c.id $listsql", $listparams);
+                core_course_category::get_many($categoryids);
+
+                // Load and validate all courses. This is called because it loads the courses
+                // more efficiently.
+                list ($courses, $warnings) = external_util::validate_courses($courseids, [],
+                        false, true);
             } else {
                 $courses = $DB->get_records('course', array($params['field'] => $value), 'id ASC');
             }
@@ -3062,14 +3163,20 @@ class core_course_external extends external_api {
             }
             // Get the public course information, even if we are not enrolled.
             $courseinlist = new core_course_list_element($course);
-            $coursesdata[$course->id] = self::get_course_public_information($courseinlist, $context);
 
-            // Now, check if we have access to the course.
+            // Now, check if we have access to the course, unless it was already checked.
             try {
-                self::validate_context($context);
+                if (empty($course->contextvalidated)) {
+                    self::validate_context($context);
+                }
             } catch (Exception $e) {
+                // User can not access the course, check if they can see the public information about the course and return it.
+                if (core_course_category::can_view_course_info($course)) {
+                    $coursesdata[$course->id] = self::get_course_public_information($courseinlist, $context);
+                }
                 continue;
             }
+            $coursesdata[$course->id] = self::get_course_public_information($courseinlist, $context);
             // Return information for any user that can access the course.
             $coursefields = array('format', 'showgrades', 'newsitems', 'startdate', 'enddate', 'maxbytes', 'showreports', 'visible',
                 'groupmode', 'groupmodeforce', 'defaultgroupingid', 'enablecompletion', 'completionnotify', 'lang', 'theme',
@@ -3373,6 +3480,17 @@ class core_course_external extends external_api {
         $id = $params['id'];
         $sectionreturn = $params['sectionreturn'];
 
+        // Set of permissions an editing user may have.
+        $contextarray = [
+                'moodle/course:update',
+                'moodle/course:manageactivities',
+                'moodle/course:activityvisibility',
+                'moodle/course:sectionvisibility',
+                'moodle/course:movesections',
+                'moodle/course:setcurrentsection',
+        ];
+        $PAGE->set_other_editing_capability($contextarray);
+
         list($course, $cm) = get_course_and_cm_from_cmid($id);
         $modcontext = context_module::instance($cm->id);
         $coursecontext = context_course::instance($course->id);
@@ -3480,6 +3598,17 @@ class core_course_external extends external_api {
         $id = $params['id'];
         $sectionreturn = $params['sectionreturn'];
 
+        // Set of permissions an editing user may have.
+        $contextarray = [
+            'moodle/course:update',
+            'moodle/course:manageactivities',
+            'moodle/course:activityvisibility',
+            'moodle/course:sectionvisibility',
+            'moodle/course:movesections',
+            'moodle/course:setcurrentsection',
+        ];
+        $PAGE->set_other_editing_capability($contextarray);
+
         // Validate access to the course (note, this is html for the course view page, we don't validate access to the module).
         list($course, $cm) = get_course_and_cm_from_cmid($id);
         self::validate_context(context_course::instance($course->id));
@@ -3490,7 +3619,7 @@ class core_course_external extends external_api {
     }
 
     /**
-     * Return structure for edit_module()
+     * Return structure for get_module()
      *
      * @since Moodle 3.3
      * @return external_description
@@ -3552,5 +3681,463 @@ class core_course_external extends external_api {
      */
     public static function edit_section_returns() {
         return new external_value(PARAM_RAW, 'Additional data for javascript (JSON-encoded string)');
+    }
+
+    /**
+     * Returns description of method parameters
+     *
+     * @return external_function_parameters
+     */
+    public static function get_enrolled_courses_by_timeline_classification_parameters() {
+        return new external_function_parameters(
+            array(
+                'classification' => new external_value(PARAM_ALPHA, 'future, inprogress, or past'),
+                'limit' => new external_value(PARAM_INT, 'Result set limit', VALUE_DEFAULT, 0),
+                'offset' => new external_value(PARAM_INT, 'Result set offset', VALUE_DEFAULT, 0),
+                'sort' => new external_value(PARAM_TEXT, 'Sort string', VALUE_DEFAULT, null),
+                'customfieldname' => new external_value(PARAM_ALPHANUMEXT, 'Used when classification = customfield',
+                    VALUE_DEFAULT, null),
+                'customfieldvalue' => new external_value(PARAM_RAW, 'Used when classification = customfield',
+                    VALUE_DEFAULT, null),
+            )
+        );
+    }
+
+    /**
+     * Get courses matching the given timeline classification.
+     *
+     * NOTE: The offset applies to the unfiltered full set of courses before the classification
+     * filtering is done.
+     * E.g.
+     * If the user is enrolled in 5 courses:
+     * c1, c2, c3, c4, and c5
+     * And c4 and c5 are 'future' courses
+     *
+     * If a request comes in for future courses with an offset of 1 it will mean that
+     * c1 is skipped (because the offset applies *before* the classification filtering)
+     * and c4 and c5 will be return.
+     *
+     * @param  string $classification past, inprogress, or future
+     * @param  int $limit Result set limit
+     * @param  int $offset Offset the full course set before timeline classification is applied
+     * @param  string $sort SQL sort string for results
+     * @param  string $customfieldname
+     * @param  string $customfieldvalue
+     * @return array list of courses and warnings
+     * @throws  invalid_parameter_exception
+     */
+    public static function get_enrolled_courses_by_timeline_classification(
+        string $classification,
+        int $limit = 0,
+        int $offset = 0,
+        string $sort = null,
+        string $customfieldname = null,
+        string $customfieldvalue = null
+    ) {
+        global $CFG, $PAGE, $USER;
+        require_once($CFG->dirroot . '/course/lib.php');
+
+        $params = self::validate_parameters(self::get_enrolled_courses_by_timeline_classification_parameters(),
+            array(
+                'classification' => $classification,
+                'limit' => $limit,
+                'offset' => $offset,
+                'sort' => $sort,
+                'customfieldvalue' => $customfieldvalue,
+            )
+        );
+
+        $classification = $params['classification'];
+        $limit = $params['limit'];
+        $offset = $params['offset'];
+        $sort = $params['sort'];
+        $customfieldvalue = $params['customfieldvalue'];
+
+        switch($classification) {
+            case COURSE_TIMELINE_ALLINCLUDINGHIDDEN:
+                break;
+            case COURSE_TIMELINE_ALL:
+                break;
+            case COURSE_TIMELINE_PAST:
+                break;
+            case COURSE_TIMELINE_INPROGRESS:
+                break;
+            case COURSE_TIMELINE_FUTURE:
+                break;
+            case COURSE_FAVOURITES:
+                break;
+            case COURSE_TIMELINE_HIDDEN:
+                break;
+            case COURSE_CUSTOMFIELD:
+                break;
+            default:
+                throw new invalid_parameter_exception('Invalid classification');
+        }
+
+        self::validate_context(context_user::instance($USER->id));
+
+        $requiredproperties = course_summary_exporter::define_properties();
+        $fields = join(',', array_keys($requiredproperties));
+        $hiddencourses = get_hidden_courses_on_timeline();
+        $courses = [];
+
+        // If the timeline requires really all courses, get really all courses.
+        if ($classification == COURSE_TIMELINE_ALLINCLUDINGHIDDEN) {
+            $courses = course_get_enrolled_courses_for_logged_in_user(0, $offset, $sort, $fields, COURSE_DB_QUERY_LIMIT);
+
+            // Otherwise if the timeline requires the hidden courses then restrict the result to only $hiddencourses.
+        } else if ($classification == COURSE_TIMELINE_HIDDEN) {
+            $courses = course_get_enrolled_courses_for_logged_in_user(0, $offset, $sort, $fields,
+                COURSE_DB_QUERY_LIMIT, $hiddencourses);
+
+            // Otherwise get the requested courses and exclude the hidden courses.
+        } else {
+            $courses = course_get_enrolled_courses_for_logged_in_user(0, $offset, $sort, $fields,
+                COURSE_DB_QUERY_LIMIT, [], $hiddencourses);
+        }
+
+        $favouritecourseids = [];
+        $ufservice = \core_favourites\service_factory::get_service_for_user_context(\context_user::instance($USER->id));
+        $favourites = $ufservice->find_favourites_by_type('core_course', 'courses');
+
+        if ($favourites) {
+            $favouritecourseids = array_map(
+                function($favourite) {
+                    return $favourite->itemid;
+                }, $favourites);
+        }
+
+        if ($classification == COURSE_FAVOURITES) {
+            list($filteredcourses, $processedcount) = course_filter_courses_by_favourites(
+                $courses,
+                $favouritecourseids,
+                $limit
+            );
+        } else if ($classification == COURSE_CUSTOMFIELD) {
+            list($filteredcourses, $processedcount) = course_filter_courses_by_customfield(
+                $courses,
+                $customfieldname,
+                $customfieldvalue,
+                $limit
+            );
+        } else {
+            list($filteredcourses, $processedcount) = course_filter_courses_by_timeline_classification(
+                $courses,
+                $classification,
+                $limit
+            );
+        }
+
+        $renderer = $PAGE->get_renderer('core');
+        $formattedcourses = array_map(function($course) use ($renderer, $favouritecourseids) {
+            context_helper::preload_from_record($course);
+            $context = context_course::instance($course->id);
+            $isfavourite = false;
+            if (in_array($course->id, $favouritecourseids)) {
+                $isfavourite = true;
+            }
+            $exporter = new course_summary_exporter($course, ['context' => $context, 'isfavourite' => $isfavourite]);
+            return $exporter->export($renderer);
+        }, $filteredcourses);
+
+        return [
+            'courses' => $formattedcourses,
+            'nextoffset' => $offset + $processedcount
+        ];
+    }
+
+    /**
+     * Returns description of method result value
+     *
+     * @return external_description
+     */
+    public static function get_enrolled_courses_by_timeline_classification_returns() {
+        return new external_single_structure(
+            array(
+                'courses' => new external_multiple_structure(course_summary_exporter::get_read_structure(), 'Course'),
+                'nextoffset' => new external_value(PARAM_INT, 'Offset for the next request')
+            )
+        );
+    }
+
+    /**
+     * Returns description of method parameters
+     *
+     * @return external_function_parameters
+     */
+    public static function set_favourite_courses_parameters() {
+        return new external_function_parameters(
+            array(
+                'courses' => new external_multiple_structure(
+                    new external_single_structure(
+                        array(
+                            'id' => new external_value(PARAM_INT, 'course ID'),
+                            'favourite' => new external_value(PARAM_BOOL, 'favourite status')
+                        )
+                    )
+                )
+            )
+        );
+    }
+
+    /**
+     * Set the course favourite status for an array of courses.
+     *
+     * @param  array $courses List with course id's and favourite status.
+     * @return array Array with an array of favourite courses.
+     */
+    public static function set_favourite_courses(
+        array $courses
+    ) {
+        global $USER;
+
+        $params = self::validate_parameters(self::set_favourite_courses_parameters(),
+            array(
+                'courses' => $courses
+            )
+        );
+
+        $warnings = [];
+
+        $ufservice = \core_favourites\service_factory::get_service_for_user_context(\context_user::instance($USER->id));
+
+        foreach ($params['courses'] as $course) {
+
+            $warning = [];
+
+            $favouriteexists = $ufservice->favourite_exists('core_course', 'courses', $course['id'],
+                    \context_course::instance($course['id']));
+
+            if ($course['favourite']) {
+                if (!$favouriteexists) {
+                    try {
+                        $ufservice->create_favourite('core_course', 'courses', $course['id'],
+                                \context_course::instance($course['id']));
+                    } catch (Exception $e) {
+                        $warning['courseid'] = $course['id'];
+                        if ($e instanceof moodle_exception) {
+                            $warning['warningcode'] = $e->errorcode;
+                        } else {
+                            $warning['warningcode'] = $e->getCode();
+                        }
+                        $warning['message'] = $e->getMessage();
+                        $warnings[] = $warning;
+                        $warnings[] = $warning;
+                    }
+                } else {
+                    $warning['courseid'] = $course['id'];
+                    $warning['warningcode'] = 'coursealreadyfavourited';
+                    $warning['message'] = 'Course already favourited';
+                    $warnings[] = $warning;
+                }
+            } else {
+                if ($favouriteexists) {
+                    try {
+                        $ufservice->delete_favourite('core_course', 'courses', $course['id'],
+                                \context_course::instance($course['id']));
+                    } catch (Exception $e) {
+                        $warning['courseid'] = $course['id'];
+                        if ($e instanceof moodle_exception) {
+                            $warning['warningcode'] = $e->errorcode;
+                        } else {
+                            $warning['warningcode'] = $e->getCode();
+                        }
+                        $warning['message'] = $e->getMessage();
+                        $warnings[] = $warning;
+                        $warnings[] = $warning;
+                    }
+                } else {
+                    $warning['courseid'] = $course['id'];
+                    $warning['warningcode'] = 'cannotdeletefavourite';
+                    $warning['message'] = 'Could not delete favourite status for course';
+                    $warnings[] = $warning;
+                }
+            }
+        }
+
+        return [
+            'warnings' => $warnings
+        ];
+    }
+
+    /**
+     * Returns description of method result value
+     *
+     * @return external_description
+     */
+    public static function set_favourite_courses_returns() {
+        return new external_single_structure(
+            array(
+                'warnings' => new external_warnings()
+            )
+        );
+    }
+
+    /**
+     * Returns description of method parameters
+     *
+     * @return external_function_parameters
+     * @since Moodle 3.6
+     */
+    public static function get_recent_courses_parameters() {
+        return new external_function_parameters(
+            array(
+                'userid' => new external_value(PARAM_INT, 'id of the user, default to current user', VALUE_DEFAULT, 0),
+                'limit' => new external_value(PARAM_INT, 'result set limit', VALUE_DEFAULT, 0),
+                'offset' => new external_value(PARAM_INT, 'Result set offset', VALUE_DEFAULT, 0),
+                'sort' => new external_value(PARAM_TEXT, 'Sort string', VALUE_DEFAULT, null)
+            )
+        );
+    }
+
+    /**
+     * Get last accessed courses adding additional course information like images.
+     *
+     * @param int $userid User id from which the courses will be obtained
+     * @param int $limit Restrict result set to this amount
+     * @param int $offset Skip this number of records from the start of the result set
+     * @param string|null $sort SQL string for sorting
+     * @return array List of courses
+     * @throws  invalid_parameter_exception
+     */
+    public static function get_recent_courses(int $userid = 0, int $limit = 0, int $offset = 0, string $sort = null) {
+        global $USER, $PAGE;
+
+        if (empty($userid)) {
+            $userid = $USER->id;
+        }
+
+        $params = self::validate_parameters(self::get_recent_courses_parameters(),
+            array(
+                'userid' => $userid,
+                'limit' => $limit,
+                'offset' => $offset,
+                'sort' => $sort
+            )
+        );
+
+        $userid = $params['userid'];
+        $limit = $params['limit'];
+        $offset = $params['offset'];
+        $sort = $params['sort'];
+
+        $usercontext = context_user::instance($userid);
+
+        self::validate_context($usercontext);
+
+        if ($userid != $USER->id and !has_capability('moodle/user:viewdetails', $usercontext)) {
+            return array();
+        }
+
+        $courses = course_get_recent_courses($userid, $limit, $offset, $sort);
+
+        $renderer = $PAGE->get_renderer('core');
+
+        $recentcourses = array_map(function($course) use ($renderer) {
+            context_helper::preload_from_record($course);
+            $context = context_course::instance($course->id);
+            $isfavourite = !empty($course->component);
+            $exporter = new course_summary_exporter($course, ['context' => $context, 'isfavourite' => $isfavourite]);
+            return $exporter->export($renderer);
+        }, $courses);
+
+        return $recentcourses;
+    }
+
+    /**
+     * Returns description of method result value
+     *
+     * @return external_description
+     * @since Moodle 3.6
+     */
+    public static function get_recent_courses_returns() {
+        return new external_multiple_structure(course_summary_exporter::get_read_structure(), 'Courses');
+    }
+
+    /**
+     * Returns description of method parameters
+     *
+     * @return external_function_parameters
+     */
+    public static function get_enrolled_users_by_cmid_parameters() {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'id of the course module', VALUE_REQUIRED),
+            'groupid' => new external_value(PARAM_INT, 'id of the group', VALUE_DEFAULT, 0),
+        ]);
+    }
+
+    /**
+     * Get all users in a course for a given cmid.
+     *
+     * @param int $cmid Course Module id from which the users will be obtained
+     * @param int $groupid Group id from which the users will be obtained
+     * @return array List of users
+     * @throws invalid_parameter_exception
+     */
+    public static function get_enrolled_users_by_cmid(int $cmid, int $groupid = 0) {
+    global $PAGE;
+        $warnings = [];
+
+        [
+            'cmid' => $cmid,
+            'groupid' => $groupid,
+        ] = self::validate_parameters(self::get_enrolled_users_by_cmid_parameters(), [
+                'cmid' => $cmid,
+                'groupid' => $groupid,
+        ]);
+
+        list($course, $cm) = get_course_and_cm_from_cmid($cmid);
+        $coursecontext = context_course::instance($course->id);
+        self::validate_context($coursecontext);
+
+        $enrolledusers = get_enrolled_users($coursecontext, '', $groupid);
+
+        $users = array_map(function ($user) use ($PAGE) {
+            $user->fullname = fullname($user);
+            $userpicture = new user_picture($user);
+            $userpicture->size = 1;
+            $user->profileimage = $userpicture->get_url($PAGE)->out(false);
+            return $user;
+        }, $enrolledusers);
+        sort($users);
+
+        return [
+            'users' => $users,
+            'warnings' => $warnings,
+        ];
+    }
+
+    /**
+     * Returns description of method result value
+     *
+     * @return external_description
+     */
+    public static function get_enrolled_users_by_cmid_returns() {
+        return new external_single_structure([
+            'users' => new external_multiple_structure(self::user_description()),
+            'warnings' => new external_warnings(),
+        ]);
+    }
+
+    /**
+     * Create user return value description.
+     *
+     * @return external_description
+     */
+    public static function user_description() {
+        $userfields = array(
+            'id'    => new external_value(core_user::get_property_type('id'), 'ID of the user'),
+            'profileimage' => new external_value(PARAM_URL, 'The location of the users larger image', VALUE_OPTIONAL),
+            'fullname' => new external_value(PARAM_TEXT, 'The full name of the user', VALUE_OPTIONAL),
+            'firstname'   => new external_value(
+                    core_user::get_property_type('firstname'),
+                        'The first name(s) of the user',
+                        VALUE_OPTIONAL),
+            'lastname'    => new external_value(
+                    core_user::get_property_type('lastname'),
+                        'The family name of the user',
+                        VALUE_OPTIONAL),
+        );
+        return new external_single_structure($userfields);
     }
 }

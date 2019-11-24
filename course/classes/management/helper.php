@@ -168,6 +168,8 @@ class helper {
      * @return array
      */
     public static function get_category_listitem_actions(\core_course_category $category) {
+        global $CFG;
+
         $manageurl = new \moodle_url('/course/management.php', array('categoryid' => $category->id));
         $baseurl = new \moodle_url($manageurl, array('sesskey' => \sesskey()));
         $actions = array();
@@ -280,6 +282,28 @@ class helper {
             );
         }
 
+        // Context locking.
+        if (!empty($CFG->contextlocking) && has_capability('moodle/site:managecontextlocks', $category->get_context())) {
+            $parentcontext = $category->get_context()->get_parent_context();
+            if (empty($parentcontext) || !$parentcontext->locked) {
+                if ($category->get_context()->locked) {
+                    $lockicon = 'i/unlock';
+                    $lockstring = get_string('managecontextunlock', 'admin');
+                } else {
+                    $lockicon = 'i/lock';
+                    $lockstring = get_string('managecontextlock', 'admin');
+                }
+                $actions['managecontextlock'] = [
+                    'url' => new \moodle_url('/admin/lock.php', [
+                            'id' => $category->get_context()->id,
+                            'returnurl' => $manageurl->out_as_local_url(false),
+                        ]),
+                    'icon' => new \pix_icon($lockicon, $lockstring),
+                    'string' => $lockstring,
+                ];
+            }
+        }
+
         // Cohorts.
         if ($category->can_review_cohorts()) {
             $actions['cohorts'] = array(
@@ -379,12 +403,10 @@ class helper {
         $baseurl = new \moodle_url('/course/management.php', $params);
         $actions = array();
         // View.
-        if ($course->is_uservisible()) {
-            $actions['view'] = array(
-                'url' => new \moodle_url('/course/view.php', array('id' => $course->id)),
-                'string' => \get_string('view')
-            );
-        }
+        $actions['view'] = array(
+            'url' => new \moodle_url('/course/view.php', array('id' => $course->id)),
+            'string' => \get_string('view')
+        );
         // Edit.
         if ($course->can_edit()) {
             $actions['edit'] = array(
@@ -742,7 +764,7 @@ class helper {
      */
     public static function get_management_viewmodes() {
         return array(
-            'combined' => new \lang_string('categoriesandcoures'),
+            'combined' => new \lang_string('categoriesandcourses'),
             'categories' => new \lang_string('categories'),
             'courses' => new \lang_string('courses')
         );
@@ -778,13 +800,14 @@ class helper {
             $searchcriteria = array('modulelist' => $modulelist);
         }
 
-        $courses = \core_course_category::get(0)->search_courses($searchcriteria, array(
+        $topcat = \core_course_category::top();
+        $courses = $topcat->search_courses($searchcriteria, array(
             'recursive' => true,
             'offset' => $page * $perpage,
             'limit' => $perpage,
             'sort' => array('fullname' => 1)
         ));
-        $totalcount = \core_course_category::get(0)->search_courses_count($searchcriteria, array('recursive' => true));
+        $totalcount = $topcat->search_courses_count($searchcriteria, array('recursive' => true));
 
         return array($courses, \count($courses), $totalcount);
     }
