@@ -62,7 +62,7 @@ class tag_condition extends condition {
             list($tagsql, $tagparams) = $DB->get_in_or_equal($selectedtagids, SQL_PARAMS_NAMED);
             $tagparams['tagcount'] = count($selectedtagids);
             $tagparams['questionitemtype'] = 'question';
-            $tagparams['questioncomponent'] = 'quiz_tag';
+            $tagparams['questioncomponent'] = 'quiz_tag_correspondence_16';
             $this->selectedtagids = $selectedtagids;
             $this->params = $tagparams;
             $this->where = "q.id IN (SELECT ti.itemid
@@ -106,7 +106,7 @@ class tag_condition extends condition {
     public function display_options() {
         global $OUTPUT;
 
-        $tags = \core_tag_tag::get_tags_by_area_in_contexts('core_question', 'question', $this->contexts);
+        $tags = \core_tag_tag::get_tags_by_area_in_contexts('quiz_tag_correspondence_16', 'question', $this->contexts);
         $tagoptions = array_map(function($tag) {
             return [
                 'id' => $tag->id,
