@@ -248,4 +248,7 @@ switch ($forum->get_type()) {
         echo $discussionsrenderer->render($USER, $cm, $groupid, $sortorder, $pageno, $pagesize, $displaymode);
 }
 
+$discussioncount = $discussionvault->get_count_discussions_in_forum($forum);
+echo "Number of discussion: $discussioncount\n";
+
 echo $OUTPUT->footer();
