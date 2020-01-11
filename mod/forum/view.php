@@ -160,6 +160,9 @@ if (!$istypesingle && !empty($forum->get_intro())) {
     echo $OUTPUT->box(format_module_intro('forum', $forumrecord, $cm->id), 'generalbox', 'intro');
 }
 
+$discussioncount = $discussionvault->get_count_discussions_in_forum($forum);
+echo "Number of discussions: $discussioncount\n";
+
 if ($sortorder) {
     set_user_preference('forum_discussionlistsortorder', $sortorder);
 }
