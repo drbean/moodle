@@ -249,6 +249,6 @@ switch ($forum->get_type()) {
 }
 
 $discussioncount = $discussionvault->get_count_discussions_in_forum($forum);
-echo "Number of discussion: $discussioncount\n";
+echo "Number of discussions: $discussioncount\n";
 
 echo $OUTPUT->footer();
