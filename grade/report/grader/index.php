@@ -140,8 +140,6 @@ print_grade_page_head($COURSE->id, 'report', 'grader', $reportname, false, $butt
 $report = new grade_report_grader($courseid, $gpr, $context, $page, $sortitemid);
 $numusers = $report->get_numusers(true, true);
 
-echo "HEYHEY\n";
-
 // make sure separate group does not prevent view
 if ($report->currentgroup == -2) {
     echo $OUTPUT->heading(get_string("notingroup"));
