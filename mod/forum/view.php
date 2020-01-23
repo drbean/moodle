@@ -248,10 +248,12 @@ switch ($forum->get_type()) {
         break;
     default:
         $discussionsrenderer = $rendererfactory->get_discussion_list_renderer($forum);
-        echo $discussionsrenderer->render($USER, $cm, $groupid, $sortorder, $pageno, $pagesize, $displaymode);
+        require_once("{$CFG->dirroot}/mod/forum/classes/grades/forum_gradeitem.php");
+        $rating = new mod_forum\grades\forum_gradeitem;
+        echo $discussionsrenderer->render($USER, $cm, $groupid, $sortorder, $pageno, $pagesize, $displaymode, $rating);
 }
 
-$discussioncount = $discussionvault->get_count_discussions_in_forum($forum);
+
 echo "Number of discussions: $discussioncount\n";
 
 echo $OUTPUT->footer();
