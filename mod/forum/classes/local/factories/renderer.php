@@ -430,6 +430,7 @@ class renderer {
     ) : discussion_list_renderer {
 
         $capabilitymanager = $this->managerfactory->get_capability_manager($forum);
+        $ratingmanager = $this->managerfactory->get_rating_manager();
         $rendererbase = $this->rendererbase;
         $notifications = [];
 
@@ -468,7 +469,8 @@ class renderer {
                     $forum,
                     $discussions
                 );
-            }
+            },
+	    $ratingmanager,
         );
     }
 

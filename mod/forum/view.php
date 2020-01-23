@@ -23,6 +23,7 @@
  */
 
 use mod_forum\grades\forum_gradeitem;
+use rating_manager;
 
 require_once('../../config.php');
 
@@ -248,9 +249,8 @@ switch ($forum->get_type()) {
         break;
     default:
         $discussionsrenderer = $rendererfactory->get_discussion_list_renderer($forum);
-        require_once("{$CFG->dirroot}/mod/forum/classes/grades/forum_gradeitem.php");
-        $rating = new mod_forum\grades\forum_gradeitem;
-        echo $discussionsrenderer->render($USER, $cm, $groupid, $sortorder, $pageno, $pagesize, $displaymode, $rating);
+        $ratingmanager = new rating_manager;
+        echo $discussionsrenderer->render($USER, $cm, $groupid, $sortorder, $pageno, $pagesize, $displaymode, $ratingmanager);
 }
 
 

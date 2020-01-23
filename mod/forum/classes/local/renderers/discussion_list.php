@@ -154,7 +154,8 @@ class discussion_list {
         ?int $sortorder,
         ?int $pageno,
         ?int $pagesize,
-        int $displaymode = null
+        int $displaymode = null,
+        \rating_manager $ratingmanager
     ) : string {
         global $PAGE;
 
@@ -210,6 +211,8 @@ class discussion_list {
             'userid' => $user->id,
             'visiblediscussioncount' => count($discussions)
         ];
+
+        $forumview['forum']['capabilities']['rating'] = ['rating' => true];
 
         if ($forumview['forum']['capabilities']['create']) {
             $forumview['newdiscussionhtml'] = $this->get_discussion_form($user, $cm, $groupid);
