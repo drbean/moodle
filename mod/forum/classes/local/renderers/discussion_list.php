@@ -212,7 +212,9 @@ class discussion_list {
             'visiblediscussioncount' => count($discussions)
         ];
 
-        $forumview['forum']['capabilities']['rating'] = ['rating' => true];
+	$rating = $ratingmanager->userid;
+	$rating = false;
+        $forumview['forum']['capabilities']['rating'] = ['rating' => $rating];
 
         if ($forumview['forum']['capabilities']['create']) {
             $forumview['newdiscussionhtml'] = $this->get_discussion_form($user, $cm, $groupid);
