@@ -9618,6 +9618,32 @@ input[disabled] {
   display: block;
   margin-top: 4px; }
 
+#goto-top-link {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity .7s ease 0s, visibility .1s ease .8s;
+  display: block;
+  position: fixed;
+  /* IE compatibility hack */
+  bottom: 50px;
+  right: 0; }
+  @supports (position: sticky) {
+    #goto-top-link {
+      position: sticky; } }
+  @supports (-ms-ime-align: auto) {
+    #goto-top-link {
+      position: fixed;
+      /* Edge compatibility hack */ } }
+  #goto-top-link a {
+    position: absolute;
+    right: 0;
+    transform: translateY(-100%); }
+
+body.scrolled #goto-top-link {
+  opacity: 1;
+  visibility: visible;
+  transition: visibility 0s ease 0s, opacity .7s ease .1s; }
+
 .context-header-settings-menu .dropdown-toggle > .icon,
 #region-main-settings-menu .dropdown-toggle > .icon {
   height: 24px;
@@ -10818,17 +10844,94 @@ body#page-lib-editor-tinymce-plugins-moodlemedia-preview {
   margin-top: -1px;
   padding-top: 1px; }
 
-.chooserdialogue-course-modchooser .modicon .icon {
-  width: 24px;
-  height: 24px;
-  font-size: 24px; }
-
 @media (max-width: 575.98px) {
   .jsenabled .choosercontainer #chooseform .alloptions {
     max-width: 100%; }
   .jsenabled .choosercontainer #chooseform .instruction,
   .jsenabled .choosercontainer #chooseform .typesummary {
     position: static; } }
+
+/**
+ * Module chooser dialogue (moodle-core-chooserdialogue)
+ *
+ * This CSS belong to the chooser dialogue which should work both with, and
+ * without javascript enabled
+ */
+.modchooser .modal-body {
+  padding: 0;
+  height: 590px;
+  overflow-y: auto; }
+  .modchooser .modal-body .loading-icon {
+    opacity: 1; }
+    .modchooser .modal-body .loading-icon .icon {
+      display: block;
+      font-size: 3em;
+      height: 1em;
+      width: 1em;
+      margin: 5em auto; }
+
+.modchoosercontainer.noscroll {
+  overflow-y: hidden; }
+
+.modchoosercontainer .optionscontainer {
+  overflow-x: hidden; }
+  .modchoosercontainer .optionscontainer .option {
+    flex-basis: 16%; }
+    .modchoosercontainer .optionscontainer .option .optionactions .optionaction {
+      cursor: pointer;
+      margin: 0.2rem;
+      color: #868e96; }
+      .modchoosercontainer .optionscontainer .option .optionactions .optionaction i {
+        margin: 0; }
+    .modchoosercontainer .optionscontainer .option .optioninfo a {
+      color: #495057; }
+      .modchoosercontainer .optionscontainer .option .optioninfo a:hover {
+        text-decoration: none; }
+      .modchoosercontainer .optionscontainer .option .optioninfo a .optionname {
+        margin-top: 0.5em; }
+      .modchoosercontainer .optionscontainer .option .optioninfo a .optionicon .icon {
+        margin: 0;
+        padding: 0;
+        width: 32px;
+        height: 32px;
+        font-size: 32px; }
+
+.modchooser .modal-body .optionsummary {
+  background-color: #fff;
+  overflow-x: hidden;
+  overflow-y: auto;
+  line-height: 2em;
+  height: 590px; }
+  .modchooser .modal-body .optionsummary .content {
+    overflow-y: auto; }
+    .modchooser .modal-body .optionsummary .content .heading .icon {
+      height: 32px;
+      width: 32px;
+      font-size: 32px;
+      padding: 0; }
+  .modchooser .modal-body .optionsummary .actions {
+    border-top: 1px solid #dee2e6;
+    background: #fff; }
+
+@media (max-width: 1199.98px) {
+  .modchoosercontainer .optionscontainer .option {
+    flex-basis: 20%; } }
+
+@media (max-width: 575.98px) {
+  .path-course-view .modal-dialog.modal-lg,
+  .path-course-view .modal-content,
+  .modchooser .modal-body,
+  .modchooser .modal-body .carousel,
+  .modchooser .modal-body .carousel-inner,
+  .modchooser .modal-body .carousel-item,
+  .modchooser .modal-body .optionsummary,
+  .modchoosercontainer,
+  .optionscontainer {
+    height: 100%; }
+  .path-course-view .modal-dialog.modal-lg {
+    margin: 0; }
+  .modchoosercontainer .optionscontainer .option {
+    flex-basis: 25%; } }
 
 /* Form element: listing */
 .formlistingradio {
@@ -11448,6 +11551,8 @@ body.h5p-embed .h5pmessages {
   max-width: 350px;
   max-height: 0;
   z-index: 1051; }
+  .toast-wrapper > :first-child {
+    margin-top: 1rem; }
 
 .icon {
   font-size: 16px;
@@ -12605,11 +12710,6 @@ table.calendartable caption {
 
 /* course.less */
 /* COURSE CONTENT */
-.section-modchooser-link img {
-  margin-right: 0.5rem;
-  width: 16px;
-  height: 16px; }
-
 .section_add_menus {
   text-align: right;
   clear: both; }
