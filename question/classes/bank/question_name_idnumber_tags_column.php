@@ -62,7 +62,7 @@ class question_name_idnumber_tags_column extends question_name_column {
 
         // Question tags.
         if (!empty($question->tags)) {
-            $tags = \core_tag_tag::get_item_tags('core_question', 'question', $question->id);
+            $tags = \core_tag_tag::get_item_tags('quiz_tag_correspondence_2', 'question', $question->id);
             echo $OUTPUT->tag_list($tags, null, 'd-inline flex-shrink-1 text-truncate ml-1', 0, null, true);
         }
 
