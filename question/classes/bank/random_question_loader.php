@@ -101,9 +101,6 @@ class random_question_loader {
         $lowestcount = key($this->availablequestionscache[$categorykey]);
         reset($this->availablequestionscache[$categorykey][$lowestcount]);
         $questionid = key($this->availablequestionscache[$categorykey][$lowestcount]);
-	// while ( empty($questionid) ) {
-		$questionid = key($this->availablequestionscache[$categorykey][$lowestcount]);
-	// }
         $this->use_question($questionid);
         return $questionid;
     }
