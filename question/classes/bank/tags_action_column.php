@@ -60,7 +60,7 @@ class tags_action_column extends action_column_base implements menuable_action {
     protected function display_content($question, $rowclasses) {
         global $OUTPUT;
 
-        if (\core_tag_tag::is_enabled('quiz_tag_conversation_2', 'question') &&
+        if (\core_tag_tag::is_enabled('quiz_tag_anime_2', 'question') &&
                 question_has_capability_on($question, 'view')) {
 
             [$url, $attributes] = $this->get_link_url_and_attributes($question);
@@ -90,7 +90,7 @@ class tags_action_column extends action_column_base implements menuable_action {
     }
 
     public function get_action_menu_link(\stdClass $question): ?\action_menu_link {
-        if (!\core_tag_tag::is_enabled('quiz_tag_conversation_2', 'question') ||
+        if (!\core_tag_tag::is_enabled('quiz_tag_anime_2', 'question') ||
                 !question_has_capability_on($question, 'view')) {
             return null;
         }
