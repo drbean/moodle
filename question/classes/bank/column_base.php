@@ -284,7 +284,7 @@ abstract class column_base {
         }
 
         // Load the tags.
-        $tagdata = \core_tag_tag::get_items_tags('quiz_tag_anime_2', 'question',
+        $tagdata = \core_tag_tag::get_items_tags('quiz_tag_toeic_speaking_2', 'question',
                 array_keys($questions));
 
         // Add them to the question objects.
