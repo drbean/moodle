@@ -60,7 +60,7 @@ class quiz_add_random_form extends moodleform {
 
         if ($CFG->usetags) {
             $tagstrings = array();
-            $tags = core_tag_tag::get_tags_by_area_in_contexts('quiz_tag_toeic_speaking_2', 'question', $usablecontexts);
+            $tags = core_tag_tag::get_tags_by_area_in_contexts("$CFG->tag_component", 'question', $usablecontexts);
             foreach ($tags as $tag) {
                 $tagstrings["{$tag->id},{$tag->name}"] = $tag->name;
             }

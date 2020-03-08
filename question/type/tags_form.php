@@ -58,8 +58,8 @@ class tags extends \moodleform {
         $mform->addElement('static', 'questioncategory', get_string('categorycurrent', 'question'));
         $mform->addElement('static', 'context', '');
 
-        if (\core_tag_tag::is_enabled('quiz_tag_toeic_speaking_2', 'question')) {
-            $tags = \core_tag_tag::get_tags_by_area_in_contexts('quiz_tag_toeic_speaking_2', 'question', $customdata['contexts']);
+        if (\core_tag_tag::is_enabled("$CFG->tag_component", 'question')) {
+            $tags = \core_tag_tag::get_tags_by_area_in_contexts('core_question', 'question', $customdata['contexts']);
             $tagstrings = [];
             foreach ($tags as $tag) {
                 $tagstrings[$tag->name] = $tag->name;
@@ -85,7 +85,7 @@ class tags extends \moodleform {
                 // If the question is being edited in a course or activity context
                 // and the question isn't a course or activity level question then
                 // allow course tags to be added to the course.
-                $coursetagheader = get_string('questionformtagheader', 'quiz_tag_toeic_speaking_2',
+                $coursetagheader = get_string('questionformtagheader', "$CFG->tag_component",
                     $editingcoursecontext->get_context_name(true));
                 $mform->addElement('autocomplete', 'coursetags',  $coursetagheader, $tagstrings, $options);
 
