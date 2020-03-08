@@ -25,6 +25,8 @@ $CFG->directorypermissions = 02777;
 
 // $CFG->hiddenuserfields = array ("First name", "Surname", "Last downloaded from this course");
 
+$CFG->tag_component = 'quiz_tag_correspondence_3';
+
 require_once(__DIR__ . '/lib/setup.php');
 
 // There is no php closing tag in this file,
