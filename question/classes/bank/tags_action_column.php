@@ -60,6 +60,7 @@ class tags_action_column extends action_column_base implements menuable_action {
     protected function display_content($question, $rowclasses) {
         global $OUTPUT;
 
+global $CFG;
         if (\core_tag_tag::is_enabled("$CFG->tag_component", 'question') &&
                 question_has_capability_on($question, 'view')) {
 
@@ -90,6 +91,7 @@ class tags_action_column extends action_column_base implements menuable_action {
     }
 
     public function get_action_menu_link(\stdClass $question): ?\action_menu_link {
+global $CFG;
         if (!\core_tag_tag::is_enabled("$CFG->tag_component", 'question') ||
                 !question_has_capability_on($question, 'view')) {
             return null;

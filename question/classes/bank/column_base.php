@@ -284,6 +284,7 @@ abstract class column_base {
         }
 
         // Load the tags.
+global $CFG;
         $tagdata = \core_tag_tag::get_items_tags("$CFG->tag_component", 'question',
                 array_keys($questions));
 

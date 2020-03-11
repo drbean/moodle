@@ -62,6 +62,7 @@ class tag_condition extends condition {
             list($tagsql, $tagparams) = $DB->get_in_or_equal($selectedtagids, SQL_PARAMS_NAMED);
             $tagparams['tagcount'] = count($selectedtagids);
             $tagparams['questionitemtype'] = 'question';
+global $CFG;
             $tagparams['questioncomponent'] = "$CFG->tag_component";
             $this->selectedtagids = $selectedtagids;
             $this->params = $tagparams;
@@ -106,6 +107,7 @@ class tag_condition extends condition {
     public function display_options() {
         global $OUTPUT;
 
+global $CFG;
         $tags = \core_tag_tag::get_tags_by_area_in_contexts("$CFG->tag_component", 'question', $this->contexts);
         $tagoptions = array_map(function($tag) {
             return [

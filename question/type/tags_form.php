@@ -57,7 +57,7 @@ class tags extends \moodleform {
         $mform->addElement('static', 'questionname', get_string('questionname', 'question'));
         $mform->addElement('static', 'questioncategory', get_string('categorycurrent', 'question'));
         $mform->addElement('static', 'context', '');
-
+global $CFG;
         if (\core_tag_tag::is_enabled("$CFG->tag_component", 'question')) {
             $tags = \core_tag_tag::get_tags_by_area_in_contexts('core_question', 'question', $customdata['contexts']);
             $tagstrings = [];
@@ -85,6 +85,7 @@ class tags extends \moodleform {
                 // If the question is being edited in a course or activity context
                 // and the question isn't a course or activity level question then
                 // allow course tags to be added to the course.
+global $CFG;
                 $coursetagheader = get_string('questionformtagheader', "$CFG->tag_component",
                     $editingcoursecontext->get_context_name(true));
                 $mform->addElement('autocomplete', 'coursetags',  $coursetagheader, $tagstrings, $options);

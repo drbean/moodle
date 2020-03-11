@@ -2076,6 +2076,7 @@ function quiz_question_tostring($question, $showicon = false, $showquestiontext 
     if (is_array($showtags)) {
         $tags = $showtags;
     } else if ($showtags) {
+global $CFG;
         $tags = core_tag_tag::get_item_tags("$CFG->tag_component", 'question', $question->id);
     } else {
         $tags = [];
