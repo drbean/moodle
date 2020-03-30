@@ -286,6 +286,18 @@ ob_end_clean();
 
 echo html_writer::tag('p', get_string('participantscount', 'moodle', $participanttable->totalrows));
 
+$perpageurl = clone($baseurl);
+$perpageurl->remove_params('perpage');
+if ($perpage == SHOW_ALL_PAGE_SIZE && $participanttable->totalrows > DEFAULT_PAGE_SIZE) {
+    $perpageurl->param('perpage', DEFAULT_PAGE_SIZE);
+    echo $OUTPUT->container(html_writer::link($perpageurl, get_string('showperpage', '', DEFAULT_PAGE_SIZE)), array(), 'showall');
+
+} else if ($participanttable->get_page_size() < $participanttable->totalrows) {
+    $perpageurl->param('perpage', SHOW_ALL_PAGE_SIZE);
+    echo $OUTPUT->container(html_writer::link($perpageurl, get_string('showall', '', $participanttable->totalrows)),
+        array(), 'showall');
+}
+
 if ($bulkoperations) {
     echo '<form action="action_redir.php" method="post" id="participantsform">';
     echo '<div>';
