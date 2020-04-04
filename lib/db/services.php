@@ -2744,6 +2744,24 @@ $functions = array(
         'capabilities'  => '',
         'services'      => [MOODLE_OFFICIAL_MOBILE_SERVICE],
     ],
+    'core_table_dynamic_fetch' => [
+        'classname' => 'core_table\external\dynamic\fetch',
+        'methodname' => 'execute',
+        'description' => 'Fetch a dynamic table view raw html',
+        'type' => 'read',
+        'ajax' => true,
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE],
+    ],
+    'core_xapi_statement_post' => [
+        'classname'     => 'core_xapi\external\post_statement',
+        'methodname'    => 'execute',
+        'classpath'     => '',
+        'description'   => 'Post an xAPI statement.',
+        'type'          => 'write',
+        'ajax'          => 'true',
+        'capabilities'  => '',
+        'services'      => [MOODLE_OFFICIAL_MOBILE_SERVICE],
+    ],
 );
 
 $services = array(
