@@ -95,6 +95,12 @@ class flexible_table {
      */
     protected $sortorder;
 
+    /** @var string The manually set first name initial preference */
+    protected $ifirst;
+
+    /** @var string The manually set last name initial preference */
+    protected $ilast;
+
     var $use_pages      = false;
     var $use_initials   = false;
 
@@ -525,16 +531,7 @@ class flexible_table {
         }
 
         $this->set_sorting_preferences();
-
-        $ilast = optional_param($this->request[TABLE_VAR_ILAST], null, PARAM_RAW);
-        if (!is_null($ilast) && ($ilast ==='' || strpos(get_string('alphabet', 'langconfig'), $ilast) !== false)) {
-            $this->prefs['i_last'] = $ilast;
-        }
-
-        $ifirst = optional_param($this->request[TABLE_VAR_IFIRST], null, PARAM_RAW);
-        if (!is_null($ifirst) && ($ifirst === '' || strpos(get_string('alphabet', 'langconfig'), $ifirst) !== false)) {
-            $this->prefs['i_first'] = $ifirst;
-        }
+        $this->set_initials_preferences();
 
         // Save user preferences if they have changed.
         if ($this->prefs != $oldprefs) {
@@ -552,7 +549,10 @@ class flexible_table {
             $this->baseurl = $PAGE->url;
         }
 
-        $this->currpage = optional_param($this->request[TABLE_VAR_PAGE], 0, PARAM_INT);
+        if ($this->currpage == null) {
+            $this->currpage = optional_param($this->request[TABLE_VAR_PAGE], 0, PARAM_INT);
+        }
+
         $this->setup = true;
 
         // Always introduce the "flexible" class for the table if not specified
@@ -1002,12 +1002,18 @@ class flexible_table {
     function print_nothing_to_display() {
         global $OUTPUT;
 
+        // Render the dynamic table header.
+        echo $this->get_dynamic_table_html_start();
+
         // Render button to allow user to reset table preferences.
         echo $this->render_reset_button();
 
         $this->print_initials_bar();
 
         echo $OUTPUT->heading(get_string('nothingtodisplay'));
+
+        // Render the dynamic table footer.
+        echo $this->get_dynamic_table_html_end();
     }
 
     /**
@@ -1172,12 +1178,8 @@ class flexible_table {
                 echo $OUTPUT->render($pagingbar);
             }
 
-            // Dynamic Table content.
-            if (is_a($this, \core_table\dynamic::class)) {
-                echo html_writer::end_tag('div');
-
-                $PAGE->requires->js_call_amd('core_table/dynamic', 'init');
-            }
+            // Render the dynamic table footer.
+            echo $this->get_dynamic_table_html_end();
         }
     }
 
@@ -1354,6 +1356,31 @@ class flexible_table {
     }
 
     /**
+     * Fill in the preferences for the initials bar.
+     */
+    protected function set_initials_preferences(): void {
+        $ifirst = $this->ifirst;
+        $ilast = $this->ilast;
+
+        if ($ifirst === null) {
+            $ifirst = optional_param($this->request[TABLE_VAR_IFIRST], null, PARAM_RAW);
+        }
+
+        if ($ilast === null) {
+            $ilast = optional_param($this->request[TABLE_VAR_ILAST], null, PARAM_RAW);
+        }
+
+        if (!is_null($ifirst) && ($ifirst === '' || strpos(get_string('alphabet', 'langconfig'), $ifirst) !== false)) {
+            $this->prefs['i_first'] = $ifirst;
+        }
+
+        if (!is_null($ilast) && ($ilast === '' || strpos(get_string('alphabet', 'langconfig'), $ilast) !== false)) {
+            $this->prefs['i_last'] = $ilast;
+        }
+
+    }
+
+    /**
      * Set the preferred table sorting attributes.
      *
      * @param string $sortby The field to sort by.
@@ -1362,6 +1389,33 @@ class flexible_table {
     public function set_sorting(string $sortby, int $sortorder): void {
         $this->sortby = $sortby;
         $this->sortorder = $sortorder;
+    }
+
+    /**
+     * Set the preferred first name initial in an initials bar.
+     *
+     * @param string $initial The character to set
+     */
+    public function set_first_initial(string $initial): void {
+        $this->ifirst = $initial;
+    }
+
+    /**
+     * Set the preferred last name initial in an initials bar.
+     *
+     * @param string $initial The character to set
+     */
+    public function set_last_initial(string $initial): void {
+        $this->ilast = $initial;
+    }
+
+    /**
+     * Set the page number.
+     *
+     * @param int $pagenumber The page number.
+     */
+    public function set_page_number(int $pagenumber): void {
+        $this->currpage = $pagenumber - 1;
     }
 
     /**
@@ -1446,22 +1500,56 @@ class flexible_table {
     }
 
     /**
-     * This function is not part of the public api.
+     * Get the dynamic table start wrapper.
+     * If this is not a dynamic table, then an empty string is returned making this safe to blindly call.
+     *
+     * @return string
      */
-    function start_html() {
-        global $OUTPUT;
-
+    protected function get_dynamic_table_html_start(): string {
         if (is_a($this, \core_table\dynamic::class)) {
             $sortdata = $this->get_sort_order();
-            echo html_writer::start_tag('div', [
+            return html_writer::start_tag('div', [
                 'data-region' => 'core_table/dynamic',
                 'data-table-handler' => get_class($this),
                 'data-table-uniqueid' => $this->uniqueid,
                 'data-table-filters' => json_encode($this->get_filterset()),
                 'data-table-sort-by' => $sortdata['sortby'],
                 'data-table-sort-order' => $sortdata['sortorder'],
+                'data-table-first-initial' => $this->prefs['i_first'],
+                'data-table-last-initial' => $this->prefs['i_last'],
+                'data-table-page-number' => $this->currpage + 1,
+                'data-table-page-size' => $this->pagesize,
             ]);
         }
+
+        return '';
+    }
+
+    /**
+     * Get the dynamic table end wrapper.
+     * If this is not a dynamic table, then an empty string is returned making this safe to blindly call.
+     *
+     * @return string
+     */
+    protected function get_dynamic_table_html_end(): string {
+        global $PAGE;
+
+        if (is_a($this, \core_table\dynamic::class)) {
+            $PAGE->requires->js_call_amd('core_table/dynamic', 'init');
+            return html_writer::end_tag('div');
+        }
+
+        return '';
+    }
+
+    /**
+     * This function is not part of the public api.
+     */
+    function start_html() {
+        global $OUTPUT;
+
+        // Render the dynamic table header.
+        echo $this->get_dynamic_table_html_start();
 
         // Render button to allow user to reset table preferences.
         echo $this->render_reset_button();
@@ -1594,7 +1682,6 @@ class table_sql extends flexible_table {
     function __construct($uniqueid) {
         parent::__construct($uniqueid);
         // some sensible defaults
-        $this->set_attribute('cellspacing', '0');
         $this->set_attribute('class', 'generaltable generalbox');
     }
 
@@ -1737,6 +1824,7 @@ class table_sql extends flexible_table {
             $this->define_columns(array_keys((array)$onerow));
             $this->define_headers(array_keys((array)$onerow));
         }
+        $this->pagesize = $pagesize;
         $this->setup();
         $this->query_db($pagesize, $useinitialsbar);
         $this->build_table();
