@@ -748,6 +748,7 @@ $functions = array(
         'type' => 'read',
         'loginrequired' => false,
         'ajax' => true,
+        'readonlysession' => false, // Fetching removes from stack.
     ),
     'core_session_touch' => array(
         'classname' => 'core\session\external',
@@ -1374,6 +1375,7 @@ $functions = array(
         'type' => 'read',
         'ajax' => true,
         'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE),
+        'readonlysession' => true, // We don't modify the session.
     ),
     'core_message_mark_all_notifications_as_read' => array(
         'classname' => 'core_message_external',
@@ -2761,6 +2763,15 @@ $functions = array(
         'ajax'          => 'true',
         'capabilities'  => '',
         'services'      => [MOODLE_OFFICIAL_MOBILE_SERVICE],
+    ],
+    'core_contentbank_delete_content' => [
+        'classname'     => 'core_contentbank\external\delete_content',
+        'methodname'    => 'execute',
+        'classpath'     => '',
+        'description'   => 'Delete a content from the content bank.',
+        'type'          => 'write',
+        'ajax'          => 'true',
+        'capabilities'  => 'moodle/contentbank:deleteanycontent',
     ],
 );
 
