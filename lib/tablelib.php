@@ -46,6 +46,7 @@ define('TABLE_P_TOP',    1);
 define('TABLE_P_BOTTOM', 2);
 /**#@-*/
 
+use core_table\local\filter\filterset;
 
 /**
  * @package   moodlecore
@@ -153,6 +154,15 @@ class flexible_table {
 
     /** @var $filename */
     protected $filename;
+
+    /** @var array $hiddencolumns List of hidden columns. */
+    protected $hiddencolumns;
+
+    /**
+     * @var filterset The currently applied filerset
+     * This is required for dynamic tables, but can be used by other tables too if desired.
+     */
+    protected $filterset = null;
 
     /**
      * Constructor
@@ -511,25 +521,7 @@ class flexible_table {
             $oldprefs = $this->prefs;
         }
 
-        if (($showcol = optional_param($this->request[TABLE_VAR_SHOW], '', PARAM_ALPHANUMEXT)) &&
-                isset($this->columns[$showcol])) {
-            $this->prefs['collapse'][$showcol] = false;
-
-        } else if (($hidecol = optional_param($this->request[TABLE_VAR_HIDE], '', PARAM_ALPHANUMEXT)) &&
-                isset($this->columns[$hidecol])) {
-            $this->prefs['collapse'][$hidecol] = true;
-            if (array_key_exists($hidecol, $this->prefs['sortby'])) {
-                unset($this->prefs['sortby'][$hidecol]);
-            }
-        }
-
-        // Now, update the column attributes for collapsed columns
-        foreach (array_keys($this->columns) as $column) {
-            if (!empty($this->prefs['collapse'][$column])) {
-                $this->column_style[$column]['width'] = '10px';
-            }
-        }
-
+        $this->set_hide_show_preferences();
         $this->set_sorting_preferences();
         $this->set_initials_preferences();
 
@@ -846,9 +838,9 @@ class flexible_table {
      * @return string contents of cell in column 'fullname', for this row.
      */
     function col_fullname($row) {
-        global $PAGE, $COURSE;
+        global $COURSE;
 
-        $name = fullname($row, has_capability('moodle/site:viewfullnames', $PAGE->context));
+        $name = fullname($row, has_capability('moodle/site:viewfullnames', $this->get_context()));
         if ($this->download) {
             return $name;
         }
@@ -1205,14 +1197,18 @@ class flexible_table {
         if (!empty($this->prefs['collapse'][$column])) {
             $linkattributes = array('title' => get_string('show') . ' ' . strip_tags($this->headers[$index]),
                                     'aria-expanded' => 'false',
-                                    'aria-controls' => $ariacontrols);
+                                    'aria-controls' => $ariacontrols,
+                                    'data-action' => 'show',
+                                    'data-column' => $column);
             return html_writer::link($this->baseurl->out(false, array($this->request[TABLE_VAR_SHOW] => $column)),
                     $OUTPUT->pix_icon('t/switch_plus', get_string('show')), $linkattributes);
 
         } else if ($this->headers[$index] !== NULL) {
             $linkattributes = array('title' => get_string('hide') . ' ' . strip_tags($this->headers[$index]),
                                     'aria-expanded' => 'true',
-                                    'aria-controls' => $ariacontrols);
+                                    'aria-controls' => $ariacontrols,
+                                    'data-action' => 'hide',
+                                    'data-column' => $column);
             return html_writer::link($this->baseurl->out(false, array($this->request[TABLE_VAR_HIDE] => $column)),
                     $OUTPUT->pix_icon('t/switch_minus', get_string('hide')), $linkattributes);
         }
@@ -1222,7 +1218,7 @@ class flexible_table {
      * This function is not part of the public api.
      */
     function print_headers() {
-        global $CFG, $OUTPUT, $PAGE;
+        global $CFG, $OUTPUT;
 
         echo html_writer::start_tag('thead');
         echo html_writer::start_tag('tr');
@@ -1244,7 +1240,7 @@ class flexible_table {
 
                 case 'fullname':
                     // Check the full name display for sortable fields.
-                    if (has_capability('moodle/site:viewfullnames', $PAGE->context)) {
+                    if (has_capability('moodle/site:viewfullnames', $this->get_context())) {
                         $nameformat = $CFG->alternativefullnameformat;
                     } else {
                         $nameformat = $CFG->fullnamedisplay;
@@ -1378,6 +1374,43 @@ class flexible_table {
             $this->prefs['i_last'] = $ilast;
         }
 
+    }
+
+    /**
+     * Set hide and show preferences.
+     */
+    protected function set_hide_show_preferences(): void {
+
+        if ($this->hiddencolumns !== null) {
+            $this->prefs['collapse'] = array_fill_keys(array_filter($this->hiddencolumns, function($column) {
+                return array_key_exists($column, $this->columns);
+            }), true);
+        } else {
+            if ($column = optional_param($this->request[TABLE_VAR_HIDE], '', PARAM_ALPHANUMEXT)) {
+                if (isset($this->columns[$column])) {
+                    $this->prefs['collapse'][$column] = true;
+                }
+            }
+        }
+
+        if ($column = optional_param($this->request[TABLE_VAR_SHOW], '', PARAM_ALPHANUMEXT)) {
+            unset($this->prefs['collapse'][$column]);
+        }
+
+        foreach (array_keys($this->prefs['collapse']) as $column) {
+            if (array_key_exists($column, $this->prefs['sortby'])) {
+                unset($this->prefs['sortby'][$column]);
+            }
+        }
+    }
+
+    /**
+     * Set the list of hidden columns.
+     *
+     * @param array $columns The list of hidden columns.
+     */
+    public function set_hidden_columns(array $columns): void {
+        $this->hiddencolumns = $columns;
     }
 
     /**
@@ -1540,6 +1573,7 @@ class flexible_table {
                 'data-table-last-initial' => $this->prefs['i_last'],
                 'data-table-page-number' => $this->currpage + 1,
                 'data-table-page-size' => $this->pagesize,
+                'data-table-hidden-columns' => json_encode(array_keys($this->prefs['collapse'])),
             ]);
         }
 
@@ -1665,6 +1699,55 @@ class flexible_table {
         }
 
         return false;
+    }
+
+    /**
+     * Get the context for the table.
+     *
+     * Note: This function _must_ be overridden by dynamic tables to ensure that the context is correctly determined
+     * from the filterset parameters.
+     *
+     * @return context
+     */
+    public function get_context(): context {
+        global $PAGE;
+
+        if (is_a($this, \core_table\dynamic::class)) {
+            throw new coding_exception('The get_context function must be defined for a dynamic table');
+        }
+
+        return $PAGE->context;
+    }
+
+    /**
+     * Set the filterset in the table class.
+     *
+     * The use of filtersets is a requirement for dynamic tables, but can be used by other tables too if desired.
+     *
+     * @param filterset $filterset The filterset object to get filters and table parameters from
+     */
+    public function set_filterset(filterset $filterset): void {
+        $this->filterset = $filterset;
+
+        $this->guess_base_url();
+    }
+
+    /**
+     * Get the currently defined filterset.
+     *
+     * @return filterset
+     */
+    public function get_filterset(): ?filterset {
+        return $this->filterset;
+    }
+
+    /**
+     * Attempt to guess the base URL.
+     */
+    public function guess_base_url(): void {
+        if (is_a($this, \core_table\dynamic::class)) {
+            throw new coding_exception('The guess_base_url function must be defined for a dynamic table');
+        }
     }
 }
 

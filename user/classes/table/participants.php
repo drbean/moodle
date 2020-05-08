@@ -239,7 +239,10 @@ class participants extends \table_sql implements dynamic_table {
         parent::out($pagesize, $useinitialsbar, $downloadhelpbutton);
 
         if (has_capability('moodle/course:enrolreview', $this->context)) {
-            $params = ['contextid' => $this->context->id, 'courseid' => $this->course->id];
+            $params = [
+                'contextid' => $this->context->id,
+                'uniqueid' => $this->uniqueid,
+            ];
             $PAGE->requires->js_call_amd('core_user/status_field', 'init', [$params]);
         }
     }
@@ -492,9 +495,6 @@ class participants extends \table_sql implements dynamic_table {
      * @param filterset $filterset The filterset object to get the filters from.
      */
     public function set_filterset(filterset $filterset): void {
-        // Store the filterset for later.
-        $this->filterset = $filterset;
-
         // Get the context.
         $this->courseid = $filterset->get_filter('courseid')->current();
         $this->course = get_course($this->courseid);
@@ -531,29 +531,14 @@ class participants extends \table_sql implements dynamic_table {
             $this->search = $filterset->get_filter('keywords')->get_filter_values();
         }
 
-        $this->define_baseurl($this->get_base_url());
+        parent::set_filterset($filterset);
     }
 
     /**
-     * Get an unique id for the participants table.
-     * @param string $argument An argument for the unique id, can be course id.
-     * @return string
+     * Guess the base url for the participants table.
      */
-    public static function get_unique_id_from_argument(string $argument): string {
-        return "user-index-participants-{$argument}";
-    }
-
-    /**
-     * Get the base url for the participants table.
-     *
-     * @return moodle_url
-     */
-    public function get_base_url(): moodle_url {
-        if ($this->baseurl === null) {
-            return new moodle_url('/user/index.php', ['id' => $this->courseid]);
-        }
-
-        return $this->baseurl;
+    public function guess_base_url(): void {
+        $this->baseurl = new moodle_url('/user/index.php', ['id' => $this->courseid]);
     }
 
     /**
@@ -563,16 +548,7 @@ class participants extends \table_sql implements dynamic_table {
      *
      * @return context
      */
-    public function get_context(): ?context {
+    public function get_context(): context {
         return $this->context;
-    }
-
-    /**
-     * Get the currently defined filterset.
-     *
-     * @return filterset
-     */
-    public function get_filterset(): ?filterset {
-        return $this->filterset;
     }
 }
