@@ -50,10 +50,27 @@ class autoloader {
     }
 
     /**
-     * Returns the default H5P library handler.
+     * Returns the default H5P library handler class.
+     *
      * @return string|null H5P library handler class
      */
     public static function get_default_handler(): ?string {
+        $default = null;
+        $handlers = self::get_all_handlers();
+        if (!empty($handlers)) {
+            // The default handler will be the first value in the list.
+            $default = array_shift($handlers);
+        }
+
+        return $default;
+    }
+
+    /**
+     * Returns the default H5P library handler.
+     *
+     * @return string|null H5P library handler
+     */
+    public static function get_default_handler_library(): ?string {
         $default = null;
         $handlers = self::get_all_handlers();
         if (!empty($handlers)) {
@@ -81,7 +98,7 @@ class autoloader {
             }
         }
 
-        // If no handler has been defined or it doesn't exist, return the default one.
+        // If no handler has been defined, return the default one.
         $defaulthandler = self::get_default_handler();
         if (empty($defaulthandler)) {
             // If there is no default handler, throw an exception.
@@ -130,6 +147,17 @@ class autoloader {
      */
     public static function get_h5p_editor_library_base(?string $filepath = null): string {
         return component_class_callback(self::get_handler_classname(), 'get_h5p_editor_library_base', [$filepath]);
+    }
+
+    /**
+     * Returns a localized string, if it exists in the h5plib plugin and the value it's different from the English version.
+     *
+     * @param string $identifier The key identifier for the localized string
+     * @param string $language Language to get the localized string.
+     * @return string|null The localized string or null if it doesn't exist in this H5P library plugin.
+     */
+    public static function get_h5p_string(string $identifier, string $language): ?string {
+        return component_class_callback(self::get_handler_classname(), 'get_h5p_string', [$identifier, $language]);
     }
 
     /**

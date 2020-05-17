@@ -23,10 +23,11 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+namespace core_contentbank;
 
-global $CFG;
-require_once($CFG->dirroot . '/contentbank/tests/fixtures/testable_contenttype.php');
+use advanced_testcase;
+use context_course;
+use context_system;
 
 /**
  * Test for extensions manager.
@@ -38,6 +39,16 @@ require_once($CFG->dirroot . '/contentbank/tests/fixtures/testable_contenttype.p
  * @coversDefaultClass \core_contentbank\contentbank
  */
 class core_contentbank_testcase extends advanced_testcase {
+
+    /**
+     * Setup to ensure that fixtures are loaded.
+     */
+    public static function setupBeforeClass(): void {
+        global $CFG;
+
+        require_once($CFG->dirroot . '/contentbank/tests/fixtures/testable_contenttype.php');
+    }
+
     /**
      * Data provider for test_get_extension_supporter.
      *
@@ -62,7 +73,7 @@ class core_contentbank_testcase extends advanced_testcase {
     public function test_get_extension(string $filename, string $expected) {
         $this->resetAfterTest();
 
-        $cb = new \core_contentbank\contentbank();
+        $cb = new contentbank();
 
         $extension = $cb->get_extension($filename);
         $this->assertEquals($expected, $extension);
@@ -93,7 +104,7 @@ class core_contentbank_testcase extends advanced_testcase {
     public function test_get_extension_supporter_for_admins(array $supporters, string $extension, string $expected) {
         $this->resetAfterTest();
 
-        $cb = new \core_contentbank\contentbank();
+        $cb = new contentbank();
         $expectedsupporters = [$extension => $expected];
 
         $systemcontext = context_system::instance();
@@ -117,7 +128,7 @@ class core_contentbank_testcase extends advanced_testcase {
     public function test_get_extension_supporter_for_users(array $supporters, string $extension, string $expected) {
         $this->resetAfterTest();
 
-        $cb = new \core_contentbank\contentbank();
+        $cb = new contentbank();
         $systemcontext = context_system::instance();
 
         // Set a user with no permissions.
@@ -142,7 +153,7 @@ class core_contentbank_testcase extends advanced_testcase {
     public function test_get_extension_supporter_for_teachers(array $supporters, string $extension, string $expected) {
         $this->resetAfterTest();
 
-        $cb = new \core_contentbank\contentbank();
+        $cb = new contentbank();
         $expectedsupporters = [$extension => $expected];
 
         $course = $this->getDataGenerator()->create_course();
@@ -168,7 +179,7 @@ class core_contentbank_testcase extends advanced_testcase {
     public function test_get_extension_supporter(array $supporters, string $extension, string $expected) {
         $this->resetAfterTest();
 
-        $cb = new \core_contentbank\contentbank();
+        $cb = new contentbank();
         $systemcontext = context_system::instance();
         $this->setAdminUser();
 
@@ -181,11 +192,12 @@ class core_contentbank_testcase extends advanced_testcase {
      *
      * @dataProvider search_contents_provider
      * @param  string $search String to search.
-     * @param  int $contextid Contextid to search.
+     * @param  string $where Context where to search.
      * @param  int $expectedresult Expected result.
      * @param  array $contexts List of contexts where to create content.
      */
-    public function test_search_contents(?string $search, int $contextid, int $expectedresult, array $contexts = []): void {
+    public function test_search_contents(?string $search, string $where, int $expectedresult, array $contexts = [],
+            array $contenttypes = null): void {
         global $DB;
 
         $this->resetAfterTest();
@@ -195,16 +207,31 @@ class core_contentbank_testcase extends advanced_testcase {
         $manager = $this->getDataGenerator()->create_user();
         $this->getDataGenerator()->role_assign($managerroleid, $manager->id);
 
+        // Create a category and a course.
+        $coursecat = $this->getDataGenerator()->create_category();
+        $course = $this->getDataGenerator()->create_course();
+        $existingcontexts = [];
+        $existingcontexts['system'] = \context_system::instance();
+        $existingcontexts['category'] = \context_coursecat::instance($coursecat->id);
+        $existingcontexts['course'] = \context_course::instance($course->id);
+
+        if (empty($where)) {
+            $contextid = 0;
+        } else {
+            $contextid = $existingcontexts[$where]->id;
+        }
+
         // Add some content to the content bank.
         $generator = $this->getDataGenerator()->get_plugin_generator('core_contentbank');
         foreach ($contexts as $context) {
+            $contextinstance = $existingcontexts[$context];
             $records = $generator->generate_contentbank_data('contenttype_h5p', 3,
-                $manager->id, $context, false);
+                $manager->id, $contextinstance, false);
         }
 
         // Search for some content.
-        $cb = new \core_contentbank\contentbank();
-        $contents = $cb->search_contents($search, $contextid);
+        $cb = new contentbank();
+        $contents = $cb->search_contents($search, $contextid, $contenttypes);
 
         $this->assertCount($expectedresult, $contents);
         if (!empty($contents) && !empty($search)) {
@@ -220,98 +247,133 @@ class core_contentbank_testcase extends advanced_testcase {
      * @return array
      */
     public function search_contents_provider(): array {
-        // Create a category and a course.
-        $systemcontext = \context_system::instance();
-        $coursecat = $this->getDataGenerator()->create_category();
-        $course = $this->getDataGenerator()->create_course();
-        $coursecatcontext = \context_coursecat::instance($coursecat->id);
-        $coursecontext = \context_course::instance($course->id);
 
         return [
             'Search all content in all contexts' => [
                 null,
-                0,
+                '',
                 9,
-                [$systemcontext, $coursecatcontext, $coursecontext]
+                ['system', 'category', 'course']
             ],
             'Search in all contexts for existing string in all contents' => [
                 'content',
-                0,
+                '',
                 9,
-                [$systemcontext, $coursecatcontext, $coursecontext]
+                ['system', 'category', 'course']
             ],
             'Search in all contexts for unexisting string in all contents' => [
                 'chocolate',
+                '',
                 0,
-                0,
-                [$systemcontext, $coursecatcontext, $coursecontext]
+                ['system', 'category', 'course']
             ],
             'Search in all contexts for existing string in some contents' => [
                 '1',
-                0,
+                '',
                 3,
-                [$systemcontext, $coursecatcontext, $coursecontext]
+                ['system', 'category', 'course']
             ],
             'Search in all contexts for existing string in some contents (create only 1 context)' => [
                 '1',
-                0,
+                '',
                 1,
-                [$systemcontext]
+                ['system']
             ],
             'Search in system context for existing string in all contents' => [
                 'content',
-                $systemcontext->id,
+                'system',
                 3,
-                [$systemcontext, $coursecatcontext, $coursecontext]
+                ['system', 'category', 'course']
             ],
             'Search in category context for unexisting string in all contents' => [
                 'chocolate',
-                $coursecatcontext->id,
+                'category',
                 0,
-                [$systemcontext, $coursecatcontext, $coursecontext]
+                ['system', 'category', 'course']
             ],
             'Search in course context for existing string in some contents' => [
                 '1',
-                $coursecontext->id,
+                'course',
                 1,
-                [$systemcontext, $coursecatcontext, $coursecontext]
+                ['system', 'category', 'course']
             ],
             'Search in system context' => [
                 null,
-                $systemcontext->id,
+                'system',
                 3,
-                [$systemcontext, $coursecatcontext, $coursecontext]
+                ['system', 'category', 'course']
             ],
             'Search in course context with existing content' => [
                 null,
-                $coursecontext->id,
+                'course',
                 3,
-                [$systemcontext, $coursecatcontext, $coursecontext]
+                ['system', 'category', 'course']
             ],
             'Search in course context without existing content' => [
                 null,
-                $coursecontext->id,
+                'course',
                 0,
-                [$systemcontext, $coursecatcontext]
+                ['system', 'category']
             ],
             'Search in an empty contentbank' => [
                 null,
-                0,
+                '',
                 0,
                 []
             ],
             'Search in a context in an empty contentbank' => [
                 null,
-                $systemcontext->id,
+                'system',
                 0,
                 []
             ],
             'Search for a string in an empty contentbank' => [
                 'content',
-                0,
+                '',
                 0,
                 []
             ],
+            'Search with unexisting content-type' => [
+                null,
+                'course',
+                0,
+                ['system', 'category', 'course'],
+                ['contenttype_unexisting'],
+            ],
         ];
+    }
+
+    /**
+     * Test create_content_from_file function.
+     *
+     * @covers ::create_content_from_file
+     */
+    public function test_create_content_from_file() {
+        global $USER;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $systemcontext = \context_system::instance();
+        $name = 'dummy_h5p.h5p';
+
+        // Create a dummy H5P file.
+        $dummyh5p = array(
+            'contextid' => $systemcontext->id,
+            'component' => 'contentbank',
+            'filearea' => 'public',
+            'itemid' => 1,
+            'filepath' => '/',
+            'filename' => $name,
+            'userid' => $USER->id
+        );
+        $fs = get_file_storage();
+        $dummyh5pfile = $fs->create_file_from_string($dummyh5p, 'Dummy H5Pcontent');
+
+        $cb = new contentbank();
+        $content = $cb->create_content_from_file($systemcontext, $USER->id, $dummyh5pfile);
+
+        $this->assertEquals('contenttype_h5p', $content->get_content_type());
+        $this->assertInstanceOf('\\contenttype_h5p\\content', $content);
+        $this->assertEquals($name, $content->get_name());
     }
 }
