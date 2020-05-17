@@ -35,8 +35,6 @@ use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
 use stdClass;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Privacy API implementation for the H5P activity plugin.
  *
@@ -177,6 +175,7 @@ class provider implements
                        har.additionals,
                        har.rawscore,
                        har.maxscore,
+                       har.duration,
                        har.timecreated,
                        ctx.id as contextid
                   FROM {h5pactivity_attempts_results} har
@@ -200,6 +199,7 @@ class provider implements
                     'additionals' => $track->additionals,
                     'rawscore' => $track->rawscore,
                     'maxscore' => $track->maxscore,
+                    'duration' => $track->duration,
                     'timecreated' => transform::datetime($track->timecreated),
                 ];
         }

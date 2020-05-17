@@ -24,6 +24,8 @@
 
 namespace core_contentbank;
 
+use stored_file;
+
 /**
  * Content bank class
  *
@@ -40,7 +42,7 @@ class contentbank {
      *
      * @return string[] Array of contentbank contenttypes.
      */
-    private function get_enabled_content_types(): array {
+    public function get_enabled_content_types(): array {
         $enabledtypes = \core\plugininfo\contenttype::get_enabled_plugins();
         $types = [];
         foreach ($enabledtypes as $name) {
@@ -157,20 +159,28 @@ class contentbank {
      * Find the contents with %$search% in the contextid defined.
      * If contextid and search are empty, all contents are returned.
      * In all the cases, only the contents for the enabled contentbank-type plugins are returned.
+     * No content-type permissions are validated here. It is the caller responsability to check that the user can access to them.
+     * The only validation done here is, for each content, a call to the method $content->is_view_allowed().
      *
      * @param  string|null $search Optional string to search (for now it will search only into the name).
      * @param  int $contextid Optional contextid to search.
+     * @param  array $contenttypenames Optional array with the list of content-type names to search.
      * @return array The contents for the enabled contentbank-type plugins having $search as name and placed in $contextid.
      */
-    public function search_contents(?string $search = null, ?int $contextid = 0): array {
+    public function search_contents(?string $search = null, ?int $contextid = 0, ?array $contenttypenames = null): array {
         global $DB;
 
         $contents = [];
 
         // Get only contents for enabled content-type plugins.
-        $contenttypes = array_map(function($contenttypename) {
-            return "contenttype_$contenttypename";
-        }, $this->get_enabled_content_types());
+        $contenttypes = [];
+        $enabledcontenttypes = $this->get_enabled_content_types();
+        foreach ($enabledcontenttypes as $contenttypename) {
+            if (empty($contenttypenames) || in_array($contenttypename, $contenttypenames)) {
+                $contenttypes[] = "contenttype_$contenttypename";
+            }
+        }
+
         if (empty($contenttypes)) {
             // Early return if there are no content-type plugins enabled.
             return $contents;
@@ -191,7 +201,7 @@ class contentbank {
             $params['name'] = '%' . $DB->sql_like_escape($search) . '%';
         }
 
-        $records = $DB->get_records_select('contentbank_content', $sql, $params);
+        $records = $DB->get_records_select('contentbank_content', $sql, $params, 'name ASC');
         foreach ($records as $record) {
             $contentclass = "\\$record->contenttype\\content";
             $content = new $contentclass($record);
@@ -201,5 +211,33 @@ class contentbank {
         }
 
         return $contents;
+    }
+
+    /**
+     * Create content from a file information.
+     *
+     * @param \context $context Context where to upload the file and content.
+     * @param int $userid Id of the user uploading the file.
+     * @param stored_file $file The file to get information from
+     * @return content
+     */
+    public function create_content_from_file(\context $context, int $userid, stored_file $file): ?content {
+        global $USER;
+        if (empty($userid)) {
+            $userid = $USER->id;
+        }
+        // Get the contenttype to manage given file's extension.
+        $filename = $file->get_filename();
+        $extension = $this->get_extension($filename);
+        $plugin = $this->get_extension_supporter($extension, $context);
+        $classname = '\\contenttype_'.$plugin.'\\contenttype';
+        $record = new \stdClass();
+        $record->name = $filename;
+        $record->usercreated = $userid;
+        $contentype = new $classname($context);
+        $content = $contentype->create_content($record);
+        $event = \core\event\contentbank_content_uploaded::create_from_record($content->get_content());
+        $event->trigger();
+        return $content;
     }
 }
