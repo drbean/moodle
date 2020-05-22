@@ -289,6 +289,7 @@ $string['cookiesenabledonlysession_help'] = 'This site uses one session cookie, 
 $string['cookiesnotenabled'] = 'Unfortunately, cookies are currently not enabled in your browser';
 $string['copy'] = 'copy';
 $string['copyasnoun'] = 'copy';
+$string['copycourse'] = 'Copy course';
 $string['copyingcoursefiles'] = 'Copying course files';
 $string['copyingsitefiles'] = 'Copying site files used in course';
 $string['copyinguserfiles'] = 'Copying user files';
@@ -1523,7 +1524,6 @@ $string['parentcategory'] = 'Parent category';
 $string['parentcoursenotfound'] = 'Parent course not found!';
 $string['parentfolder'] = 'Parent folder';
 $string['participants'] = 'Participants';
-$string['participantscount'] = 'Number of participants: {$a}';
 $string['participantslist'] = 'Participants list';
 $string['participationratio'] = 'Participation ratio';
 $string['participationreport'] = 'Participation report';
@@ -2290,3 +2290,6 @@ $string['messagedselectedcountusersfailed'] = 'A problem occurred and {$a} messa
 $string['messagedselecteduserfailed'] = 'The message was not sent to user {$a->fullname}.';
 $string['previewhtml'] = 'HTML format preview';
 $string['sitemessage'] = 'Message users';
+
+// Deprecated since Moodle 3.9.
+$string['participantscount'] = 'Number of participants: {$a}';

@@ -23,14 +23,12 @@
  */
 
 use mod_h5pactivity\local\manager;
-use mod_h5pactivity\event\course_module_viewed;
 use core_h5p\factory;
 use core_h5p\player;
 use core_h5p\helper;
 
 require(__DIR__.'/../../config.php');
 require_once(__DIR__.'/lib.php');
-require_once($CFG->libdir.'/completionlib.php');
 
 $id = required_param('id', PARAM_INT);
 
@@ -44,17 +42,8 @@ $moduleinstance = $manager->get_instance();
 
 $context = $manager->get_context();
 
-$event = course_module_viewed::create([
-    'objectid' => $moduleinstance->id,
-    'context' => $context
-]);
-$event->add_record_snapshot('course', $course);
-$event->add_record_snapshot('h5pactivity', $moduleinstance);
-$event->trigger();
-
-// Completion.
-$completion = new completion_info($course);
-$completion->set_module_viewed($cm);
+// Trigger module viewed event and completion.
+$manager->set_module_viewed($course);
 
 // Convert display options to a valid object.
 $factory = new factory();
@@ -80,6 +69,19 @@ $PAGE->set_context($context);
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($moduleinstance->name));
+
+// Attempts review.
+if ($manager->can_view_all_attempts()) {
+    $reviewurl = new moodle_url('report.php', ['a' => $cm->instance]);
+    $reviewmessage = get_string('review_all_attempts', 'mod_h5pactivity', $manager->count_attempts());
+} else if ($manager->can_view_own_attempts() && $manager->count_attempts($USER->id)) {
+    $reviewurl = new moodle_url('report.php', ['a' => $cm->instance, 'userid' => $USER->id]);
+    $reviewmessage = get_string('review_my_attempts', 'mod_h5pactivity');
+}
+if (isset($reviewurl)) {
+    $widget = new mod_h5pactivity\output\reportlink($reviewurl, $reviewmessage);
+    echo $OUTPUT->render($widget);
+}
 
 if ($manager->is_tracking_enabled()) {
     $trackcomponent = 'mod_h5pactivity';
