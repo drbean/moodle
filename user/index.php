@@ -223,6 +223,15 @@ if ($groupid > 0 && ($course->groupmode != SEPARATEGROUPS || $canaccessallgroups
     echo $grouprenderer->group_details($groupdetailpage);
 }
 
+// Should use this variable so that we don't break stuff every time a variable is added or changed.
+$baseurl = new moodle_url('/user/index.php', array(
+        'contextid' => $context->id,
+        'id' => $course->id,
+        'perpage' => $perpage));
+
+$participanttable = new \core_user\table\participants("user-index-participants-{$course->id}");
+$participanttable->define_baseurl($baseurl);
+
 // Manage enrolments.
 $manager = new course_enrolment_manager($PAGE, $course);
 $enrolbuttons = $manager->get_manual_enrol_buttons();
@@ -231,13 +240,10 @@ $enrolbuttonsout = '';
 foreach ($enrolbuttons as $enrolbutton) {
     $enrolbuttonsout .= $enrolrenderer->render($enrolbutton);
 }
-echo html_writer::div($enrolbuttonsout, 'float-right');
-
-// Should use this variable so that we don't break stuff every time a variable is added or changed.
-$baseurl = new moodle_url('/user/index.php', array(
-        'contextid' => $context->id,
-        'id' => $course->id,
-        'perpage' => $perpage));
+echo html_writer::div($enrolbuttonsout, 'float-right', [
+    'data-region' => 'wrapper',
+    'data-table-uniqueid' => $participanttable->uniqueid,
+]);
 
 // Render the unified filter.
 $renderer = $PAGE->get_renderer('core_user');
@@ -274,12 +280,9 @@ if (count($keywordfilter)) {
     $filterset->add_filter($keywordfilter);
 }
 
-$participanttable = new \core_user\table\participants("user-index-participants-{$course->id}");
-$participanttable->set_filterset($filterset);
-$participanttable->define_baseurl($baseurl);
-
 // Do this so we can get the total number of rows.
 ob_start();
+$participanttable->set_filterset($filterset);
 $participanttable->out($perpage, true);
 $participanttablehtml = ob_get_contents();
 ob_end_clean();
@@ -418,7 +421,7 @@ if ($bulkoperations) {
         'data-action' => 'toggle',
         'data-togglegroup' => 'participants-table',
         'data-toggle' => 'action',
-        'disabled' => empty($selectall)
+        'disabled' => 'disabled'
     );
     $label = html_writer::tag('label', get_string("withselectedusers"),
             ['for' => 'formactionid', 'class' => 'col-form-label d-inline']);
