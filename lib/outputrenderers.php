@@ -835,6 +835,12 @@ class core_renderer extends renderer_base {
             }
         }
 
+        if (isloggedin() && !isguestuser()) {
+            $output .= html_writer::div(
+                $this->render_from_template('core/userfeedback_footer_link', ['url' => core_userfeedback::make_link()->out(false)])
+            );
+        }
+
         // This function is normally called from a layout.php file in {@link core_renderer::header()}
         // but some of the content won't be known until later, so we return a placeholder
         // for now. This will be replaced with the real content in {@link core_renderer::footer()}.
@@ -1168,7 +1174,7 @@ class core_renderer extends renderer_base {
         if ($this->page->pagetype == 'site-index') {
             // Special case for site home page - please do not remove
             return '<div class="sitelink">' .
-                   '<a title="Moodle" href="http://moodle.org/">' .
+                   '<a title="Moodle" class="d-inline-block aalink" href="http://moodle.org/">' .
                    '<img src="' . $this->image_url('moodlelogo_grayhat') . '" alt="'.get_string('moodlelogo').'" /></a></div>';
 
         } else if (!empty($CFG->target_release) && $CFG->target_release != $CFG->release) {
@@ -1415,7 +1421,8 @@ class core_renderer extends renderer_base {
         if (!empty($this->page->context->id)) {
             $this->page->requires->js_call_amd('core/notification', 'init', array(
                 $this->page->context->id,
-                \core\notification::fetch_as_array($this)
+                \core\notification::fetch_as_array($this),
+                isloggedin()
             ));
         }
         $footer = str_replace($this->unique_end_html_token, $this->page->requires->get_end_code(), $footer);
@@ -2572,7 +2579,7 @@ class core_renderer extends renderer_base {
             $url = new moodle_url('/user/view.php', array('id' => $user->id, 'course' => $courseid));
         }
 
-        $attributes = array('href'=>$url);
+        $attributes = array('href' => $url, 'class' => 'd-inline-block aabtn');
         if (!$userpicture->visibletoscreenreaders) {
             $attributes['tabindex'] = '-1';
             $attributes['aria-hidden'] = 'true';

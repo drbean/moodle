@@ -969,7 +969,7 @@ $capabilities = array(
 
     'moodle/course:viewhiddenactivities' => array(
 
-        'captype' => 'write',
+        'captype' => 'read',
         'contextlevel' => CONTEXT_MODULE,
         'archetypes' => array(
             'teacher' => CAP_ALLOW,
@@ -1558,7 +1558,7 @@ $capabilities = array(
 
     'moodle/course:viewhiddensections' => array(
 
-        'captype' => 'write',
+        'captype' => 'read',
         'contextlevel' => CONTEXT_COURSE,
         'archetypes' => array(
             'editingteacher' => CAP_ALLOW,
@@ -2536,6 +2536,18 @@ $capabilities = array(
 
     // Manage (rename, move, publish, share, etc.) content created by yourself.
     'moodle/contentbank:manageowncontent' => [
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes' => array(
+            'manager' => CAP_ALLOW,
+            'coursecreator' => CAP_ALLOW,
+            'editingteacher' => CAP_ALLOW,
+        )
+    ],
+
+    // Allow users to create/edit content within the content bank.
+    'moodle/contentbank:useeditor' => [
+        'riskbitmask' => RISK_SPAM,
         'captype' => 'write',
         'contextlevel' => CONTEXT_COURSE,
         'archetypes' => array(

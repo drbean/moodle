@@ -31,7 +31,6 @@ use external_multiple_structure;
 use external_single_structure;
 use external_value;
 use external_warnings;
-use moodle_url;
 
 /**
  * Core table external functions.
@@ -41,7 +40,7 @@ use moodle_url;
  * @copyright  2020 Simey Lameze <simey@moodle.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class fetch extends external_api {
+class get extends external_api {
 
     /**
      * Describes the parameters for fetching the table html.
@@ -99,13 +98,13 @@ class fetch extends external_api {
             ),
             'jointype' => new external_value(PARAM_INT, 'Type of join to join all filters together', VALUE_REQUIRED),
             'firstinitial' => new external_value(
-                PARAM_ALPHANUMEXT,
+                PARAM_RAW,
                 'The first initial to sort filter on',
                 VALUE_REQUIRED,
                 null
             ),
             'lastinitial' => new external_value(
-                PARAM_ALPHANUMEXT,
+                PARAM_RAW,
                 'The last initial to sort filter on',
                 VALUE_REQUIRED,
                 null
@@ -140,7 +139,7 @@ class fetch extends external_api {
     }
 
     /**
-     * External function to fetch a table view.
+     * External function to get the table view content.
      *
      * @param string $component The component.
      * @param string $handler Dynamic table class name.
@@ -217,6 +216,7 @@ class fetch extends external_api {
         }
 
         $filterset = new $filtersetclass();
+        $filterset->set_join_type($jointype);
         foreach ($filters as $rawfilter) {
             $filterset->add_filter_from_params(
                 $rawfilter['name'],
@@ -230,12 +230,13 @@ class fetch extends external_api {
         self::validate_context($instance->get_context());
 
         $instance->set_sortdata($sortdata);
+        $alphabet = get_string('alphabet', 'langconfig');
 
-        if ($firstinitial !== null) {
+        if ($firstinitial !== null && ($firstinitial === '' || strpos($alphabet, $firstinitial) !== false)) {
             $instance->set_first_initial($firstinitial);
         }
 
-        if ($lastinitial !== null) {
+        if ($lastinitial !== null && ($lastinitial === '' || strpos($alphabet, $lastinitial) !== false)) {
             $instance->set_last_initial($lastinitial);
         }
 

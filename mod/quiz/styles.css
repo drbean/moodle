@@ -617,10 +617,6 @@ table.quizreviewsummary td.cell {
 }
 
 /** Mod quiz edit **/
-#page-mod-quiz-edit .statusbar {
-    margin: 0.6em 0.4em;
-}
-
 #page-mod-quiz-edit .statusdisplay {
     background-color: #ffc;
     clear: both;
@@ -638,16 +634,6 @@ table.quizreviewsummary td.cell {
 #page-mod-quiz-edit .mod_quiz-edit-action-buttons {
     display: block;
     min-height: 2.85em;
-}
-
-@media (min-width: 576px) {
-    #page-mod-quiz-edit .maxgrade,
-    #page-mod-quiz-edit .totalpoints {
-        position: absolute;
-        right: 0;
-        margin: -2.85em 0 0;
-        padding: .2em;
-    }
 }
 
 @media (max-width: 576px) {
@@ -889,15 +875,13 @@ table.quizreviewsummary td.cell {
 }
 
 #page-mod-quiz-edit ul.slots li.section li.activity .activityinstance {
-    display: block;
+    display: flex;
+    flex: 1 1 auto;
     min-height: 1.7em;
-    position: absolute;
-    top: 0;
-    left: 5em;
-    width: 100%;
 }
 
 #page-mod-quiz-edit ul.slots li.section li.activity .mod-indent-outer {
+    display: flex;
     padding-left: 22px;
 }
 
@@ -914,7 +898,6 @@ table.quizreviewsummary td.cell {
     white-space: nowrap;
     text-overflow: ellipsis;
     overflow: hidden;
-    width: 70%;
     display: inline-block;
     height: 20px;
 }
@@ -927,6 +910,9 @@ table.quizreviewsummary td.cell {
 #page-mod-quiz-edit ul.slots li.activity div.activityinstance .questionname {
     font-weight: bold;
     color: #555;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 #page-mod-quiz-edit ul.slots li.activity div.activityinstance .questiontext {
@@ -941,6 +927,10 @@ table.quizreviewsummary td.cell {
 
 #page-mod-quiz-edit ul.slots li.activity div.activityinstance .mod_quiz_random_qbank_link {
     font-size: 0.8em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-left: 0.25rem;
 }
 
 #page-mod-quiz-edit ul.slots .activityinstance img.activityicon {
@@ -950,6 +940,7 @@ table.quizreviewsummary td.cell {
 }
 
 #page-mod-quiz-edit .section .activity .actions {
+    position: inherit;
     white-space: nowrap;
     background: #e6e6e6;
     padding: 0.1em 0;
@@ -1219,8 +1210,10 @@ table#categoryquestions {
     #page-mod-quiz-edit ul.slots li.section li.activity .activityinstance {
         top: -30px;
         left: 0;
-    }
-    #page-mod-quiz-edit ul.slots .activityinstance span.instancename {
+        padding-right: 0;
+        overflow: hidden;
+        align-items: center;
+        position: absolute;
         width: 100%;
     }
 }

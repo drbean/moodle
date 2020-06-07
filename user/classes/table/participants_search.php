@@ -95,14 +95,26 @@ class participants_search {
         global $DB;
 
         [
-            'select' => $select,
-            'from' => $from,
-            'where' => $where,
+            'subqueryalias' => $subqueryalias,
+            'outerselect' => $outerselect,
+            'innerselect' => $innerselect,
+            'outerjoins' => $outerjoins,
+            'innerjoins' => $innerjoins,
+            'outerwhere' => $outerwhere,
+            'innerwhere' => $innerwhere,
             'params' => $params,
-            'groupby' => $groupby,
         ] = $this->get_participants_sql($additionalwhere, $additionalparams);
 
-        return $DB->get_recordset_sql("{$select} {$from} {$where} {$groupby} {$sort}", $params, $limitfrom, $limitnum);
+        $sql = "{$outerselect}
+                          FROM ({$innerselect}
+                                          FROM {$innerjoins}
+                                 {$innerwhere}
+                               ) {$subqueryalias}
+                 {$outerjoins}
+                 {$outerwhere}
+                       {$sort}";
+
+        return $DB->get_recordset_sql($sql, $params, $limitfrom, $limitnum);
     }
 
     /**
@@ -116,12 +128,24 @@ class participants_search {
         global $DB;
 
         [
-            'from' => $from,
-            'where' => $where,
+            'subqueryalias' => $subqueryalias,
+            'innerselect' => $innerselect,
+            'outerjoins' => $outerjoins,
+            'innerjoins' => $innerjoins,
+            'outerwhere' => $outerwhere,
+            'innerwhere' => $innerwhere,
             'params' => $params,
         ] = $this->get_participants_sql($additionalwhere, $additionalparams);
 
-        return $DB->count_records_sql("SELECT COUNT(DISTINCT(u.id)) {$from} {$where}", $params);
+        $sql = "SELECT COUNT(u.id)
+                  FROM ({$innerselect}
+                                  FROM {$innerjoins}
+                         {$innerwhere}
+                       ) {$subqueryalias}
+         {$outerjoins}
+         {$outerwhere}";
+
+        return $DB->count_records_sql($sql, $params);
     }
 
     /**
@@ -136,6 +160,19 @@ class participants_search {
         $accesssince = 0;
         // Whether to match on users who HAVE accessed since the given time (ie false is 'inactive for more than x').
         $matchaccesssince = false;
+
+        // The alias for the subquery that fetches all distinct course users.
+        $usersubqueryalias = 'targetusers';
+        // The alias for {user} within the distinct user subquery.
+        $inneruseralias = 'udistinct';
+        // Inner query that selects distinct users in a course who are not deleted.
+        // Note: This ensures the outer (filtering) query joins on distinct users, avoiding the need for GROUP BY.
+        $innerselect = "SELECT DISTINCT {$inneruseralias}.id";
+        $innerjoins = ["{user} {$inneruseralias}"];
+        $innerwhere = "WHERE {$inneruseralias}.deleted = 0";
+
+        $outerjoins = ["JOIN {user} u ON u.id = {$usersubqueryalias}.id"];
+        $wheres = [];
 
         if ($this->filterset->has_filter('accesssince')) {
             $accesssince = $this->filterset->get_filter('accesssince')->current();
@@ -155,53 +192,46 @@ class participants_search {
             'params' => $params,
         ] = $this->get_enrolled_sql();
 
-        $joins = ['FROM {user} u'];
-        $wheres = [];
-        // Set where statement(s) that must always be included (outside of filter wheres).
-        $forcedwhere = "u.deleted = 0";
-
         $userfieldssql = user_picture::fields('u', $this->userfields);
 
         // Include any compulsory enrolment SQL (eg capability related filtering that must be applied).
         if (!empty($esqlforced)) {
-            $joins[] = "JOIN ({$esqlforced}) fef ON fef.id = u.id";
+            $outerjoins[] = "JOIN ({$esqlforced}) fef ON fef.id = u.id";
         }
 
         // Include any enrolment related filtering.
         if (!empty($esql)) {
-            $joins[] = "LEFT JOIN ({$esql}) ef ON ef.id = u.id";
+            $outerjoins[] = "LEFT JOIN ({$esql}) ef ON ef.id = u.id";
             $wheres[] = 'ef.id IS NOT NULL';
         }
 
         if ($isfrontpage) {
-            $select = "SELECT {$userfieldssql}, u.lastaccess";
+            $outerselect = "SELECT {$userfieldssql}, u.lastaccess";
             if ($accesssince) {
                 $wheres[] = user_get_user_lastaccess_sql($accesssince, 'u', $matchaccesssince);
             }
-            $groupby = ' GROUP BY u.id, u.lastaccess, ctx.id';
         } else {
-            $select = "SELECT {$userfieldssql}, COALESCE(ul.timeaccess, 0) AS lastaccess";
+            $outerselect = "SELECT {$userfieldssql}, COALESCE(ul.timeaccess, 0) AS lastaccess";
             // Not everybody has accessed the course yet.
-            $joins[] = 'LEFT JOIN {user_lastaccess} ul ON (ul.userid = u.id AND ul.courseid = :courseid2)';
+            $outerjoins[] = 'LEFT JOIN {user_lastaccess} ul ON (ul.userid = u.id AND ul.courseid = :courseid2)';
             $params['courseid2'] = $this->course->id;
             if ($accesssince) {
                 $wheres[] = user_get_course_lastaccess_sql($accesssince, 'ul', $matchaccesssince);
             }
 
             // Make sure we only ever fetch users in the course (regardless of enrolment filters).
-            $joins[] = 'JOIN {user_enrolments} ue ON ue.userid = u.id';
-            $joins[] = 'JOIN {enrol} e ON e.id = ue.enrolid
+            $innerjoins[] = "JOIN {user_enrolments} ue ON ue.userid = {$inneruseralias}.id";
+            $innerjoins[] = 'JOIN {enrol} e ON e.id = ue.enrolid
                                       AND e.courseid = :courseid1';
             $params['courseid1'] = $this->course->id;
-            $groupby = ' GROUP BY u.id, ul.timeaccess, ctx.id';
         }
 
         // Performance hacks - we preload user contexts together with accounts.
         $ccselect = ', ' . context_helper::get_preload_record_columns_sql('ctx');
         $ccjoin = 'LEFT JOIN {context} ctx ON (ctx.instanceid = u.id AND ctx.contextlevel = :contextlevel)';
         $params['contextlevel'] = CONTEXT_USER;
-        $select .= $ccselect;
-        $joins[] = $ccjoin;
+        $outerselect .= $ccselect;
+        $outerjoins[] = $ccjoin;
 
         // Apply any role filtering.
         if ($this->filterset->has_filter('roles')) {
@@ -242,35 +272,39 @@ class participants_search {
         }
 
         // Prepare final values.
-        $from = implode("\n", $joins);
+        $outerjoinsstring = implode("\n", $outerjoins);
+        $innerjoinsstring = implode("\n", $innerjoins);
         if ($wheres) {
             switch ($this->filterset->get_join_type()) {
                 case $this->filterset::JOINTYPE_ALL:
-                    $firstjoin = ' AND ';
+                    $wherenot = '';
                     $wheresjoin = ' AND ';
                     break;
                 case $this->filterset::JOINTYPE_NONE:
-                    $firstjoin = ' AND NOT ';
+                    $wherenot = ' NOT ';
                     $wheresjoin = ' AND NOT ';
                     break;
                 default:
                     // Default to 'Any' jointype.
-                    $firstjoin = ' AND ';
+                    $wherenot = '';
                     $wheresjoin = ' OR ';
                     break;
             }
 
-            $where = "WHERE ({$forcedwhere}) {$firstjoin}" . implode($wheresjoin, $wheres);
+            $outerwhere = 'WHERE ' . $wherenot . implode($wheresjoin, $wheres);
         } else {
-            $where = '';
+            $outerwhere = '';
         }
 
         return [
-            'select' => $select,
-            'from' => $from,
-            'where' => $where,
+            'subqueryalias' => $usersubqueryalias,
+            'outerselect' => $outerselect,
+            'innerselect' => $innerselect,
+            'outerjoins' => $outerjoinsstring,
+            'innerjoins' => $innerjoinsstring,
+            'outerwhere' => $outerwhere,
+            'innerwhere' => $innerwhere,
             'params' => $params,
-            'groupby' => $groupby,
         ];
     }
 
@@ -280,6 +314,8 @@ class participants_search {
      * @return array SQL query data in the format ['sql' => '', 'forcedsql' => '', 'params' => []].
      */
     protected function get_enrolled_sql(): array {
+        global $USER;
+
         $isfrontpage = ($this->context->instanceid == SITEID);
         $prefix = 'eu_';
         $filteruid = "{$prefix}u.id";
@@ -323,15 +359,43 @@ class participants_search {
             $params = array_merge($params, $methodparams, $statusparams);
         }
 
-        // Prepare any groups filtering.
         $groupids = [];
 
         if ($this->filterset->has_filter('groups')) {
             $groupids = $this->filterset->get_filter('groups')->get_filter_values();
         }
 
+        // Force additional groups filtering if required due to lack of capabilities.
+        // Note: This means results will always be limited to allowed groups, even if the user applies their own groups filtering.
+        $canaccessallgroups = has_capability('moodle/site:accessallgroups', $this->context);
+        $forcegroups = ($this->course->groupmode == SEPARATEGROUPS && !$canaccessallgroups);
+
+        if ($forcegroups) {
+            $allowedgroupids = array_keys(groups_get_all_groups($this->course->id, $USER->id));
+
+            // Users not in any group in a course with separate groups mode should not be able to access the participants filter.
+            if (empty($allowedgroupids)) {
+                // The UI does not support this, so it should not be reachable unless someone is trying to bypass the restriction.
+                throw new \coding_exception('User must be part of a group to filter by participants.');
+            }
+
+            $forceduid = "{$forcedprefix}u.id";
+            $forcedjointype = $this->get_groups_jointype(\core_table\local\filter\filter::JOINTYPE_ANY);
+            $forcedgroupjoin = groups_get_members_join($allowedgroupids, $forceduid, $this->context, $forcedjointype);
+
+            $forcedjoins[] = $forcedgroupjoin->joins;
+            $forcedwhere .= "AND ({$forcedgroupjoin->wheres})";
+
+            $params = array_merge($params, $forcedgroupjoin->params);
+
+            // Remove any filtered groups the user does not have access to.
+            $groupids = array_intersect($allowedgroupids, $groupids);
+        }
+
+        // Prepare any user defined groups filtering.
         if ($groupids) {
             $groupjoin = groups_get_members_join($groupids, $filteruid, $this->context, $this->get_groups_jointype());
+
             $joins[] = $groupjoin->joins;
             $params = array_merge($params, $groupjoin->params);
             if (!empty($groupjoin->wheres)) {
@@ -651,12 +715,28 @@ class participants_search {
      * Fetch the groups filter's grouplib jointype, based on its filterset jointype.
      * This mapping is to ensure compatibility between the two, should their values ever differ.
      *
+     * @param int|null $forcedjointype If set, specifies the join type to fetch mapping for (used when applying forced filtering).
+     *                            If null, then user defined filter join type is used.
      * @return int
      */
-    protected function get_groups_jointype(): int {
+    protected function get_groups_jointype(?int $forcedjointype = null): int {
+
+        // If applying forced groups filter and no manual groups filtering is applied, add an empty filter so we can map the join.
+        if (!is_null($forcedjointype) && !$this->filterset->has_filter('groups')) {
+            $this->filterset->add_filter(new \core_table\local\filter\integer_filter('groups'));
+        }
+
         $groupsfilter = $this->filterset->get_filter('groups');
 
-        switch ($groupsfilter->get_join_type()) {
+        if (is_null($forcedjointype)) {
+            // Fetch join type mapping for a user supplied groups filtering.
+            $filterjointype = $groupsfilter->get_join_type();
+        } else {
+            // Fetch join type mapping for forced groups filtering.
+            $filterjointype = $forcedjointype;
+        }
+
+        switch ($filterjointype) {
             case $groupsfilter::JOINTYPE_NONE:
                 $groupsjoin = GROUPS_JOIN_NONE;
                 break;
