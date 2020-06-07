@@ -85,19 +85,43 @@ const registerListenerEvents = (courseId, chooserConfig) => {
         };
     })();
 
+    const fetchFooterData = (() => {
+        let footerInnerPromise = null;
+
+        return (sectionId) => {
+            if (!footerInnerPromise) {
+                footerInnerPromise = new Promise((resolve) => {
+                    resolve(Repository.fetchFooterData(courseId, sectionId));
+                });
+            }
+
+            return footerInnerPromise;
+        };
+    })();
+
     CustomEvents.define(document, events);
 
     // Display module chooser event listeners.
     events.forEach((event) => {
         document.addEventListener(event, async(e) => {
             if (e.target.closest(selectors.elements.sectionmodchooser)) {
+                let caller;
                 // We need to know who called this.
                 // Standard courses use the ID in the main section info.
                 const sectionDiv = e.target.closest(selectors.elements.section);
                 // Front page courses need some special handling.
                 const button = e.target.closest(selectors.elements.sectionmodchooser);
+
                 // If we don't have a section ID use the fallback ID.
-                const caller = sectionDiv || button;
+                // We always want the sectionDiv caller first as it keeps track of section ID's after DnD changes.
+                // The button attribute is always just a fallback for us as the section div is not always available.
+                // A YUI change could be done maybe to only update the button attribute but we are going for minimal change here.
+                if (sectionDiv !== null && sectionDiv.hasAttribute('data-sectionid')) {
+                    // We check for attributes just in case of outdated contrib course formats.
+                    caller = sectionDiv;
+                } else {
+                    caller = button;
+                }
 
                 // We want to show the modal instantly but loading whilst waiting for our data.
                 let bodyPromiseResolver;
@@ -105,7 +129,8 @@ const registerListenerEvents = (courseId, chooserConfig) => {
                     bodyPromiseResolver = resolve;
                 });
 
-                const sectionModal = buildModal(bodyPromise);
+                const footerData = await fetchFooterData(caller.dataset.sectionid);
+                const sectionModal = buildModal(bodyPromise, footerData);
 
                 // Now we have a modal we should start fetching data.
                 const data = await fetchModuleData();
@@ -117,6 +142,7 @@ const registerListenerEvents = (courseId, chooserConfig) => {
                     sectionModal,
                     builtModuleData,
                     partiallyAppliedFavouriteManager(data, caller.dataset.sectionid),
+                    footerData,
                 );
 
                 bodyPromiseResolver(await Templates.render(
@@ -211,13 +237,15 @@ const templateDataBuilder = (data, chooserConfig) => {
  *
  * @method buildModal
  * @param {Promise} bodyPromise
+ * @param {String|Boolean} footer Either a footer to add or nothing
  * @return {Object} The modal ready to display immediately and render body in later.
  */
-const buildModal = bodyPromise => {
+const buildModal = (bodyPromise, footer) => {
     return ModalFactory.create({
         type: ModalFactory.types.DEFAULT,
         title: getString('addresourceoractivity'),
         body: bodyPromise,
+        footer: footer.customfootertemplate,
         large: true,
         templateContext: {
             classes: 'modchooser'
