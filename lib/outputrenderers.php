@@ -1053,7 +1053,7 @@ class core_renderer extends renderer_base {
         $course = $this->page->course;
         if (\core\session\manager::is_loggedinas()) {
             $realuser = \core\session\manager::get_realuser();
-            $fullname = fullname($realuser, true);
+            $fullname = fullname($realuser);
             if ($withlinks) {
                 $loginastitle = get_string('loginas');
                 $realuserinfo = " [<a href=\"$CFG->wwwroot/course/loginas.php?id=$course->id&amp;sesskey=".sesskey()."\"";
@@ -1074,7 +1074,7 @@ class core_renderer extends renderer_base {
         } else if (isloggedin()) {
             $context = context_course::instance($course->id);
 
-            $fullname = fullname($USER, true);
+            $fullname = fullname($USER);
             // Since Moodle 2.0 this link always goes to the public profile page (not the course profile page)
             if ($withlinks) {
                 $linktitle = get_string('viewprofile');
@@ -1817,11 +1817,12 @@ class core_renderer extends renderer_base {
      */
     public function blocks_for_region($region) {
         $blockcontents = $this->page->blocks->get_content_for_region($region, $this);
-        $blocks = $this->page->blocks->get_blocks_for_region($region);
         $lastblock = null;
         $zones = array();
-        foreach ($blocks as $block) {
-            $zones[] = $block->title;
+        foreach ($blockcontents as $bc) {
+            if ($bc instanceof block_contents) {
+                $zones[] = $bc->title;
+            }
         }
         $output = '';
 
