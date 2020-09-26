@@ -13,11 +13,11 @@ $CFG->dbpass    = '';
 $CFG->prefix    = 'mdl_';
 $CFG->dboptions = array (
   'dbpersist' => 0,
-  'dbport' => 5433,
+  'dbport' => 5432,
   'dbsocket' => '',
 );
 
-$CFG->wwwroot   = 'https://sac.nuu.edu.tw/cgi-bin/moodle';
+$CFG->wwwroot   = 'http://localhost/cgi-bin/moodle';
 $CFG->dataroot  = '/var/lib/moodle';
 $CFG->admin     = 'admin';
 
