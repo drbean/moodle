@@ -2,6 +2,7 @@ This files describes API changes in core libraries and APIs,
 information provided here is intended especially for developers.
 
 === 3.10 ===
+* Retains the source course id when a course is copied from another course on the same site.
 * Added function setScrollable in core/modal. This function can be used to set the modal's body to be scrollable or not
   when the modal's height exceeds the browser's height. This is also supported in core/modal_factory through the
   'scrollable' config parameter which can be set to either true or false. If not explicitly defined, the default value
@@ -44,6 +45,9 @@ information provided here is intended especially for developers.
 * New library function rename_to_unused_name() to rename a file within its current location.
 * Constant \core_h5p\file_storage::EDITOR_FILEAREA has been deprecated
   because it's not required any more.
+* The ZipStream-PHP library has been added to Moodle core in /lib/zipstream.
+* The php-enum library has been added to Moodle core in /lib/php-enum.
+* The http-message library has been added to Moodle core in /lib/http-message.
 
 === 3.9 ===
 * Following function has been deprecated, please use \core\task\manager::run_from_cli().
