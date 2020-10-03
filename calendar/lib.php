@@ -969,6 +969,22 @@ class calendar_event {
     }
 
     /**
+     * Format the event name using the external API.
+     *
+     * This function should we used when text formatting is required in external functions.
+     *
+     * @return string Formatted name.
+     */
+    public function format_external_name() {
+        if ($this->editorcontext === null) {
+            // Switch on the event type to decide upon the appropriate context to use for this event.
+            $this->editorcontext = $this->get_context();
+        }
+
+        return external_format_string($this->properties->name, $this->editorcontext->id);
+    }
+
+    /**
      * Format the text using the external API.
      *
      * This function should we used when text formatting is required in external functions.
@@ -3257,7 +3273,7 @@ function calendar_get_calendar_context($subscription) {
 }
 
 /**
- * Implements callback user_preferences, whitelists preferences that users are allowed to update directly
+ * Implements callback user_preferences, lists preferences that users are allowed to update directly
  *
  * Used in {@see core_user::fill_preferences_cache()}, see also {@see useredit_update_user_preference()}
  *
@@ -3667,11 +3683,10 @@ function calendar_get_timestamp($d, $m, $y, $time = 0) {
  * @return array The data for template and template name.
  */
 function calendar_get_footer_options($calendar) {
-    global $CFG, $USER, $DB, $PAGE;
+    global $CFG, $USER, $PAGE;
 
     // Generate hash for iCal link.
-    $rawhash = $USER->id . $DB->get_field('user', 'password', ['id' => $USER->id]) . $CFG->calendar_exportsalt;
-    $authtoken = sha1($rawhash);
+    $authtoken = calendar_get_export_token($USER);
 
     $renderer = $PAGE->get_renderer('core_calendar');
     $footer = new \core_calendar\external\footer_options_exporter($calendar, $USER->id, $authtoken);
@@ -3904,4 +3919,16 @@ function calendar_internal_update_course_and_group_permission(int $courseid, con
             }
         }
     }
+}
+
+/**
+ * Get the auth token for exporting the given user calendar.
+ * @param stdClass $user The user to export the calendar for
+ *
+ * @return string The export token.
+ */
+function calendar_get_export_token(stdClass $user): string {
+    global $CFG, $DB;
+
+    return sha1($user->id . $DB->get_field('user', 'password', ['id' => $user->id]) . $CFG->calendar_exportsalt);
 }
