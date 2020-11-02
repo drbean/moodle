@@ -4306,6 +4306,9 @@ function delete_user(stdClass $user) {
     // Remove users customised pages.
     $DB->delete_records('my_pages', array('userid' => $user->id, 'private' => 1));
 
+    // Remove user's oauth2 refresh tokens, if present.
+    $DB->delete_records('oauth2_refresh_token', array('userid' => $user->id));
+
     // Delete user from $SESSION->bulk_users.
     if (isset($SESSION->bulk_users[$user->id])) {
         unset($SESSION->bulk_users[$user->id]);
@@ -5303,6 +5306,7 @@ function remove_course_contents($courseid, $showfeedback = true, array $options 
                     if ($cm->id) {
                         // Delete cm and its context - orphaned contexts are purged in cron in case of any race condition.
                         context_helper::delete_instance(CONTEXT_MODULE, $cm->id);
+                        $DB->delete_records('course_modules_completion', ['coursemoduleid' => $cm->id]);
                         $DB->delete_records('course_modules', array('id' => $cm->id));
                         rebuild_course_cache($cm->course, true);
                     }
@@ -5324,9 +5328,8 @@ function remove_course_contents($courseid, $showfeedback = true, array $options 
     // Remove all data from availability and completion tables that is associated
     // with course-modules belonging to this course. Note this is done even if the
     // features are not enabled now, in case they were enabled previously.
-    $DB->delete_records_select('course_modules_completion',
-           'coursemoduleid IN (SELECT id from {course_modules} WHERE course=?)',
-           array($courseid));
+    $DB->delete_records_subquery('course_modules_completion', 'coursemoduleid', 'id',
+            'SELECT id from {course_modules} WHERE course = ?', [$courseid]);
 
     // Remove course-module data that has not been removed in modules' _delete_instance callbacks.
     $cms = $DB->get_records('course_modules', array('course' => $course->id));
@@ -6379,6 +6382,19 @@ function email_to_user($user, $from, $subject, $messagetext, $messagehtml = '', 
     }
     foreach ($tempreplyto as $values) {
         $mail->addReplyTo($values[0], $values[1]);
+    }
+
+    if (!empty($CFG->emaildkimselector)) {
+        $domain = substr(strrchr($mail->From, "@"), 1);
+        $pempath = "{$CFG->dataroot}/dkim/{$domain}/{$CFG->emaildkimselector}.private";
+        if (file_exists($pempath)) {
+            $mail->DKIM_domain      = $domain;
+            $mail->DKIM_private     = $pempath;
+            $mail->DKIM_selector    = $CFG->emaildkimselector;
+            $mail->DKIM_identity    = $mail->From;
+        } else {
+            debugging("Email DKIM selector chosen due to {$mail->From} but no certificate found at $pempath", DEBUG_DEVELOPER);
+        }
     }
 
     if ($mail->send()) {
