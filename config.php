@@ -25,6 +25,10 @@ $CFG->directorypermissions = 02777;
 
 // $CFG->hiddenuserfields = array ("First name", "Surname", "Last downloaded from this course");
 
+$CFG->getremoteaddrconf = 0;
+//https://stackoverflow.com/questions/61908291/installation-must-be-finished-from-the-original-ip-address-sorry-moodle
+
+
 $CFG->tag_component = 'quiz_tag_toeic_speaking_4';
 
 require_once(__DIR__ . '/lib/setup.php');
