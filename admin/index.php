@@ -752,9 +752,9 @@ if (during_initial_install()) {
 
     if ($adminuser->password === 'adminsetuppending') {
         // prevent installation hijacking
-        if ($adminuser->lastip !== getremoteaddr()) {
-            print_error('installhijacked', 'admin');
-        }
+//        if ($adminuser->lastip !== getremoteaddr()) {
+//            print_error('installhijacked', 'admin');
+//        }
         // login user and let him set password and admin details
         $adminuser->newadminuser = 1;
         complete_user_login($adminuser);
